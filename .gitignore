@@ -1,0 +1,21 @@
+# Environment files with secrets
+.env
+
+# Docker volumes (managed by Docker)
+mysql_data/
+omeka_files/
+
+# Sideload files (bulk imports)
+sideload/*
+!sideload/.gitkeep
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+CLAUDE.md

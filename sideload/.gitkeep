@@ -1,0 +1,2 @@
+# This directory is used for bulk file imports with FileSideload module
+# Place files here and use FileSideload module in Omeka S to import them
