@@ -19,14 +19,15 @@ OMEKA_REPO="omeka/omeka-s"
 OMEKA_VERSION="${OMEKA_VERSION:-latest}"
 
 # Default modules to install (official Omeka S modules)
+# Format: "ModuleName:repo:branch"
 DEFAULT_MODULES=(
-    "ActivityLog:omeka-s-modules/ActivityLog"
-    "CSVImport:omeka-s-modules/CSVImport"
-    "DataCleaning:omeka-s-modules/DataCleaning"
-    "FacetedBrowse:omeka-s-modules/FacetedBrowse"
-    "FileSideload:omeka-s-modules/FileSideload"
-    "Mapping:omeka-s-modules/Mapping"
-    "NumericDataTypes:omeka-s-modules/NumericDataTypes"
+    "ActivityLog:omeka-s-modules/ActivityLog:master"
+    "CSVImport:omeka-s-modules/CSVImport:develop"
+    "DataCleaning:omeka-s-modules/DataCleaning:master"
+    "FacetedBrowse:omeka-s-modules/FacetedBrowse:master"
+    "FileSideload:omeka-s-modules/FileSideload:master"
+    "Mapping:omeka-s-modules/Mapping:master"
+    "NumericDataTypes:omeka-s-modules/NumericDataTypes:master"
 )
 
 # Function to get the latest release version from GitHub
@@ -149,8 +150,11 @@ install_default_modules() {
     log_step "Installing default modules..."
 
     for module_entry in "${DEFAULT_MODULES[@]}"; do
+        # Parse format: "ModuleName:repo:branch"
         local MODULE_NAME="${module_entry%%:*}"
-        local REPO="${module_entry#*:}"
+        local remainder="${module_entry#*:}"
+        local REPO="${remainder%%:*}"
+        local BRANCH="${remainder##*:}"
 
         # Skip if module already exists
         if [[ -d "${OMEKA_ROOT}/modules/${MODULE_NAME}" ]]; then
@@ -158,7 +162,7 @@ install_default_modules() {
             continue
         fi
 
-        install_module "$MODULE_NAME" "$REPO" || log_warn "Failed to install $MODULE_NAME, continuing..."
+        install_module "$MODULE_NAME" "$REPO" "$BRANCH" || log_warn "Failed to install $MODULE_NAME, continuing..."
     done
 
     log_info "Default modules installation completed!"
