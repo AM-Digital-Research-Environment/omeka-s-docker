@@ -265,7 +265,10 @@ docker compose restart php
 - Store passwords in `.env` file (never commit to git)
 - MySQL uses random root password
 - Security headers are configured in nginx
-- Consider adding SSL/TLS termination via reverse proxy
+- **SSL Certificate Required**: For production deployments, you must configure an SSL certificate. Options include:
+  - Using a reverse proxy (Traefik, Caddy) with automatic Let's Encrypt certificates
+  - Adding SSL termination to the nginx configuration
+  - Placing the setup behind a load balancer with SSL termination
 
 ## Volumes
 
@@ -288,10 +291,6 @@ docker compose exec db mysqldump -u omeka -p omeka > backup.sql
 docker run --rm -v omeka-s-docker-template_omeka_files:/data -v $(pwd):/backup alpine tar czf /backup/omeka-files.tar.gz /data
 ```
 
-## Adding Solr Search (Optional)
-
-If you need full-text search, see the [IWAC-docker](https://github.com/fmadore/IWAC-docker) repository for a complete example with Solr integration.
-
 ## License
 
-This template is based on the [Islam West Africa Collection (IWAC) Docker setup](https://github.com/fmadore/IWAC-docker).
+MIT License
