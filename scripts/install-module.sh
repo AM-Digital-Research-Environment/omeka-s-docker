@@ -1,10 +1,21 @@
 #!/bin/bash
 # Script to install Omeka S modules from GitHub/GitLab
 # Usage: ./install-module.sh <module-name> [branch/tag]
-# Example: ./install-module.sh CSVImport
+# Example: ./install-module.sh AdvancedSearch
 # Example: ./install-module.sh AdvancedSearch 3.5.46
 
 set -e
+
+# Pre-installed modules (installed automatically with Omeka S)
+PREINSTALLED_MODULES=(
+    "ActivityLog"
+    "CSVImport"
+    "DataCleaning"
+    "FacetedBrowse"
+    "FileSideload"
+    "Mapping"
+    "NumericDataTypes"
+)
 
 # Configuration - Map module names to their GitHub repositories
 declare -A MODULE_REPOS=(
@@ -59,6 +70,17 @@ NC='\033[0m'
 log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+
+# Function to check if a module is pre-installed
+is_preinstalled() {
+    local module="$1"
+    for preinstalled in "${PREINSTALLED_MODULES[@]}"; do
+        if [[ "$preinstalled" == "$module" ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
 
 # Function to display usage
 usage() {
@@ -118,6 +140,15 @@ install_module() {
     if [[ -z "$CONTAINER_ID" ]]; then
         log_error "PHP container is not running. Start it with: docker compose up -d php"
         return 1
+    fi
+
+    # Check if module is pre-installed
+    if is_preinstalled "$MODULE_NAME"; then
+        log_info "Module $MODULE_NAME is pre-installed by default."
+        if docker compose exec -T php test -d "/var/www/html/modules/$MODULE_NAME"; then
+            log_info "Module is already present. Use update-module.sh to update it if needed."
+            return 0
+        fi
     fi
 
     # Check if module already exists
@@ -209,9 +240,18 @@ fi
 
 # List modules if requested
 if [[ "$MODULE_NAME" == "list" ]]; then
+    echo "Pre-installed modules (included by default):"
+    for module in "${PREINSTALLED_MODULES[@]}"; do
+        echo "  - $module"
+    done | sort
+    echo ""
     echo "Available modules (GitHub):"
     for module in "${!MODULE_REPOS[@]}"; do
-        echo "  - $module"
+        if is_preinstalled "$module"; then
+            echo "  - $module (pre-installed)"
+        else
+            echo "  - $module"
+        fi
     done | sort
     echo ""
     echo "Available modules (GitLab):"

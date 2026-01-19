@@ -5,6 +5,7 @@ A reusable Docker template for deploying Omeka S digital archive installations. 
 ## Features
 
 - **Automatic Installation**: Omeka S is automatically installed on first run
+- **Pre-installed Modules**: Common modules included by default
 - **Optimized PHP 8.4**: Pre-configured with OPcache, APCu, and ImageMagick
 - **Production-Ready Nginx**: Gzip compression, security headers, CORS for IIIF
 - **Module Management**: Scripts for installing and updating modules
@@ -20,8 +21,10 @@ A reusable Docker template for deploying Omeka S digital archive installations. 
 ```
 .
 ├── docker-compose.yml          # Main service orchestration
+├── docker-compose.ssl.yml      # SSL override for production
 ├── Dockerfile                  # PHP-FPM container configuration
-├── nginx.conf                  # Nginx web server configuration
+├── nginx.conf                  # Nginx web server configuration (HTTP)
+├── nginx-ssl.conf              # Nginx configuration with SSL/TLS
 ├── uploads.ini                 # PHP upload settings
 ├── docker-entrypoint.sh        # PHP container initialization & auto-install
 ├── .env.example                # Environment variables template
@@ -29,6 +32,7 @@ A reusable Docker template for deploying Omeka S digital archive installations. 
 │   ├── install-module.sh       # Install new modules
 │   ├── update-module.sh        # Update existing modules
 │   └── update-omeka.sh         # Update Omeka S core
+├── ssl/                        # SSL certificates (gitignored)
 └── sideload/                   # Bulk import directory
 ```
 
@@ -77,15 +81,17 @@ docker compose logs -f php
 
 3. Complete the Omeka S web installation wizard
 
-### 4. Install Modules (Optional)
+### 4. Install Additional Modules (Optional)
+
+Common modules (CSVImport, FileSideload, Mapping, etc.) are pre-installed. To add more:
 
 ```bash
 # List available modules
 ./scripts/install-module.sh list
 
-# Install a module
-./scripts/install-module.sh CSVImport
-./scripts/install-module.sh FileSideload
+# Install additional modules
+./scripts/install-module.sh AdvancedSearch
+./scripts/install-module.sh BulkEdit
 ```
 
 ## Environment Variables
@@ -99,6 +105,10 @@ MYSQL_PASSWORD=your_secure_mysql_password
 # Optional
 OMEKA_VERSION=latest    # or specific version like 4.2.0
 NGINX_PORT=80           # change if port 80 is in use
+
+# SSL Configuration (for production)
+DOMAIN_NAME=omeka.example.edu
+NGINX_SSL_PORT=443
 ```
 
 ## Key Configuration
@@ -180,9 +190,25 @@ docker compose exec db mysql -u omeka -p
 
 ## Module Installation
 
-### Available Modules
+### Pre-installed Modules
 
-The scripts support many popular modules including:
+The following modules are automatically installed with Omeka S:
+
+| Module | Purpose |
+|--------|---------|
+| **ActivityLog** | Track user activity and changes |
+| **CSVImport** | Import items from CSV files |
+| **DataCleaning** | Batch clean and normalize data |
+| **FacetedBrowse** | Create faceted search pages |
+| **FileSideload** | Import files from server directory |
+| **Mapping** | Add geographic locations to items |
+| **NumericDataTypes** | Support for numeric and date values |
+
+These modules are ready to activate in the Omeka S admin panel after installation.
+
+### Additional Modules
+
+The scripts support many additional modules including:
 
 **Official Omeka S Modules:**
 - CSVImport, FileSideload, Mapping, CustomVocab
@@ -265,10 +291,66 @@ docker compose restart php
 - Store passwords in `.env` file (never commit to git)
 - MySQL uses random root password
 - Security headers are configured in nginx
-- **SSL Certificate Required**: For production deployments, you must configure an SSL certificate. Options include:
-  - Using a reverse proxy (Traefik, Caddy) with automatic Let's Encrypt certificates
-  - Adding SSL termination to the nginx configuration
-  - Placing the setup behind a load balancer with SSL termination
+- SSL certificates should be configured for production (see below)
+
+## Production SSL Deployment
+
+For production deployments with SSL/TLS, use the provided SSL configuration with your organization's certificates.
+
+### 1. Prepare SSL Certificates
+
+Place your SSL certificate files in the `ssl/` directory:
+
+```
+ssl/
+├── fullchain.pem    # Your certificate + intermediate chain
+└── privkey.pem      # Your private key
+```
+
+> **Note**: The `ssl/` directory is gitignored to prevent accidental commits of private keys.
+
+### 2. Configure Environment
+
+Update your `.env` file with domain settings:
+
+```bash
+MYSQL_PASSWORD=your_secure_mysql_password
+DOMAIN_NAME=omeka.youruniversity.edu
+NGINX_SSL_PORT=443
+```
+
+### 3. Start with SSL
+
+Use the SSL compose override file:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.ssl.yml up -d
+```
+
+### SSL Configuration Details
+
+The SSL configuration (`nginx-ssl.conf`) includes:
+
+| Feature | Setting |
+|---------|---------|
+| **Protocols** | TLS 1.2, TLS 1.3 |
+| **Ciphers** | Mozilla Modern configuration |
+| **HSTS** | Enabled (2 years, includeSubDomains) |
+| **HTTP Redirect** | Automatic redirect to HTTPS |
+| **OCSP Stapling** | Enabled |
+
+### Project Structure with SSL
+
+```
+.
+├── docker-compose.yml          # Base configuration
+├── docker-compose.ssl.yml      # SSL override (use with -f flag)
+├── nginx.conf                  # HTTP-only nginx config
+├── nginx-ssl.conf              # HTTPS nginx config
+└── ssl/                        # SSL certificates (gitignored)
+    ├── fullchain.pem
+    └── privkey.pem
+```
 
 ## Volumes
 

@@ -18,6 +18,17 @@ OMEKA_ROOT="/var/www/html"
 OMEKA_REPO="omeka/omeka-s"
 OMEKA_VERSION="${OMEKA_VERSION:-latest}"
 
+# Default modules to install (official Omeka S modules)
+DEFAULT_MODULES=(
+    "ActivityLog:omeka-s-modules/ActivityLog"
+    "CSVImport:omeka-s-modules/CSVImport"
+    "DataCleaning:omeka-s-modules/DataCleaning"
+    "FacetedBrowse:omeka-s-modules/FacetedBrowse"
+    "FileSideload:omeka-s-modules/FileSideload"
+    "Mapping:omeka-s-modules/Mapping"
+    "NumericDataTypes:omeka-s-modules/NumericDataTypes"
+)
+
 # Function to get the latest release version from GitHub
 get_latest_version() {
     local latest
@@ -84,6 +95,75 @@ EOF
     return 0
 }
 
+# Function to install a single module from GitHub
+install_module() {
+    local MODULE_NAME="$1"
+    local REPO="$2"
+    local BRANCH="${3:-master}"
+
+    log_info "Installing module: $MODULE_NAME..."
+
+    local TEMP_DIR=$(mktemp -d)
+    local ARCHIVE_URL="https://github.com/${REPO}/archive/refs/heads/${BRANCH}.zip"
+
+    # Download the module
+    if ! curl -sL "$ARCHIVE_URL" -o "${TEMP_DIR}/module.zip" 2>/dev/null; then
+        # Try as a tag if branch fails
+        ARCHIVE_URL="https://github.com/${REPO}/archive/refs/tags/${BRANCH}.zip"
+        if ! curl -sL "$ARCHIVE_URL" -o "${TEMP_DIR}/module.zip" 2>/dev/null; then
+            log_warn "Failed to download module $MODULE_NAME"
+            rm -rf "${TEMP_DIR}"
+            return 1
+        fi
+    fi
+
+    # Extract the module
+    unzip -q "${TEMP_DIR}/module.zip" -d "${TEMP_DIR}" 2>/dev/null
+
+    # Find the extracted directory
+    local EXTRACTED_DIR=$(find "${TEMP_DIR}" -maxdepth 1 -type d ! -name "$(basename "${TEMP_DIR}")" | head -1)
+    if [[ -z "$EXTRACTED_DIR" ]]; then
+        log_warn "Failed to find extracted module directory for $MODULE_NAME"
+        rm -rf "${TEMP_DIR}"
+        return 1
+    fi
+
+    # Move to modules directory with correct name
+    mv "$EXTRACTED_DIR" "${OMEKA_ROOT}/modules/${MODULE_NAME}"
+
+    # Install composer dependencies if needed
+    if [[ -f "${OMEKA_ROOT}/modules/${MODULE_NAME}/composer.json" ]]; then
+        log_info "Installing composer dependencies for $MODULE_NAME..."
+        (cd "${OMEKA_ROOT}/modules/${MODULE_NAME}" && composer install --no-dev --quiet 2>/dev/null) || true
+    fi
+
+    # Cleanup
+    rm -rf "${TEMP_DIR}"
+
+    log_info "Module $MODULE_NAME installed successfully!"
+    return 0
+}
+
+# Function to install all default modules
+install_default_modules() {
+    log_step "Installing default modules..."
+
+    for module_entry in "${DEFAULT_MODULES[@]}"; do
+        local MODULE_NAME="${module_entry%%:*}"
+        local REPO="${module_entry#*:}"
+
+        # Skip if module already exists
+        if [[ -d "${OMEKA_ROOT}/modules/${MODULE_NAME}" ]]; then
+            log_info "Module $MODULE_NAME already exists, skipping..."
+            continue
+        fi
+
+        install_module "$MODULE_NAME" "$REPO" || log_warn "Failed to install $MODULE_NAME, continuing..."
+    done
+
+    log_info "Default modules installation completed!"
+}
+
 # Create required directories if they don't exist
 log_step "Creating required directories..."
 mkdir -p "${OMEKA_ROOT}/files"
@@ -134,6 +214,9 @@ if [[ ! -f "${OMEKA_ROOT}/application/Module.php" ]]; then
 else
     log_info "Omeka S is already installed"
 fi
+
+# Always check and install missing default modules
+install_default_modules
 
 # Set proper permissions
 log_step "Setting proper permissions..."

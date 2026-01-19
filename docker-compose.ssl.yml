@@ -1,0 +1,22 @@
+# Production SSL Override for Omeka S Docker
+# Usage: docker compose -f docker-compose.yml -f docker-compose.ssl.yml up -d
+#
+# Requirements:
+#   1. Place SSL certificates in ./ssl/ directory:
+#      - ssl/fullchain.pem  (certificate + chain)
+#      - ssl/privkey.pem    (private key)
+#   2. Set DOMAIN_NAME in .env file
+
+services:
+  web:
+    ports:
+      - "${NGINX_PORT:-80}:80"
+      - "${NGINX_SSL_PORT:-443}:443"
+    volumes:
+      - ./nginx-ssl.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - omeka_files:/var/www/html:ro
+    environment:
+      - DOMAIN_NAME=${DOMAIN_NAME:-localhost}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -skfo /dev/null https://localhost/ || curl -sfo /dev/null http://localhost/ || exit 1"]
