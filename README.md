@@ -40,7 +40,7 @@ A reusable Docker template for deploying Omeka S digital archive installations. 
 
 | Service | Image | Port | Purpose |
 |---------|-------|------|---------|
-| **web** | nginx:1.27-alpine | 80 | Reverse proxy, static files |
+| **web** | nginx:1.28-alpine | 80 | Reverse proxy, static files |
 | **php** | PHP 8.4-FPM | 9000 (internal) | Omeka S application |
 | **db** | MySQL 9.4 | 3306 (internal) | Database |
 
@@ -292,6 +292,82 @@ docker compose restart php
 - MySQL uses random root password
 - Security headers are configured in nginx
 - SSL certificates should be configured for production (see below)
+
+## Security Hardening (Built-in)
+
+This template includes Docker security hardening by default in the main `docker-compose.yml`:
+
+| Feature | Description |
+|---------|-------------|
+| **Resource Limits** | CPU and memory limits prevent DoS attacks |
+| **no-new-privileges** | Prevents privilege escalation inside containers |
+| **Dropped Capabilities** | Removes unnecessary Linux capabilities |
+| **Read-only Filesystems** | nginx runs with read-only root filesystem |
+
+### Security Considerations for Docker in Production
+
+#### Known Limitations
+
+| Concern | Risk | Mitigation |
+|---------|------|------------|
+| **Shared Kernel** | Kernel exploit affects all containers | Keep host OS updated, use minimal host |
+| **Container Breakout** | Compromised container may access host | Never use `--privileged`, drop capabilities |
+| **Image Vulnerabilities** | Base images may contain CVEs | Scan images with Docker Scout or Trivy |
+| **Secrets in Environment** | `docker inspect` exposes env vars | Use Docker secrets for sensitive data |
+| **Docker Socket** | Mounting socket = root on host | Never mount in application containers |
+
+#### Recommended Additional Measures
+
+1. **Use a Reverse Proxy** (Traefik, Caddy, or nginx proxy)
+   - Terminate TLS at proxy level
+   - Add rate limiting and WAF rules
+   - Hide internal container topology
+
+2. **Image Scanning**
+   ```bash
+   # Scan for vulnerabilities
+   docker scout cves omeka-s-docker-php:latest
+   ```
+
+3. **Regular Updates**
+   ```bash
+   # Pull latest base images
+   docker compose pull
+   docker compose up -d --build
+   ```
+
+4. **Network Segmentation**
+   - Database should never be directly accessible
+   - Use internal networks for inter-service communication
+
+5. **Monitoring & Logging**
+   - Ship logs to external aggregator (ELK, Loki)
+   - Monitor container resource usage
+   - Set up alerting for unusual activity
+
+### Reverse Proxy Architecture
+
+For production, consider placing Omeka S behind a dedicated reverse proxy:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Internet                              │
+└──────────────────────┬──────────────────────────────────┘
+                       │
+┌──────────────────────▼──────────────────────────────────┐
+│              Reverse Proxy (Traefik/Caddy)              │
+│  • TLS termination    • Rate limiting                   │
+│  • WAF rules          • Load balancing                  │
+└──────────────────────┬──────────────────────────────────┘
+                       │ Internal Network
+┌──────────────────────▼──────────────────────────────────┐
+│                 Omeka S Stack                            │
+│  ┌─────────┐    ┌─────────┐    ┌─────────┐              │
+│  │  nginx  │───▶│   php   │───▶│  mysql  │              │
+│  └─────────┘    └─────────┘    └─────────┘              │
+│                                 (internal only)          │
+└─────────────────────────────────────────────────────────┘
+```
 
 ## Production SSL Deployment
 

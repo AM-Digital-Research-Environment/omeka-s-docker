@@ -114,7 +114,7 @@ RUN pecl install apcu && \
 # Set PHP configuration
 RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
     && sed -i \
-        -e 's/memory_limit = 128M/memory_limit = 512M/' \
+        -e 's/memory_limit = 128M/memory_limit = 1024M/' \
         -e 's/upload_max_filesize = 2M/upload_max_filesize = 100M/' \
         -e 's/post_max_size = 8M/post_max_size = 100M/' \
         -e 's/max_execution_time = 30/max_execution_time = 300/' \
@@ -156,6 +156,19 @@ RUN curl -o /usr/local/bin/php-fpm-healthcheck \
 
 # Enable PHP-FPM status page for healthcheck
 RUN set -xe && echo "pm.status_path = /status" >> /usr/local/etc/php-fpm.d/zz-docker.conf
+
+# Configure PHP-FPM pool settings (optimized for 4GB container limit)
+RUN { \
+    echo '[www]'; \
+    echo 'pm = dynamic'; \
+    echo 'pm.max_children = 10'; \
+    echo 'pm.start_servers = 3'; \
+    echo 'pm.min_spare_servers = 2'; \
+    echo 'pm.max_spare_servers = 5'; \
+    echo 'pm.max_requests = 500'; \
+    echo 'pm.process_idle_timeout = 10s'; \
+    echo 'request_terminate_timeout = 300s'; \
+    } > /usr/local/etc/php-fpm.d/zzz-omeka-pool.conf
 
 WORKDIR /var/www/html
 

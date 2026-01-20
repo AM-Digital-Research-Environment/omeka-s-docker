@@ -3,7 +3,7 @@
 
 services:
   web:
-    image: nginx:1.27-alpine
+    image: nginx:1.28-alpine
     ports:
       - "${NGINX_PORT:-80}:80"
     volumes:
@@ -17,6 +17,29 @@ services:
     networks:
       - omeka-network
     restart: unless-stopped
+    # Security hardening
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - NET_BIND_SERVICE
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:mode=1777,size=64M
+      - /var/run:mode=1777,size=1M
+      - /tmp:mode=1777,size=64M
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
     healthcheck:
       test: ["CMD-SHELL", "curl -sfo /dev/null http://localhost/ || exit 1"]
       interval: 30s
@@ -43,28 +66,33 @@ services:
       - MYSQL_USER=omeka
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
       - OMEKA_VERSION=${OMEKA_VERSION:-latest}
-      - PHP_MAX_EXECUTION_TIME=300
-      - PHP_PM_MAX_CHILDREN=35
-      - PHP_PM_START_SERVERS=5
-      - PHP_PM_MIN_SPARE_SERVERS=5
-      - PHP_PM_MAX_SPARE_SERVERS=25
-      - PHP_PM_MAX_REQUESTS=500
-      - PHP_OPCACHE_MEMORY_CONSUMPTION=128
-      - PHP_MEMORY_LIMIT=1024M
-      - PHP_OPCACHE_ENABLE=1
-      - PHP_OPCACHE_REVALIDATE_FREQ=0
-      - PHP_OPCACHE_VALIDATE_TIMESTAMPS=0
-      - PHP_OPCACHE_MAX_ACCELERATED_FILES=7000
-      - PHP_OPCACHE_INTERNED_STRINGS_BUFFER=8
-      - PHP_OPCACHE_FAST_SHUTDOWN=1
-      - PHP_OPCACHE_JIT=1255
-      - PHP_OPCACHE_JIT_BUFFER_SIZE=50M
     depends_on:
       db:
         condition: service_healthy
     networks:
       - omeka-network
     restart: unless-stopped
+    # Security hardening
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+      - FOWNER
+    tmpfs:
+      - /tmp:mode=1777,size=256M
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
     healthcheck:
       test: ["CMD-SHELL", "php -v || exit 1"]
       interval: 30s
@@ -106,6 +134,24 @@ services:
     networks:
       - omeka-network
     restart: unless-stopped
+    # Security hardening
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -u$$MYSQL_USER -p$$MYSQL_PASSWORD --silent"]
       interval: 30s

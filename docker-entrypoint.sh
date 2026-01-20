@@ -144,7 +144,17 @@ install_module() {
     # Install composer dependencies if needed
     if [[ -f "${OMEKA_ROOT}/modules/${MODULE_NAME}/composer.json" ]]; then
         log_info "Installing composer dependencies for $MODULE_NAME..."
-        (cd "${OMEKA_ROOT}/modules/${MODULE_NAME}" && composer install --no-dev --quiet 2>/dev/null) || true
+        if command -v composer &> /dev/null; then
+            if ! (cd "${OMEKA_ROOT}/modules/${MODULE_NAME}" && composer install --no-dev --no-interaction 2>&1); then
+                log_warn "Failed to install composer dependencies for $MODULE_NAME"
+                log_warn "Module may not work correctly until dependencies are installed"
+            else
+                log_info "Composer dependencies for $MODULE_NAME installed successfully"
+            fi
+        else
+            log_warn "Composer not found! Module $MODULE_NAME requires composer dependencies."
+            log_warn "Please rebuild the Docker image: docker compose build --no-cache php"
+        fi
     fi
 
     # Cleanup
@@ -243,6 +253,39 @@ install_default_themes() {
     log_info "Default themes installation completed!"
 }
 
+# Function to install composer dependencies for all modules that need them
+install_module_dependencies() {
+    log_step "Checking module composer dependencies..."
+
+    if ! command -v composer &> /dev/null; then
+        log_error "Composer not found! Cannot install module dependencies."
+        log_error "Please rebuild the Docker image: docker compose build --no-cache php"
+        return 1
+    fi
+
+    local modules_updated=0
+    for module_dir in "${OMEKA_ROOT}"/modules/*/; do
+        local module_name=$(basename "$module_dir")
+        
+        # Check if module has composer.json but no vendor directory
+        if [[ -f "${module_dir}composer.json" ]] && [[ ! -d "${module_dir}vendor" ]]; then
+            log_info "Installing composer dependencies for $module_name..."
+            if (cd "$module_dir" && composer install --no-dev --no-interaction 2>&1); then
+                log_info "Composer dependencies for $module_name installed successfully"
+                modules_updated=$((modules_updated + 1))
+            else
+                log_warn "Failed to install composer dependencies for $module_name"
+            fi
+        fi
+    done
+
+    if [[ $modules_updated -eq 0 ]]; then
+        log_info "All module dependencies are already installed"
+    else
+        log_info "Installed composer dependencies for $modules_updated module(s)"
+    fi
+}
+
 # Create required directories if they don't exist
 log_step "Creating required directories..."
 mkdir -p "${OMEKA_ROOT}/files"
@@ -298,17 +341,20 @@ fi
 install_default_modules
 install_default_themes
 
-# Set proper permissions
+# Install composer dependencies for modules that need them
+install_module_dependencies
+
+# Set proper permissions (use || true for bind-mounted dirs that may fail on Windows)
 log_step "Setting proper permissions..."
-chown -R www-data:www-data "${OMEKA_ROOT}/modules"
-chown -R www-data:www-data "${OMEKA_ROOT}/themes"
-chown -R www-data:www-data "${OMEKA_ROOT}/files"
-chown -R www-data:www-data "${OMEKA_ROOT}/sideload"
-chown -R www-data:www-data "${OMEKA_ROOT}/config"
-chmod 775 "${OMEKA_ROOT}/sideload"
-chmod 775 "${OMEKA_ROOT}/files"
-chmod 775 "${OMEKA_ROOT}/modules"
-chmod 775 "${OMEKA_ROOT}/themes"
+chown -R www-data:www-data "${OMEKA_ROOT}/modules" 2>/dev/null || true
+chown -R www-data:www-data "${OMEKA_ROOT}/themes" 2>/dev/null || true
+chown -R www-data:www-data "${OMEKA_ROOT}/files" 2>/dev/null || true
+chown -R www-data:www-data "${OMEKA_ROOT}/sideload" 2>/dev/null || log_warn "Could not change sideload ownership (bind mount from host)"
+chown -R www-data:www-data "${OMEKA_ROOT}/config" 2>/dev/null || true
+chmod 775 "${OMEKA_ROOT}/sideload" 2>/dev/null || log_warn "Could not change sideload permissions (bind mount from host)"
+chmod 775 "${OMEKA_ROOT}/files" 2>/dev/null || true
+chmod 775 "${OMEKA_ROOT}/modules" 2>/dev/null || true
+chmod 775 "${OMEKA_ROOT}/themes" 2>/dev/null || true
 
 log_info "Entrypoint completed. Starting PHP-FPM..."
 
