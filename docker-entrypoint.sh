@@ -24,7 +24,7 @@ DEFAULT_MODULES=(
     "ActivityLog:omeka-s-modules/ActivityLog:master"
     "CSVImport:omeka-s-modules/CSVImport:develop"
     "DataCleaning:omeka-s-modules/DataCleaning:master"
-    "DspaceConnector:omeka-s-modules/DspaceConnector:master"
+    "DspaceConnector:omeka-s-modules/DspaceConnector:develop"
     "FacetedBrowse:omeka-s-modules/FacetedBrowse:master"
     "FileSideload:omeka-s-modules/FileSideload:master"
     "ItemCarouselBlock:omeka-s-modules/ItemCarouselBlock:master"
