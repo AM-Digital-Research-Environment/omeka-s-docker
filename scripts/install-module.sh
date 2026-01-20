@@ -40,6 +40,7 @@ declare -A MODULE_REPOS=(
     ["CSVImport"]="omeka-s-modules/CSVImport"
     ["CustomVocab"]="omeka-s-modules/CustomVocab"
     ["DataCleaning"]="omeka-s-modules/DataCleaning"
+    ["DspaceConnector"]="omeka-s-modules/DspaceConnector"
     ["FacetedBrowse"]="omeka-s-modules/FacetedBrowse"
     ["FileSideload"]="omeka-s-modules/FileSideload"
     ["Hierarchy"]="omeka-s-modules/Hierarchy"

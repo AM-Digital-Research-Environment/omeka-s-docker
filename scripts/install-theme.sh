@@ -12,6 +12,7 @@ declare -A THEME_REPOS=(
     ["CenterRow"]="omeka-s-themes/CenterRow"
     ["Cozy"]="omeka-s-themes/Cozy"
     ["Freedom"]="omeka-s-themes/Freedom"
+    ["Lively"]="omeka-s-themes/Lively"
     ["Papers"]="omeka-s-themes/Papers"
     ["Foundation"]="omeka-s-themes/Foundation"
     ["ThankRoy"]="omeka-s-themes/ThankRoy"

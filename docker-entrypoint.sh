@@ -24,10 +24,19 @@ DEFAULT_MODULES=(
     "ActivityLog:omeka-s-modules/ActivityLog:master"
     "CSVImport:omeka-s-modules/CSVImport:develop"
     "DataCleaning:omeka-s-modules/DataCleaning:master"
+    "DspaceConnector:omeka-s-modules/DspaceConnector:master"
     "FacetedBrowse:omeka-s-modules/FacetedBrowse:master"
     "FileSideload:omeka-s-modules/FileSideload:master"
+    "ItemCarouselBlock:omeka-s-modules/ItemCarouselBlock:master"
     "Mapping:omeka-s-modules/Mapping:master"
     "NumericDataTypes:omeka-s-modules/NumericDataTypes:master"
+)
+
+# Default themes to install (official Omeka S themes)
+# Format: "ThemeName:repo:branch"
+DEFAULT_THEMES=(
+    "Freedom:omeka-s-themes/Freedom:master"
+    "Lively:omeka-s-themes/Lively:master"
 )
 
 # Function to get the latest release version from GitHub
@@ -145,6 +154,49 @@ install_module() {
     return 0
 }
 
+# Function to install a single theme from GitHub
+install_theme() {
+    local THEME_NAME="$1"
+    local REPO="$2"
+    local BRANCH="${3:-master}"
+
+    log_info "Installing theme: $THEME_NAME..."
+
+    local TEMP_DIR=$(mktemp -d)
+    local ARCHIVE_URL="https://github.com/${REPO}/archive/refs/heads/${BRANCH}.zip"
+
+    # Download the theme
+    if ! curl -sL "$ARCHIVE_URL" -o "${TEMP_DIR}/theme.zip" 2>/dev/null; then
+        # Try as a tag if branch fails
+        ARCHIVE_URL="https://github.com/${REPO}/archive/refs/tags/${BRANCH}.zip"
+        if ! curl -sL "$ARCHIVE_URL" -o "${TEMP_DIR}/theme.zip" 2>/dev/null; then
+            log_warn "Failed to download theme $THEME_NAME"
+            rm -rf "${TEMP_DIR}"
+            return 1
+        fi
+    fi
+
+    # Extract the theme
+    unzip -q "${TEMP_DIR}/theme.zip" -d "${TEMP_DIR}" 2>/dev/null
+
+    # Find the extracted directory
+    local EXTRACTED_DIR=$(find "${TEMP_DIR}" -maxdepth 1 -type d ! -name "$(basename "${TEMP_DIR}")" | head -1)
+    if [[ -z "$EXTRACTED_DIR" ]]; then
+        log_warn "Failed to find extracted theme directory for $THEME_NAME"
+        rm -rf "${TEMP_DIR}"
+        return 1
+    fi
+
+    # Move to themes directory with correct name
+    mv "$EXTRACTED_DIR" "${OMEKA_ROOT}/themes/${THEME_NAME}"
+
+    # Cleanup
+    rm -rf "${TEMP_DIR}"
+
+    log_info "Theme $THEME_NAME installed successfully!"
+    return 0
+}
+
 # Function to install all default modules
 install_default_modules() {
     log_step "Installing default modules..."
@@ -166,6 +218,29 @@ install_default_modules() {
     done
 
     log_info "Default modules installation completed!"
+}
+
+# Function to install all default themes
+install_default_themes() {
+    log_step "Installing default themes..."
+
+    for theme_entry in "${DEFAULT_THEMES[@]}"; do
+        # Parse format: "ThemeName:repo:branch"
+        local THEME_NAME="${theme_entry%%:*}"
+        local remainder="${theme_entry#*:}"
+        local REPO="${remainder%%:*}"
+        local BRANCH="${remainder##*:}"
+
+        # Skip if theme already exists
+        if [[ -d "${OMEKA_ROOT}/themes/${THEME_NAME}" ]]; then
+            log_info "Theme $THEME_NAME already exists, skipping..."
+            continue
+        fi
+
+        install_theme "$THEME_NAME" "$REPO" "$BRANCH" || log_warn "Failed to install $THEME_NAME, continuing..."
+    done
+
+    log_info "Default themes installation completed!"
 }
 
 # Create required directories if they don't exist
@@ -219,8 +294,9 @@ else
     log_info "Omeka S is already installed"
 fi
 
-# Always check and install missing default modules
+# Always check and install missing default modules and themes
 install_default_modules
+install_default_themes
 
 # Set proper permissions
 log_step "Setting proper permissions..."
