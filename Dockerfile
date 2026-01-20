@@ -165,7 +165,7 @@ RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh \
     && chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Set recommended PHP.ini settings
-RUN echo "date.timezone = UTC" >> /usr/local/etc/php/conf.d/docker-php-timezone.ini
+RUN echo "date.timezone = Europe/Berlin" >> /usr/local/etc/php/conf.d/docker-php-timezone.ini
 
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["php-fpm"]
