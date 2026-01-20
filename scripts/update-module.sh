@@ -6,49 +6,74 @@
 
 set -e
 
-# Configuration - Map module names to their GitHub repositories
+# Configuration - Map module names to their repositories and default branches
+# Format: "repo:branch"
 declare -A MODULE_REPOS=(
     # Daniel-KM modules (GitHub)
-    ["AdvancedSearch"]="Daniel-KM/Omeka-S-module-AdvancedSearch"
-    ["AnalyticsSnippet"]="Daniel-KM/Omeka-S-module-AnalyticsSnippet"
-    ["BulkEdit"]="Daniel-KM/Omeka-S-module-BulkEdit"
-    ["BulkExport"]="Daniel-KM/Omeka-s-module-BulkExport"
-    ["Common"]="Daniel-KM/Omeka-S-module-Common"
-    ["EasyAdmin"]="Daniel-KM/Omeka-S-module-EasyAdmin"
-    ["IiifServer"]="Daniel-KM/Omeka-S-module-IiifServer"
-    ["ImageServer"]="Daniel-KM/Omeka-S-module-ImageServer"
-    ["Log"]="Daniel-KM/Omeka-S-module-Log"
-    ["OaiPmhRepository"]="Daniel-KM/Omeka-S-module-OaiPmhRepository"
-    ["Reference"]="Daniel-KM/Omeka-S-module-Reference"
-    ["SearchSolr"]="Daniel-KM/Omeka-S-module-SearchSolr"
-    ["UniversalViewer"]="Daniel-KM/Omeka-S-module-UniversalViewer"
+    ["AdvancedSearch"]="Daniel-KM/Omeka-S-module-AdvancedSearch:master"
+    ["AnalyticsSnippet"]="Daniel-KM/Omeka-S-module-AnalyticsSnippet:master"
+    ["BulkEdit"]="Daniel-KM/Omeka-S-module-BulkEdit:master"
+    ["BulkExport"]="Daniel-KM/Omeka-s-module-BulkExport:master"
+    ["Common"]="Daniel-KM/Omeka-S-module-Common:master"
+    ["EasyAdmin"]="Daniel-KM/Omeka-S-module-EasyAdmin:master"
+    ["IiifServer"]="Daniel-KM/Omeka-S-module-IiifServer:master"
+    ["ImageServer"]="Daniel-KM/Omeka-S-module-ImageServer:master"
+    ["Log"]="Daniel-KM/Omeka-S-module-Log:master"
+    ["OaiPmhRepository"]="Daniel-KM/Omeka-S-module-OaiPmhRepository:master"
+    ["Reference"]="Daniel-KM/Omeka-S-module-Reference:master"
+    ["SearchSolr"]="Daniel-KM/Omeka-S-module-SearchSolr:master"
+    ["UniversalViewer"]="Daniel-KM/Omeka-S-module-UniversalViewer:master"
 
     # Official Omeka-S modules
-    ["ActivityLog"]="omeka-s-modules/ActivityLog"
-    ["Collecting"]="omeka-s-modules/Collecting"
-    ["CSVImport"]="omeka-s-modules/CSVImport"
-    ["CustomVocab"]="omeka-s-modules/CustomVocab"
-    ["DataCleaning"]="omeka-s-modules/DataCleaning"
-    ["FacetedBrowse"]="omeka-s-modules/FacetedBrowse"
-    ["FileSideload"]="omeka-s-modules/FileSideload"
-    ["Hierarchy"]="omeka-s-modules/Hierarchy"
-    ["InverseProperties"]="omeka-s-modules/InverseProperties"
-    ["ItemCarouselBlock"]="omeka-s-modules/ItemCarouselBlock"
-    ["Mapping"]="omeka-s-modules/Mapping"
-    ["NumericDataTypes"]="omeka-s-modules/NumericDataTypes"
-    ["ResourceMeta"]="omeka-s-modules/ResourceMeta"
+    ["ActivityLog"]="omeka-s-modules/ActivityLog:master"
+    ["Collecting"]="omeka-s-modules/Collecting:master"
+    ["CSVImport"]="omeka-s-modules/CSVImport:develop"
+    ["CustomVocab"]="omeka-s-modules/CustomVocab:master"
+    ["DataCleaning"]="omeka-s-modules/DataCleaning:master"
+    ["DspaceConnector"]="omeka-s-modules/DspaceConnector:develop"
+    ["FacetedBrowse"]="omeka-s-modules/FacetedBrowse:master"
+    ["FileSideload"]="omeka-s-modules/FileSideload:master"
+    ["Hierarchy"]="omeka-s-modules/Hierarchy:master"
+    ["InverseProperties"]="omeka-s-modules/InverseProperties:master"
+    ["ItemCarouselBlock"]="omeka-s-modules/ItemCarouselBlock:master"
+    ["Mapping"]="omeka-s-modules/Mapping:master"
+    ["NumericDataTypes"]="omeka-s-modules/NumericDataTypes:master"
+    ["ResourceMeta"]="omeka-s-modules/ResourceMeta:master"
 
     # Other modules
-    ["RightsStatements"]="zerocrates/RightsStatements"
-    ["Sitemaps"]="ManOnDaMoon/omeka-s-module-Sitemaps"
+    ["RightsStatements"]="zerocrates/RightsStatements:master"
+    ["Sitemaps"]="ManOnDaMoon/omeka-s-module-Sitemaps:master"
 )
 
 # Configuration - Map module names to their GitLab repositories
+# Format: "repo:branch"
 declare -A GITLAB_REPOS=(
     # Daniel-KM modules (GitLab)
-    ["IiifSearch"]="Daniel-KM/Omeka-S-module-IiifSearch"
-    ["Internationalisation"]="Daniel-KM/Omeka-S-module-Internationalisation"
+    ["IiifSearch"]="Daniel-KM/Omeka-S-module-IiifSearch:master"
+    ["Internationalisation"]="Daniel-KM/Omeka-S-module-Internationalisation:master"
 )
+
+# Function to get repo and branch from MODULE_REPOS or GITLAB_REPOS
+get_module_info() {
+    local MODULE_NAME="$1"
+    local entry=""
+    local is_gitlab=false
+
+    if [[ -n "${MODULE_REPOS[$MODULE_NAME]}" ]]; then
+        entry="${MODULE_REPOS[$MODULE_NAME]}"
+    elif [[ -n "${GITLAB_REPOS[$MODULE_NAME]}" ]]; then
+        entry="${GITLAB_REPOS[$MODULE_NAME]}"
+        is_gitlab=true
+    else
+        return 1
+    fi
+
+    # Parse "repo:branch" format
+    local repo="${entry%%:*}"
+    local branch="${entry##*:}"
+
+    echo "$repo|$branch|$is_gitlab"
+}
 
 # Colors for output
 RED='\033[0;31m'
@@ -65,47 +90,60 @@ usage() {
     echo ""
     echo "Available modules (GitHub):"
     for module in "${!MODULE_REPOS[@]}"; do
-        echo "  - $module"
+        local entry="${MODULE_REPOS[$module]}"
+        local branch="${entry##*:}"
+        echo "  - $module (default: $branch)"
     done | sort
     echo ""
     echo "Available modules (GitLab):"
     for module in "${!GITLAB_REPOS[@]}"; do
-        echo "  - $module"
+        local entry="${GITLAB_REPOS[$module]}"
+        local branch="${entry##*:}"
+        echo "  - $module (default: $branch)"
     done | sort
     echo ""
     echo "Options:"
     echo "  module-name    Name of the module to update"
-    echo "  branch/tag     Optional: specific branch or tag (default: master)"
+    echo "  branch/tag     Optional: override default branch/tag"
     echo ""
     echo "Examples:"
-    echo "  $0 CSVImport"
-    echo "  $0 AdvancedSearch 3.5.46"
-    echo "  $0 all                    # Update all modules"
+    echo "  $0 CSVImport              # Uses default branch (develop)"
+    echo "  $0 AdvancedSearch 3.5.46  # Override with specific tag"
+    echo "  $0 all                    # Update all installed modules"
     exit 1
 }
 
 update_module() {
     local MODULE_NAME="$1"
-    local BRANCH="${2:-master}"
+    local BRANCH_OVERRIDE="$2"
 
-    local REPO=""
-    local BASE_URL=""
-    local ARCHIVE_URL=""
-    local IS_GITLAB=false
-
-    if [[ -n "${MODULE_REPOS[$MODULE_NAME]}" ]]; then
-        REPO="${MODULE_REPOS[$MODULE_NAME]}"
-        BASE_URL="https://github.com/${REPO}"
-        ARCHIVE_URL="${BASE_URL}/archive/refs/heads/${BRANCH}.zip"
-    elif [[ -n "${GITLAB_REPOS[$MODULE_NAME]}" ]]; then
-        REPO="${GITLAB_REPOS[$MODULE_NAME]}"
-        BASE_URL="https://gitlab.com/${REPO}"
-        ARCHIVE_URL="${BASE_URL}/-/archive/${BRANCH}/${REPO##*/}-${BRANCH}.zip"
-        IS_GITLAB=true
-    else
+    # Get module info (repo, default branch, is_gitlab)
+    local module_info
+    module_info=$(get_module_info "$MODULE_NAME")
+    if [[ $? -ne 0 ]]; then
         log_error "Unknown module: $MODULE_NAME"
         echo "Use '$0' without arguments to see available modules"
         return 1
+    fi
+
+    # Parse module info
+    local REPO="${module_info%%|*}"
+    local remainder="${module_info#*|}"
+    local DEFAULT_BRANCH="${remainder%%|*}"
+    local IS_GITLAB="${remainder##*|}"
+
+    # Use override branch if provided, otherwise use default
+    local BRANCH="${BRANCH_OVERRIDE:-$DEFAULT_BRANCH}"
+
+    local BASE_URL=""
+    local ARCHIVE_URL=""
+
+    if [[ "$IS_GITLAB" == "true" ]]; then
+        BASE_URL="https://gitlab.com/${REPO}"
+        ARCHIVE_URL="${BASE_URL}/-/archive/${BRANCH}/${REPO##*/}-${BRANCH}.zip"
+    else
+        BASE_URL="https://github.com/${REPO}"
+        ARCHIVE_URL="${BASE_URL}/archive/refs/heads/${BRANCH}.zip"
     fi
 
     local TEMP_DIR=$(mktemp -d)
@@ -119,15 +157,19 @@ update_module() {
     log_info "Updating module: $MODULE_NAME from $BASE_URL (branch: $BRANCH)"
 
     log_info "Downloading module..."
-    if ! curl -sL "$ARCHIVE_URL" -o "$TEMP_DIR/module.zip"; then
-        if [[ "$IS_GITLAB" == true ]]; then
+    local HTTP_CODE
+    HTTP_CODE=$(curl -sL -w "%{http_code}" "$ARCHIVE_URL" -o "$TEMP_DIR/module.zip")
+    if [[ "$HTTP_CODE" != "200" ]]; then
+        # Try as a tag if branch fails
+        if [[ "$IS_GITLAB" == "true" ]]; then
             ARCHIVE_URL="${BASE_URL}/-/archive/${BRANCH}/${REPO##*/}-${BRANCH}.zip"
         else
             ARCHIVE_URL="${BASE_URL}/archive/refs/tags/${BRANCH}.zip"
         fi
-        log_warn "Branch not found, trying as tag..."
-        if ! curl -sL "$ARCHIVE_URL" -o "$TEMP_DIR/module.zip"; then
-            log_error "Failed to download module. Check if branch/tag '$BRANCH' exists."
+        log_warn "Branch not found (HTTP $HTTP_CODE), trying as tag..."
+        HTTP_CODE=$(curl -sL -w "%{http_code}" "$ARCHIVE_URL" -o "$TEMP_DIR/module.zip")
+        if [[ "$HTTP_CODE" != "200" ]]; then
+            log_error "Failed to download module (HTTP $HTTP_CODE). Check if branch/tag '$BRANCH' exists."
             rm -rf "$TEMP_DIR"
             return 1
         fi
@@ -174,23 +216,33 @@ update_module() {
 }
 
 update_all_modules() {
-    local BRANCH="${1:-master}"
-    log_info "Updating all modules..."
+    log_info "Updating all installed modules..."
 
+    local CONTAINER_ID=$(docker compose ps -q php)
+    if [[ -z "$CONTAINER_ID" ]]; then
+        log_error "PHP container is not running. Start it with: docker compose up -d php"
+        return 1
+    fi
+
+    # Only update modules that are actually installed
     for module in "${!MODULE_REPOS[@]}"; do
-        echo ""
-        echo "=========================================="
-        update_module "$module" "$BRANCH"
+        if docker compose exec -T php test -d "/var/www/html/modules/$module"; then
+            echo ""
+            echo "=========================================="
+            update_module "$module"
+        fi
     done
 
     for module in "${!GITLAB_REPOS[@]}"; do
-        echo ""
-        echo "=========================================="
-        update_module "$module" "$BRANCH"
+        if docker compose exec -T php test -d "/var/www/html/modules/$module"; then
+            echo ""
+            echo "=========================================="
+            update_module "$module"
+        fi
     done
 
     echo ""
-    log_info "All modules updated!"
+    log_info "All installed modules updated!"
 }
 
 # Main script
@@ -202,7 +254,7 @@ if [[ $# -lt 1 ]]; then
 fi
 
 MODULE_NAME="$1"
-BRANCH="${2:-master}"
+BRANCH_OVERRIDE="$2"  # Optional: override default branch
 
 if ! command -v docker &> /dev/null; then
     log_error "Docker is not installed or not in PATH"
@@ -210,9 +262,9 @@ if ! command -v docker &> /dev/null; then
 fi
 
 if [[ "$MODULE_NAME" == "all" ]]; then
-    update_all_modules "$BRANCH"
+    update_all_modules
 else
-    update_module "$MODULE_NAME" "$BRANCH"
+    update_module "$MODULE_NAME" "$BRANCH_OVERRIDE"
 fi
 
 echo ""
