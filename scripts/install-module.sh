@@ -9,12 +9,16 @@ set -e
 # Pre-installed modules (installed automatically with Omeka S)
 PREINSTALLED_MODULES=(
     "ActivityLog"
+    "Collecting"
     "CSVImport"
+    "CustomVocab"
     "DataCleaning"
+    "Datavis"
     "FacetedBrowse"
     "FileSideload"
     "Mapping"
     "NumericDataTypes"
+    "ZoteroImport"
 )
 
 # Configuration - Map module names to their repositories and default branches
@@ -38,18 +42,24 @@ declare -A MODULE_REPOS=(
     # Official Omeka-S modules
     ["ActivityLog"]="omeka-s-modules/ActivityLog:master"
     ["Collecting"]="omeka-s-modules/Collecting:master"
+    ["CSSEditor"]="omeka-s-modules/CSSEditor:master"
     ["CSVImport"]="omeka-s-modules/CSVImport:develop"
     ["CustomVocab"]="omeka-s-modules/CustomVocab:master"
     ["DataCleaning"]="omeka-s-modules/DataCleaning:master"
+    ["Datavis"]="omeka-s-modules/Datavis:main"
     ["DspaceConnector"]="omeka-s-modules/DspaceConnector:develop"
+    ["Exports"]="omeka-s-modules/Exports:main"
     ["FacetedBrowse"]="omeka-s-modules/FacetedBrowse:master"
     ["FileSideload"]="omeka-s-modules/FileSideload:master"
-    ["Hierarchy"]="omeka-s-modules/Hierarchy:master"
-    ["InverseProperties"]="omeka-s-modules/InverseProperties:master"
+    ["Hierarchy"]="omeka-s-modules/Hierarchy:main"
+    ["InverseProperties"]="omeka-s-modules/InverseProperties:main"
     ["ItemCarouselBlock"]="omeka-s-modules/ItemCarouselBlock:master"
     ["Mapping"]="omeka-s-modules/Mapping:master"
     ["NumericDataTypes"]="omeka-s-modules/NumericDataTypes:master"
+    ["OutputFormats"]="omeka-s-modules/OutputFormats:main"
     ["ResourceMeta"]="omeka-s-modules/ResourceMeta:master"
+    ["ValueSuggest"]="omeka-s-modules/ValueSuggest:master"
+    ["ZoteroImport"]="omeka-s-modules/ZoteroImport:master"
 
     # Other modules
     ["RightsStatements"]="zerocrates/RightsStatements:master"
