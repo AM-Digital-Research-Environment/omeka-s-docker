@@ -16,6 +16,7 @@ PREINSTALLED_MODULES=(
     "Datavis"
     "FacetedBrowse"
     "FileSideload"
+    "IframeEmbed"
     "Mapping"
     "NumericDataTypes"
     "ZoteroImport"
@@ -62,6 +63,7 @@ declare -A MODULE_REPOS=(
     ["ZoteroImport"]="omeka-s-modules/ZoteroImport:master"
 
     # Other modules
+    ["IframeEmbed"]="fmadore/IframeEmbed:main"
     ["RightsStatements"]="zerocrates/RightsStatements:master"
     ["Sitemaps"]="ManOnDaMoon/omeka-s-module-Sitemaps:master"
 )

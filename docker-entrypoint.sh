@@ -27,6 +27,7 @@ DEFAULT_MODULES=(
     "DspaceConnector:omeka-s-modules/DspaceConnector:develop"
     "FacetedBrowse:omeka-s-modules/FacetedBrowse:master"
     "FileSideload:omeka-s-modules/FileSideload:master"
+    "IframeEmbed:fmadore/IframeEmbed:main"
     "ItemCarouselBlock:omeka-s-modules/ItemCarouselBlock:master"
     "Mapping:omeka-s-modules/Mapping:master"
     "NumericDataTypes:omeka-s-modules/NumericDataTypes:master"
