@@ -218,17 +218,46 @@ The scripts support many additional modules including:
 **Daniel-KM Modules:**
 - AdvancedSearch, BulkEdit, BulkExport
 - IiifServer, ImageServer, UniversalViewer
-- Common, Log, EasyAdmin, Reference
+- Common, Log, Cron, EasyAdmin, Reference
 
 Run `./scripts/install-module.sh list` to see all available modules.
 
 ### Module Dependencies
 
-Some modules have dependencies. Install in this order if using Daniel-KM modules:
+Dependencies are **automatically installed** when you install a module that requires them. For example:
 
-1. Common (required by many Daniel-KM modules)
-2. Log (required by some modules)
-3. Other modules as needed
+```bash
+# This will automatically install Common and Cron first, then EasyAdmin
+./scripts/install-module.sh EasyAdmin
+```
+
+The script will:
+1. Check if required dependencies are installed
+2. Install missing dependencies in the correct order
+3. Install the requested module
+4. Display a reminder to activate modules in the correct order in Omeka S admin
+
+**Modules with automatic dependencies:**
+
+| Module | Dependencies |
+|--------|--------------|
+| EasyAdmin | Common, Cron |
+| AdvancedSearch | Common |
+| BulkEdit | Common |
+| BulkExport | Common |
+| SearchSolr | Common, AdvancedSearch |
+| IiifServer | Common |
+| ImageServer | Common |
+| UniversalViewer | Common |
+| Log | Common |
+| Reference | Common |
+| OaiPmhRepository | Common |
+
+**Activation order in Omeka S admin:**
+When activating modules with dependencies, always activate them in order:
+1. Common (first)
+2. Other dependencies (Cron, Log, AdvancedSearch, etc.)
+3. The module you want to use (EasyAdmin, SearchSolr, etc.)
 
 ## IIIF Support
 
