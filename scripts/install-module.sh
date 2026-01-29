@@ -77,6 +77,24 @@ declare -A GITLAB_REPOS=(
     ["Internationalisation"]="Daniel-KM/Omeka-S-module-Internationalisation:master"
 )
 
+# Module dependencies - modules that must be installed first
+# Format: "dependency1 dependency2 ..."
+declare -A MODULE_DEPENDENCIES=(
+    ["EasyAdmin"]="Common Cron"
+    ["AdvancedSearch"]="Common"
+    ["BulkEdit"]="Common"
+    ["BulkExport"]="Common"
+    ["IiifServer"]="Common"
+    ["ImageServer"]="Common"
+    ["Log"]="Common"
+    ["OaiPmhRepository"]="Common"
+    ["Reference"]="Common"
+    ["SearchSolr"]="Common AdvancedSearch"
+    ["UniversalViewer"]="Common"
+    ["IiifSearch"]="Common"
+    ["Internationalisation"]="Common"
+)
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -96,6 +114,41 @@ is_preinstalled() {
         fi
     done
     return 1
+}
+
+# Function to check if a module is already installed in the container
+is_module_installed() {
+    local module="$1"
+    docker compose exec -T php test -d "/var/www/html/modules/$module" 2>/dev/null
+}
+
+# Function to install module dependencies
+install_dependencies() {
+    local MODULE_NAME="$1"
+    local deps="${MODULE_DEPENDENCIES[$MODULE_NAME]}"
+
+    if [[ -z "$deps" ]]; then
+        return 0
+    fi
+
+    log_info "Checking dependencies for $MODULE_NAME: $deps"
+
+    for dep in $deps; do
+        if ! is_module_installed "$dep"; then
+            log_info "Installing required dependency: $dep"
+            # Recursively install dependencies (in case the dependency has its own dependencies)
+            install_dependencies "$dep"
+            install_module "$dep"
+            if [[ $? -ne 0 ]]; then
+                log_error "Failed to install dependency: $dep"
+                return 1
+            fi
+        else
+            log_info "Dependency $dep is already installed"
+        fi
+    done
+
+    return 0
 }
 
 # Function to get repo and branch from MODULE_REPOS or GITLAB_REPOS
@@ -318,9 +371,22 @@ if [[ "$MODULE_NAME" == "list" ]]; then
     exit 0
 fi
 
+# Install dependencies first (if any)
+install_dependencies "$MODULE_NAME"
+if [[ $? -ne 0 ]]; then
+    log_error "Failed to install dependencies for $MODULE_NAME"
+    exit 1
+fi
+
+# Install the requested module
 install_module "$MODULE_NAME" "$BRANCH_OVERRIDE"
 
 echo ""
 log_info "Don't forget to:"
-echo "  1. Activate the module in Omeka S admin panel"
+echo "  1. Activate the module (and any dependencies) in Omeka S admin panel"
 echo "  2. Configure the module as needed"
+echo ""
+if [[ -n "${MODULE_DEPENDENCIES[$MODULE_NAME]}" ]]; then
+    log_info "Note: Dependencies were auto-installed: ${MODULE_DEPENDENCIES[$MODULE_NAME]}"
+    echo "  Make sure to activate them in the correct order in Omeka S admin."
+fi
