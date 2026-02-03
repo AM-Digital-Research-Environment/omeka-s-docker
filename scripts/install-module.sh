@@ -1,8 +1,8 @@
 #!/bin/bash
 # Script to install Omeka S modules from GitHub/GitLab
-# Usage: ./install-module.sh <module-name> [branch/tag]
-# Example: ./install-module.sh AdvancedSearch
-# Example: ./install-module.sh AdvancedSearch 3.5.46
+# Usage: bash scripts/install-module.sh <module-name> [branch/tag]
+# Example: bash scripts/install-module.sh AdvancedSearch
+# Example: bash scripts/install-module.sh AdvancedSearch 3.5.46
 
 set -e
 

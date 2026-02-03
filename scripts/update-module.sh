@@ -1,8 +1,8 @@
 #!/bin/bash
 # Script to update Omeka S modules from GitHub/GitLab
-# Usage: ./update-module.sh <module-name> [branch/tag]
-# Example: ./update-module.sh CSVImport
-# Example: ./update-module.sh AdvancedSearch 3.5.46
+# Usage: bash scripts/update-module.sh <module-name> [branch/tag]
+# Example: bash scripts/update-module.sh CSVImport
+# Example: bash scripts/update-module.sh AdvancedSearch 3.5.46
 
 set -e
 

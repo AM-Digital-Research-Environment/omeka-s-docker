@@ -1,8 +1,8 @@
 #!/bin/bash
 # Script to install Omeka S themes from GitHub
-# Usage: ./install-theme.sh <theme-name> [branch/tag]
-# Example: ./install-theme.sh CenterRow
-# Example: ./install-theme.sh Foundation 1.4.0
+# Usage: bash scripts/install-theme.sh <theme-name> [branch/tag]
+# Example: bash scripts/install-theme.sh CenterRow
+# Example: bash scripts/install-theme.sh Foundation 1.4.0
 
 set -e
 
