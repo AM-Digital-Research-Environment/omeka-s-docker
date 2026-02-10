@@ -130,7 +130,15 @@ RUN { \
     echo 'opcache.enable_cli=1'; \
     echo 'opcache.enable_file_override=1'; \
     echo 'opcache.validate_timestamps=0'; \
+    echo 'opcache.jit=1255'; \
+    echo 'opcache.jit_buffer_size=50M'; \
     } > /usr/local/etc/php/conf.d/opcache-recommended.ini
+
+# Configure realpath cache (reduces stat() calls with many modules)
+RUN { \
+    echo 'realpath_cache_size=4096K'; \
+    echo 'realpath_cache_ttl=600'; \
+    } > /usr/local/etc/php/conf.d/realpath-cache.ini
 
 # Configure APCu
 RUN { \
@@ -157,18 +165,8 @@ RUN curl -o /usr/local/bin/php-fpm-healthcheck \
 # Enable PHP-FPM status page for healthcheck
 RUN set -xe && echo "pm.status_path = /status" >> /usr/local/etc/php-fpm.d/zz-docker.conf
 
-# Configure PHP-FPM pool settings (optimized for 4GB container limit)
-RUN { \
-    echo '[www]'; \
-    echo 'pm = dynamic'; \
-    echo 'pm.max_children = 10'; \
-    echo 'pm.start_servers = 3'; \
-    echo 'pm.min_spare_servers = 2'; \
-    echo 'pm.max_spare_servers = 5'; \
-    echo 'pm.max_requests = 500'; \
-    echo 'pm.process_idle_timeout = 10s'; \
-    echo 'request_terminate_timeout = 300s'; \
-    } > /usr/local/etc/php-fpm.d/zzz-omeka-pool.conf
+# PHP-FPM pool settings are generated dynamically in docker-entrypoint.sh
+# to support runtime configuration via PHP_PM_* environment variables
 
 WORKDIR /var/www/html
 

@@ -13,6 +13,33 @@ log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 log_step() { echo -e "${BLUE}[STEP]${NC} $1"; }
 
+# Load Docker secrets if available (preferred over environment variables)
+if [ -f /run/secrets/mysql_password ]; then
+    export MYSQL_PASSWORD=$(cat /run/secrets/mysql_password)
+    log_info "Loaded MySQL password from Docker secret"
+fi
+
+# Verify MySQL password is available
+if [ -z "$MYSQL_PASSWORD" ]; then
+    log_error "No MySQL password found. Set MYSQL_PASSWORD env var or mount /run/secrets/mysql_password"
+    exit 1
+fi
+
+# Generate PHP-FPM pool configuration (supports runtime tuning via env vars)
+log_step "Configuring PHP-FPM pool..."
+cat > /usr/local/etc/php-fpm.d/zzz-omeka-pool.conf << FPMEOF
+[www]
+pm = dynamic
+pm.max_children = ${PHP_PM_MAX_CHILDREN:-10}
+pm.start_servers = ${PHP_PM_START_SERVERS:-3}
+pm.min_spare_servers = ${PHP_PM_MIN_SPARE_SERVERS:-2}
+pm.max_spare_servers = ${PHP_PM_MAX_SPARE_SERVERS:-5}
+pm.max_requests = ${PHP_PM_MAX_REQUESTS:-500}
+pm.process_idle_timeout = 10s
+request_terminate_timeout = 300s
+FPMEOF
+log_info "PHP-FPM pool: max_children=${PHP_PM_MAX_CHILDREN:-10}, start=${PHP_PM_START_SERVERS:-3}, min_spare=${PHP_PM_MIN_SPARE_SERVERS:-2}, max_spare=${PHP_PM_MAX_SPARE_SERVERS:-5}"
+
 # Configuration
 OMEKA_ROOT="/var/www/html"
 OMEKA_REPO="omeka/omeka-s"

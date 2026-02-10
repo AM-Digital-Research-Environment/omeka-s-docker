@@ -8,6 +8,8 @@ services:
       - "${NGINX_PORT:-80}:80"
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx-http-settings.conf:/etc/nginx/conf.d/00-http-settings.conf:ro
+      - ./nginx-security-headers.conf:/etc/nginx/snippets/security-headers.conf:ro
       - omeka_files:/var/www/html:ro
     depends_on:
       php:
@@ -66,6 +68,12 @@ services:
       - MYSQL_USER=omeka
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
       - OMEKA_VERSION=${OMEKA_VERSION:-latest}
+      # PHP-FPM pool tuning (optional - defaults in entrypoint if unset)
+      # - PHP_PM_MAX_CHILDREN=10
+      # - PHP_PM_START_SERVERS=3
+      # - PHP_PM_MIN_SPARE_SERVERS=2
+      # - PHP_PM_MAX_SPARE_SERVERS=5
+      # - PHP_PM_MAX_REQUESTS=500
     depends_on:
       db:
         condition: service_healthy
@@ -94,7 +102,7 @@ services:
           cpus: '1.0'
           memory: 1G
     healthcheck:
-      test: ["CMD-SHELL", "php -v || exit 1"]
+      test: ["CMD-SHELL", "php-fpm-healthcheck || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
