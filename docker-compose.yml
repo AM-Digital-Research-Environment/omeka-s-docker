@@ -125,7 +125,7 @@ services:
       --innodb-flush-method=O_DIRECT
       --innodb-flush-log-at-trx-commit=2
       --innodb-file-per-table=1
-      --max-connections=100
+      --max-connections=250
       --table-open-cache=400
       --tmp-table-size=32M
       --max-heap-table-size=32M
