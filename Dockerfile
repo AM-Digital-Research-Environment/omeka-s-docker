@@ -1,7 +1,7 @@
 # ==============================================================================
 # Stage 1: builder — compile ImageMagick & PHP extensions with dev headers
 # ==============================================================================
-FROM php:8.4-fpm AS builder
+FROM php:8.5-fpm AS builder
 
 # Pin ImageMagick version for reproducible builds
 ARG IMAGEMAGICK_VERSION=7.1.2-13
@@ -90,7 +90,7 @@ RUN pecl install apcu && \
 # ==============================================================================
 # Stage 2: runtime — lean production image
 # ==============================================================================
-FROM php:8.4-fpm AS runtime
+FROM php:8.5-fpm AS runtime
 
 # Install only runtime shared libraries (no -dev headers, no compilers)
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
