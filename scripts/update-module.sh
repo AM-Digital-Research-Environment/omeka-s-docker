@@ -213,6 +213,7 @@ update_module() {
 
     if docker compose exec -T php test -f "/var/www/html/modules/$MODULE_NAME/composer.json"; then
         log_info "Installing composer dependencies..."
+        docker compose exec -T php bash -c "source /usr/local/bin/ensure-composer.sh && ensure_composer"
         if docker compose exec -T php bash -c "cd /var/www/html/modules/$MODULE_NAME && composer install --no-dev --quiet"; then
             log_info "Composer dependencies installed successfully!"
         else

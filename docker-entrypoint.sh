@@ -13,6 +13,9 @@ log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 log_step() { echo -e "${BLUE}[STEP]${NC} $1"; }
 
+# Load on-demand composer helper
+source /usr/local/bin/ensure-composer.sh
+
 # Load Docker secrets if available (preferred over environment variables)
 if [ -f /run/secrets/mysql_password ]; then
     export MYSQL_PASSWORD=$(cat /run/secrets/mysql_password)
@@ -40,10 +43,15 @@ request_terminate_timeout = 300s
 FPMEOF
 log_info "PHP-FPM pool: max_children=${PHP_PM_MAX_CHILDREN:-10}, start=${PHP_PM_START_SERVERS:-3}, min_spare=${PHP_PM_MIN_SPARE_SERVERS:-2}, max_spare=${PHP_PM_MAX_SPARE_SERVERS:-5}"
 
-# Configuration
+# Configuration — repo URL is hardcoded for safety (no env var override)
 OMEKA_ROOT="/var/www/html"
-OMEKA_REPO="omeka/omeka-s"
-OMEKA_VERSION="${OMEKA_VERSION:-latest}"
+readonly OMEKA_REPO="omeka/omeka-s"
+OMEKA_VERSION="${OMEKA_VERSION:-4.2.0}"
+
+# Warn when using "latest" — the resolved version has not been tested against this image
+if [[ "$OMEKA_VERSION" == "latest" ]]; then
+    log_warn "OMEKA_VERSION=latest — the resolved version may not be tested with this image"
+fi
 
 # Default modules to install (official Omeka S modules)
 # Format: "ModuleName:repo:branch"
@@ -172,16 +180,12 @@ install_module() {
     # Install composer dependencies if needed
     if [[ -f "${OMEKA_ROOT}/modules/${MODULE_NAME}/composer.json" ]]; then
         log_info "Installing composer dependencies for $MODULE_NAME..."
-        if command -v composer &> /dev/null; then
-            if ! (cd "${OMEKA_ROOT}/modules/${MODULE_NAME}" && composer install --no-dev --no-interaction 2>&1); then
-                log_warn "Failed to install composer dependencies for $MODULE_NAME"
-                log_warn "Module may not work correctly until dependencies are installed"
-            else
-                log_info "Composer dependencies for $MODULE_NAME installed successfully"
-            fi
+        ensure_composer
+        if ! (cd "${OMEKA_ROOT}/modules/${MODULE_NAME}" && composer install --no-dev --no-interaction 2>&1); then
+            log_warn "Failed to install composer dependencies for $MODULE_NAME"
+            log_warn "Module may not work correctly until dependencies are installed"
         else
-            log_warn "Composer not found! Module $MODULE_NAME requires composer dependencies."
-            log_warn "Please rebuild the Docker image: docker compose build --no-cache php"
+            log_info "Composer dependencies for $MODULE_NAME installed successfully"
         fi
     fi
 
@@ -285,16 +289,22 @@ install_default_themes() {
 install_module_dependencies() {
     log_step "Checking module composer dependencies..."
 
-    if ! command -v composer &> /dev/null; then
-        log_error "Composer not found! Cannot install module dependencies."
-        log_error "Please rebuild the Docker image: docker compose build --no-cache php"
-        return 1
+    local needs_composer=false
+    for module_dir in "${OMEKA_ROOT}"/modules/*/; do
+        if [[ -f "${module_dir}composer.json" ]] && [[ ! -d "${module_dir}vendor" ]]; then
+            needs_composer=true
+            break
+        fi
+    done
+
+    if [[ "$needs_composer" == "true" ]]; then
+        ensure_composer
     fi
 
     local modules_updated=0
     for module_dir in "${OMEKA_ROOT}"/modules/*/; do
         local module_name=$(basename "$module_dir")
-        
+
         # Check if module has composer.json but no vendor directory
         if [[ -f "${module_dir}composer.json" ]] && [[ ! -d "${module_dir}vendor" ]]; then
             log_info "Installing composer dependencies for $module_name..."
@@ -386,5 +396,7 @@ chmod 775 "${OMEKA_ROOT}/themes" 2>/dev/null || true
 
 log_info "Entrypoint completed. Starting PHP-FPM..."
 
-# Start php-fpm
+# PHP-FPM handles privilege dropping internally — the master process runs as
+# root (needed for log access and worker management), while worker processes
+# run as www-data via the pool configuration.
 exec "$@"

@@ -9,12 +9,6 @@ omeka_files/
 sideload/*
 !sideload/.gitkeep
 
-# SSL certificates (never commit private keys!)
-ssl/*.pem
-ssl/*.key
-ssl/*.crt
-!ssl/.gitkeep
-
 # OS files
 .DS_Store
 Thumbs.db

@@ -7,6 +7,9 @@ A reusable Docker template for deploying Omeka S digital archive installations. 
 - **Automatic Installation**: Omeka S is automatically installed on first run
 - **Pre-installed Modules**: Common modules included by default
 - **Optimized PHP 8.4**: Pre-configured with OPcache, APCu, and ImageMagick
+- **Multi-stage Build**: Lean production image with pinned ImageMagick version
+- **Non-root Execution**: PHP-FPM workers run as www-data via pool configuration
+- **Network Isolation**: Separate frontend/backend networks isolate PHP and MySQL
 - **Production-Ready Nginx**: Gzip compression, security headers, CORS for IIIF
 - **Module Management**: Scripts for installing and updating modules
 - **Health Checks**: All services include Docker health checks
@@ -21,18 +24,18 @@ A reusable Docker template for deploying Omeka S digital archive installations. 
 ```
 .
 ├── docker-compose.yml          # Main service orchestration
-├── docker-compose.ssl.yml      # SSL override for production
-├── Dockerfile                  # PHP-FPM container configuration
-├── nginx.conf                  # Nginx web server configuration (HTTP)
-├── nginx-ssl.conf              # Nginx configuration with SSL/TLS
+├── Dockerfile                  # Multi-stage PHP-FPM container build
+├── nginx.conf                  # Nginx web server configuration
 ├── uploads.ini                 # PHP upload settings
 ├── docker-entrypoint.sh        # PHP container initialization & auto-install
+├── ensure-composer.sh          # On-demand Composer installer
 ├── .env.example                # Environment variables template
+├── docs/
+│   └── DB_TUNING.md            # MySQL tuning parameter reference
 ├── scripts/
 │   ├── install-module.sh       # Install new modules
 │   ├── update-module.sh        # Update existing modules
 │   └── update-omeka.sh         # Update Omeka S core
-├── ssl/                        # SSL certificates (gitignored)
 └── sideload/                   # Bulk import directory
 ```
 
@@ -42,7 +45,7 @@ A reusable Docker template for deploying Omeka S digital archive installations. 
 |---------|-------|------|---------|
 | **web** | nginx:1.28-alpine | 80 | Reverse proxy, static files |
 | **php** | PHP 8.4-FPM | 9000 (internal) | Omeka S application |
-| **db** | MySQL 9.4 | 3306 (internal) | Database |
+| **db** | MySQL 8.4 | 3306 (internal) | Database |
 
 ## Quick Start
 
@@ -103,12 +106,8 @@ Create a `.env` file with:
 MYSQL_PASSWORD=your_secure_mysql_password
 
 # Optional
-OMEKA_VERSION=latest    # or specific version like 4.2.0
+OMEKA_VERSION=4.2.0    # or specific version (default: 4.2.0)
 NGINX_PORT=80           # change if port 80 is in use
-
-# SSL Configuration (for production)
-DOMAIN_NAME=omeka.example.edu
-NGINX_SSL_PORT=443
 ```
 
 ## Key Configuration
@@ -121,9 +120,9 @@ NGINX_SSL_PORT=443
 - APCu caching enabled
 
 ### MySQL Settings
-- Authentication: mysql_native_password
 - InnoDB buffer pool: 512MB
-- Max connections: 100
+- Max connections: 250
+- See [docs/DB_TUNING.md](docs/DB_TUNING.md) for full parameter reference
 
 ### Nginx Settings
 - Gzip compression enabled
@@ -320,7 +319,7 @@ docker compose restart php
 - Store passwords in `.env` file (never commit to git)
 - MySQL uses random root password
 - Security headers are configured in nginx
-- SSL certificates should be configured for production (see below)
+- Use a reverse proxy for SSL/TLS in production (see below)
 
 ## Security Hardening (Built-in)
 
@@ -332,6 +331,8 @@ This template includes Docker security hardening by default in the main `docker-
 | **no-new-privileges** | Prevents privilege escalation inside containers |
 | **Dropped Capabilities** | Removes unnecessary Linux capabilities |
 | **Read-only Filesystems** | nginx runs with read-only root filesystem |
+| **Network Isolation** | Separate frontend/backend networks; only nginx is exposed |
+| **Non-root Execution** | PHP-FPM workers run as www-data via pool configuration |
 
 ### Security Considerations for Docker in Production
 
@@ -366,95 +367,97 @@ This template includes Docker security hardening by default in the main `docker-
    ```
 
 4. **Network Segmentation**
-   - Database should never be directly accessible
-   - Use internal networks for inter-service communication
+   - Database and PHP are on a separate backend network
+   - Only nginx is exposed to the host via the frontend network
 
 5. **Monitoring & Logging**
    - Ship logs to external aggregator (ELK, Loki)
    - Monitor container resource usage
    - Set up alerting for unusual activity
 
-### Reverse Proxy Architecture
+## Production SSL/TLS
 
-For production, consider placing Omeka S behind a dedicated reverse proxy:
+This template does **not** handle SSL/TLS directly. For production deployments, place a reverse proxy in front of the stack. The reverse proxy terminates TLS and forwards plain HTTP to the nginx container on port 80.
+
+### Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                    Internet                              │
 └──────────────────────┬──────────────────────────────────┘
-                       │
+                       │ HTTPS (443)
 ┌──────────────────────▼──────────────────────────────────┐
 │              Reverse Proxy (Traefik/Caddy)              │
 │  • TLS termination    • Rate limiting                   │
 │  • WAF rules          • Load balancing                  │
 └──────────────────────┬──────────────────────────────────┘
-                       │ Internal Network
+                       │ HTTP (80) — internal
 ┌──────────────────────▼──────────────────────────────────┐
 │                 Omeka S Stack                            │
 │  ┌─────────┐    ┌─────────┐    ┌─────────┐              │
 │  │  nginx  │───▶│   php   │───▶│  mysql  │              │
 │  └─────────┘    └─────────┘    └─────────┘              │
-│                                 (internal only)          │
+│  (frontend)     (backend only)  (backend only)           │
 └─────────────────────────────────────────────────────────┘
 ```
 
-## Production SSL Deployment
+### Option A: Caddy (automatic HTTPS)
 
-For production deployments with SSL/TLS, use the provided SSL configuration with your organization's certificates.
+Caddy obtains and renews certificates automatically from Let's Encrypt.
 
-### 1. Prepare SSL Certificates
-
-Place your SSL certificate files in the `ssl/` directory:
+Create a `Caddyfile` alongside the stack:
 
 ```
-ssl/
-├── fullchain.pem    # Your certificate + intermediate chain
-└── privkey.pem      # Your private key
+omeka.example.edu {
+    reverse_proxy localhost:80
+}
 ```
 
-> **Note**: The `ssl/` directory is gitignored to prevent accidental commits of private keys.
-
-### 2. Configure Environment
-
-Update your `.env` file with domain settings:
+Then run Caddy:
 
 ```bash
-MYSQL_PASSWORD=your_secure_mysql_password
-DOMAIN_NAME=omeka.youruniversity.edu
-NGINX_SSL_PORT=443
+caddy run
 ```
 
-### 3. Start with SSL
+### Option B: Traefik (Docker-native)
 
-Use the SSL compose override file:
+Add labels to the `web` service in a `docker-compose.override.yml`:
 
-```bash
-docker compose -f docker-compose.yml -f docker-compose.ssl.yml up -d
+```yaml
+services:
+  web:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.omeka.rule=Host(`omeka.example.edu`)"
+      - "traefik.http.routers.omeka.tls.certresolver=letsencrypt"
 ```
 
-### SSL Configuration Details
+### Option C: Standalone nginx reverse proxy
 
-The SSL configuration (`nginx-ssl.conf`) includes:
+Install nginx on the host and create a site config:
 
-| Feature | Setting |
-|---------|---------|
-| **Protocols** | TLS 1.2, TLS 1.3 |
-| **Ciphers** | Mozilla Modern configuration |
-| **HSTS** | Enabled (2 years, includeSubDomains) |
-| **HTTP Redirect** | Automatic redirect to HTTPS |
-| **OCSP Stapling** | Enabled |
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name omeka.example.edu;
 
-### Project Structure with SSL
+    ssl_certificate     /etc/letsencrypt/live/omeka.example.edu/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/omeka.example.edu/privkey.pem;
 
-```
-.
-├── docker-compose.yml          # Base configuration
-├── docker-compose.ssl.yml      # SSL override (use with -f flag)
-├── nginx.conf                  # HTTP-only nginx config
-├── nginx-ssl.conf              # HTTPS nginx config
-└── ssl/                        # SSL certificates (gitignored)
-    ├── fullchain.pem
-    └── privkey.pem
+    location / {
+        proxy_pass http://127.0.0.1:80;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+server {
+    listen 80;
+    server_name omeka.example.edu;
+    return 301 https://$host$request_uri;
+}
 ```
 
 ## Volumes

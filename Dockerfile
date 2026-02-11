@@ -1,6 +1,12 @@
-FROM php:8.4-fpm
+# ==============================================================================
+# Stage 1: builder — compile ImageMagick & PHP extensions with dev headers
+# ==============================================================================
+FROM php:8.4-fpm AS builder
 
-# Install system dependencies
+# Pin ImageMagick version for reproducible builds
+ARG IMAGEMAGICK_VERSION=7.1.2-13
+
+# Install build-time dependencies (dev headers, compilers, tools)
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     libfreetype6-dev \
     libjpeg62-turbo-dev \
@@ -11,32 +17,22 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
     libzip-dev \
     libmagickwand-dev \
     libgmp-dev \
-    libldap2-dev \
     libtidy-dev \
+    libicu-dev \
+    libopenjp2-7-dev \
     pkg-config \
-    unzip \
     git \
     curl \
     wget \
-    lsb-release \
-    gnupg \
     xz-utils \
-    ghostscript \
-    libvips-tools \
-    poppler-utils \
-    libicu-dev \
-    libfcgi-bin \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Composer
-RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
-
-# Install and configure ImageMagick
+# Compile ImageMagick from source (pinned version)
 RUN set -eux; \
     cd /tmp && \
-    wget https://imagemagick.org/archive/ImageMagick.tar.gz && \
-    tar xf ImageMagick.tar.gz && \
-    cd ImageMagick-* && \
+    wget "https://github.com/ImageMagick/ImageMagick/archive/refs/tags/${IMAGEMAGICK_VERSION}.tar.gz" -O "ImageMagick-${IMAGEMAGICK_VERSION}.tar.gz" && \
+    tar xf "ImageMagick-${IMAGEMAGICK_VERSION}.tar.gz" && \
+    cd "ImageMagick-${IMAGEMAGICK_VERSION}" && \
     ./configure --with-modules --enable-shared --with-webp --with-openjp2 --with-gslib --with-gs-font-dir=/usr/share/fonts/type1/gsfonts && \
     make -j$(nproc) && \
     make install && \
@@ -44,25 +40,7 @@ RUN set -eux; \
     cd .. && \
     rm -rf ImageMagick*
 
-# Configure ImageMagick policies
-RUN set -eux; \
-    mkdir -p /etc/ImageMagick-6 && \
-    { \
-        echo '<?xml version="1.0" encoding="UTF-8"?>'; \
-        echo '<policymap>'; \
-        echo '  <policy domain="resource" name="memory" value="256MiB"/>'; \
-        echo '  <policy domain="resource" name="map" value="512MiB"/>'; \
-        echo '  <policy domain="resource" name="width" value="16KP"/>'; \
-        echo '  <policy domain="resource" name="height" value="16KP"/>'; \
-        echo '  <policy domain="coder" rights="read|write" pattern="PDF"/>'; \
-        echo '  <policy domain="coder" rights="read|write" pattern="PS"/>'; \
-        echo '  <policy domain="coder" rights="read|write" pattern="EPS"/>'; \
-        echo '  <policy domain="coder" rights="read|write" pattern="XPS"/>'; \
-        echo '  <policy domain="delegate" rights="read|write" pattern="gs"/>'; \
-        echo '</policymap>'; \
-    } > /etc/ImageMagick-6/policy.xml
-
-# Install PHP Imagick extension
+# Build PHP Imagick extension from PECL source
 RUN set -eux; \
     mkdir -p /usr/local/etc/php/conf.d && \
     pecl channel-update pecl.php.net && \
@@ -80,36 +58,97 @@ RUN set -eux; \
     echo "extension=imagick.so" > /usr/local/etc/php/conf.d/imagick.ini && \
     php -r "if (class_exists('Imagick')) echo 'Imagick installed successfully';"
 
-# Configure and install PHP extensions
-RUN docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
-    && docker-php-ext-configure ldap
+# Configure and build PHP extensions
+# Omeka S core needs: gd, intl, pdo_mysql, xml/xsl, zip
+# Useful extras: bcmath, exif, gettext, gmp, mysqli, opcache, sockets, tidy
+#
+# Removed (not needed by Omeka S): shmop, sysvmsg, sysvsem, sysvshm, calendar, soap, ldap
+# To re-add any of these, append them to the docker-php-ext-install list below
+# and add the corresponding -dev package (e.g. libldap2-dev for ldap).
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp
 
-# Install PHP extensions (pspell removed - not available in PHP 8.4)
 RUN docker-php-ext-install -j$(nproc) \
     bcmath \
-    calendar \
     exif \
     gd \
     gettext \
     gmp \
     intl \
-    ldap \
     mysqli \
     opcache \
     pdo_mysql \
-    shmop \
-    soap \
     sockets \
-    sysvmsg \
-    sysvsem \
-    sysvshm \
     tidy \
     xsl \
     zip
 
-# Install APCu
+# Build APCu
 RUN pecl install apcu && \
     docker-php-ext-enable apcu
+
+
+# ==============================================================================
+# Stage 2: runtime — lean production image
+# ==============================================================================
+FROM php:8.4-fpm AS runtime
+
+# Install only runtime shared libraries (no -dev headers, no compilers)
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
+    libfreetype6 \
+    libjpeg62-turbo \
+    libpng16-16t64 \
+    libwebp7 \
+    libxml2 \
+    libxslt1.1 \
+    libzip5 \
+    libgmp10 \
+    libtidy58 \
+    libicu76 \
+    libopenjp2-7 \
+    ghostscript \
+    libvips-tools \
+    poppler-utils \
+    # Runtime tools needed by entrypoint and module scripts
+    curl \
+    wget \
+    unzip \
+    # Healthcheck dependency
+    libfcgi-bin \
+    # Privilege dropping (entrypoint runs as root, drops to www-data)
+    gosu \
+    && rm -rf /var/lib/apt/lists/* \
+    # Verify gosu works
+    && gosu nobody true
+
+# Copy compiled PHP extensions and config from builder
+COPY --from=builder /usr/local/lib/php/extensions/ /usr/local/lib/php/extensions/
+COPY --from=builder /usr/local/etc/php/conf.d/ /usr/local/etc/php/conf.d/
+
+# Copy ImageMagick binaries and libraries from builder
+COPY --from=builder /usr/local/bin/magick /usr/local/bin/magick
+COPY --from=builder /usr/local/lib/libMagick* /usr/local/lib/
+COPY --from=builder /usr/local/etc/ImageMagick-7/ /usr/local/etc/ImageMagick-7/
+RUN ldconfig /usr/local/lib \
+    && ln -sf /usr/local/bin/magick /usr/local/bin/convert \
+    && ln -sf /usr/local/bin/magick /usr/local/bin/identify
+
+# Configure ImageMagick policies
+RUN set -eux; \
+    mkdir -p /usr/local/etc/ImageMagick-7 && \
+    { \
+        echo '<?xml version="1.0" encoding="UTF-8"?>'; \
+        echo '<policymap>'; \
+        echo '  <policy domain="resource" name="memory" value="256MiB"/>'; \
+        echo '  <policy domain="resource" name="map" value="512MiB"/>'; \
+        echo '  <policy domain="resource" name="width" value="16KP"/>'; \
+        echo '  <policy domain="resource" name="height" value="16KP"/>'; \
+        echo '  <policy domain="coder" rights="read|write" pattern="PDF"/>'; \
+        echo '  <policy domain="coder" rights="read|write" pattern="PS"/>'; \
+        echo '  <policy domain="coder" rights="read|write" pattern="EPS"/>'; \
+        echo '  <policy domain="coder" rights="read|write" pattern="XPS"/>'; \
+        echo '  <policy domain="delegate" rights="read|write" pattern="gs"/>'; \
+        echo '</policymap>'; \
+    } > /usr/local/etc/ImageMagick-7/policy.xml
 
 # Set PHP configuration
 RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
@@ -170,13 +209,19 @@ RUN set -xe && echo "pm.status_path = /status" >> /usr/local/etc/php-fpm.d/zz-do
 
 WORKDIR /var/www/html
 
-# Copy entrypoint script and fix line endings (for Windows compatibility)
+# Copy helper scripts and entrypoint, fix line endings (Windows compatibility)
+COPY ensure-composer.sh /usr/local/bin/
 COPY docker-entrypoint.sh /usr/local/bin/
-RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh \
+RUN sed -i 's/\r$//' /usr/local/bin/ensure-composer.sh \
+    && sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh \
+    && chmod +x /usr/local/bin/ensure-composer.sh \
     && chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Set recommended PHP.ini settings
 RUN echo "date.timezone = Europe/Berlin" >> /usr/local/etc/php/conf.d/docker-php-timezone.ini
+
+# No USER directive — entrypoint runs as root for setup, then drops to
+# www-data via gosu before starting php-fpm.
 
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["php-fpm"]

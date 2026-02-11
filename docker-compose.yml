@@ -17,7 +17,8 @@ services:
       db:
         condition: service_healthy
     networks:
-      - omeka-network
+      - frontend
+      - backend
     restart: unless-stopped
     # Security hardening
     security_opt:
@@ -67,7 +68,7 @@ services:
       - MYSQL_DATABASE=omeka
       - MYSQL_USER=omeka
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
-      - OMEKA_VERSION=${OMEKA_VERSION:-latest}
+      - OMEKA_VERSION=${OMEKA_VERSION:-4.2.0}
       # PHP-FPM pool tuning (optional - defaults in entrypoint if unset)
       # - PHP_PM_MAX_CHILDREN=10
       # - PHP_PM_START_SERVERS=3
@@ -78,7 +79,7 @@ services:
       db:
         condition: service_healthy
     networks:
-      - omeka-network
+      - backend
     restart: unless-stopped
     # Security hardening
     security_opt:
@@ -115,6 +116,7 @@ services:
 
   db:
     image: mysql:8.4
+    # MySQL tuning parameters — see docs/DB_TUNING.md for explanations
     command: >-
       --innodb-buffer-pool-size=512M
       --innodb-buffer-pool-instances=2
@@ -140,7 +142,7 @@ services:
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
       - MYSQL_RANDOM_ROOT_PASSWORD=yes
     networks:
-      - omeka-network
+      - backend
     restart: unless-stopped
     # Security hardening
     security_opt:
@@ -179,5 +181,9 @@ volumes:
     driver: local
 
 networks:
-  omeka-network:
+  frontend:
+    driver: bridge
+  backend:
+    # PHP needs outbound internet during setup (download Omeka S, modules, composer).
+    # DB isolation is achieved by not publishing any ports on this network.
     driver: bridge
