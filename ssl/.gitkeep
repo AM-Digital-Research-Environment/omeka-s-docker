@@ -1,8 +1,0 @@
-# SSL Certificate Directory
-#
-# Place your SSL certificates here:
-#   - fullchain.pem  (certificate + intermediate chain)
-#   - privkey.pem    (private key)
-#
-# IMPORTANT: Never commit actual certificates to version control!
-# Add *.pem to .gitignore
