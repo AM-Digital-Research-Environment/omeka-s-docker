@@ -30,6 +30,7 @@ A reusable Docker template for deploying Omeka S digital archive installations. 
 ├── docker-entrypoint.sh        # PHP container initialization & auto-install
 ├── ensure-composer.sh          # On-demand Composer installer
 ├── .env.example                # Environment variables template
+├── COMMANDS.md                 # Docker commands quick reference
 ├── docs/
 │   └── DB_TUNING.md            # MySQL tuning parameter reference
 ├── scripts/
