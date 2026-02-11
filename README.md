@@ -26,6 +26,8 @@ A reusable Docker template for deploying Omeka S digital archive installations. 
 ├── docker-compose.yml          # Main service orchestration
 ├── Dockerfile                  # Multi-stage PHP-FPM container build
 ├── nginx.conf                  # Nginx web server configuration
+├── nginx-http-settings.conf    # Nginx HTTP-level settings (gzip, rate limiting)
+├── nginx-security-headers.conf # Nginx security headers snippet
 ├── uploads.ini                 # PHP upload settings
 ├── docker-entrypoint.sh        # PHP container initialization & auto-install
 ├── ensure-composer.sh          # On-demand Composer installer
@@ -35,6 +37,7 @@ A reusable Docker template for deploying Omeka S digital archive installations. 
 │   └── DB_TUNING.md            # MySQL tuning parameter reference
 ├── scripts/
 │   ├── install-module.sh       # Install new modules
+│   ├── install-theme.sh        # Install themes from GitHub
 │   ├── update-module.sh        # Update existing modules
 │   └── update-omeka.sh         # Update Omeka S core
 └── sideload/                   # Bulk import directory
@@ -54,7 +57,7 @@ A reusable Docker template for deploying Omeka S digital archive installations. 
 
 ```bash
 # Clone this template
-git clone <repository-url> my-omeka-site
+git clone https://github.com/AM-Digital-Research-Environment/omeka-s-docker.git my-omeka-site
 cd my-omeka-site
 
 # Create environment file
@@ -199,8 +202,11 @@ The following modules are automatically installed with Omeka S:
 | **ActivityLog** | Track user activity and changes |
 | **CSVImport** | Import items from CSV files |
 | **DataCleaning** | Batch clean and normalize data |
+| **DspaceConnector** | Import items from DSpace repositories |
 | **FacetedBrowse** | Create faceted search pages |
 | **FileSideload** | Import files from server directory |
+| **IframeEmbed** | Embed iframes in page blocks |
+| **ItemCarouselBlock** | Display items in a carousel block |
 | **Mapping** | Add geographic locations to items |
 | **NumericDataTypes** | Support for numeric and date values |
 
@@ -479,7 +485,7 @@ To backup your installation:
 docker compose exec db mysqldump -u omeka -p omeka > backup.sql
 
 # Files backup (from host)
-docker run --rm -v omeka-s-docker-template_omeka_files:/data -v $(pwd):/backup alpine tar czf /backup/omeka-files.tar.gz /data
+docker run --rm -v omeka-s-docker_omeka_files:/data -v $(pwd):/backup alpine tar czf /backup/omeka-files.tar.gz -C /data .
 ```
 
 ## License
