@@ -13,11 +13,12 @@ A reusable Docker template for deploying Omeka S digital archive installations. 
 - **Production-Ready Nginx**: Gzip compression, security headers, CORS for IIIF
 - **Module Management**: Scripts for installing and updating modules
 - **Health Checks**: All services include Docker health checks
+- **Optional Automatic HTTPS**: Built-in Caddy reverse proxy with Let's Encrypt
 
 ## Prerequisites
 
-- Docker and Docker Compose v2+
-- Git (for cloning this template)
+- Docker and Docker Compose v2
+- For HTTPS: a domain name with a DNS A record pointing to your server
 
 ## Project Structure
 
@@ -53,7 +54,15 @@ A reusable Docker template for deploying Omeka S digital archive installations. 
 
 ## Quick Start
 
-### 1. Clone and Configure
+### One-Line Setup (Fresh Linux Server)
+
+For a fully automated setup on a clean Linux VM, see **[am-omeka-s-docker-bootstrap](https://github.com/AM-Digital-Research-Environment/am-omeka-s-docker-bootstrap)**. A single `curl` command installs Docker, clones this project, configures everything (including optional HTTPS with Caddy), and launches the services.
+
+### Manual Setup
+
+If you prefer to do things step by step, or already have Docker installed:
+
+#### 1. Clone and Configure
 
 ```bash
 # Clone this template
@@ -67,7 +76,7 @@ cp .env.example .env
 nano .env
 ```
 
-### 2. Start Services
+#### 2. Start Services
 
 ```bash
 # Start all services (Omeka S will auto-install on first run)
@@ -384,9 +393,14 @@ This template includes Docker security hardening by default in the main `docker-
 
 ## Production SSL/TLS
 
-This template does **not** handle SSL/TLS directly. For production deployments, place a reverse proxy in front of the stack. The reverse proxy terminates TLS and forwards plain HTTP to the nginx container on port 80.
+### Built-in: Caddy (automatic HTTPS)
 
-### Architecture
+The [bootstrap script](https://github.com/AM-Digital-Research-Environment/am-omeka-s-docker-bootstrap) can install and configure [Caddy](https://caddyserver.com/) automatically. When enabled during setup:
+
+- Caddy runs on the host as a systemd service
+- Nginx binds to `127.0.0.1:8080` (not exposed externally)
+- Caddy handles ports 80/443 and obtains Let's Encrypt certificates automatically
+- Certificates are renewed automatically — zero maintenance
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -394,13 +408,13 @@ This template does **not** handle SSL/TLS directly. For production deployments, 
 └──────────────────────┬──────────────────────────────────┘
                        │ HTTPS (443)
 ┌──────────────────────▼──────────────────────────────────┐
-│              Reverse Proxy (Traefik/Caddy)              │
-│  • TLS termination    • Rate limiting                   │
-│  • WAF rules          • Load balancing                  │
+│                 Caddy (host)                             │
+│  • Auto TLS (Let's Encrypt)  • HTTP→HTTPS redirect      │
+│  • Certificate renewal       • Reverse proxy             │
 └──────────────────────┬──────────────────────────────────┘
-                       │ HTTP (80) — internal
+                       │ HTTP (127.0.0.1:8080) — localhost
 ┌──────────────────────▼──────────────────────────────────┐
-│                 Omeka S Stack                            │
+│                 Omeka S Stack (Docker)                    │
 │  ┌─────────┐    ┌─────────┐    ┌─────────┐              │
 │  │  nginx  │───▶│   php   │───▶│  mysql  │              │
 │  └─────────┘    └─────────┘    └─────────┘              │
@@ -408,25 +422,24 @@ This template does **not** handle SSL/TLS directly. For production deployments, 
 └─────────────────────────────────────────────────────────┘
 ```
 
-### Option A: Caddy (automatic HTTPS)
+The Caddyfile is written to `/etc/caddy/Caddyfile` and can be edited any time:
 
-Caddy obtains and renews certificates automatically from Let's Encrypt.
+```bash
+sudo nano /etc/caddy/Caddyfile
+sudo systemctl reload caddy
+```
 
-Create a `Caddyfile` alongside the stack:
+If you skipped HTTPS during initial setup, you can add it later by installing Caddy manually and creating a Caddyfile:
 
 ```
 omeka.example.edu {
-    reverse_proxy localhost:80
+    reverse_proxy 127.0.0.1:8080
 }
 ```
 
-Then run Caddy:
+Then update your `.env` to bind nginx to localhost: `NGINX_PORT=127.0.0.1:8080`, restart the stack with `docker compose up -d`, and start Caddy.
 
-```bash
-caddy run
-```
-
-### Option B: Traefik (Docker-native)
+### Alternative: Traefik (Docker-native)
 
 Add labels to the `web` service in a `docker-compose.override.yml`:
 
@@ -439,7 +452,7 @@ services:
       - "traefik.http.routers.omeka.tls.certresolver=letsencrypt"
 ```
 
-### Option C: Standalone nginx reverse proxy
+### Alternative: Standalone nginx reverse proxy
 
 Install nginx on the host and create a site config:
 
