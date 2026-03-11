@@ -379,6 +379,133 @@ fi
 install_default_modules
 install_default_themes
 
+# Install extra modules from EXTRA_MODULES env var (comma-separated)
+# Format: "ModuleName:repo:branch" or just "ModuleName" (looked up from known modules)
+# Known module mappings (for short-name support)
+declare -A KNOWN_MODULES=(
+    # Daniel-KM modules
+    ["AdvancedSearch"]="Daniel-KM/Omeka-S-module-AdvancedSearch:master"
+    ["AnalyticsSnippet"]="Daniel-KM/Omeka-S-module-AnalyticsSnippet:master"
+    ["BulkEdit"]="Daniel-KM/Omeka-S-module-BulkEdit:master"
+    ["BulkExport"]="Daniel-KM/Omeka-S-module-BulkExport:master"
+    ["Common"]="Daniel-KM/Omeka-S-module-Common:master"
+    ["Cron"]="Daniel-KM/Omeka-S-module-Cron:master"
+    ["EasyAdmin"]="Daniel-KM/Omeka-S-module-EasyAdmin:master"
+    ["IiifServer"]="Daniel-KM/Omeka-S-module-IiifServer:master"
+    ["ImageServer"]="Daniel-KM/Omeka-S-module-ImageServer:master"
+    ["Log"]="Daniel-KM/Omeka-S-module-Log:master"
+    ["OaiPmhRepository"]="Daniel-KM/Omeka-S-module-OaiPmhRepository:master"
+    ["Reference"]="Daniel-KM/Omeka-S-module-Reference:master"
+    ["SearchSolr"]="Daniel-KM/Omeka-S-module-SearchSolr:master"
+    ["UniversalViewer"]="Daniel-KM/Omeka-S-module-UniversalViewer:master"
+    # Official Omeka-S modules
+    ["CSSEditor"]="omeka-s-modules/CSSEditor:master"
+    ["CustomVocab"]="omeka-s-modules/CustomVocab:master"
+    ["Collecting"]="omeka-s-modules/Collecting:master"
+    ["Datavis"]="omeka-s-modules/Datavis:main"
+    ["Exports"]="omeka-s-modules/Exports:main"
+    ["Hierarchy"]="omeka-s-modules/Hierarchy:main"
+    ["InverseProperties"]="omeka-s-modules/InverseProperties:main"
+    ["OutputFormats"]="omeka-s-modules/OutputFormats:main"
+    ["ResourceMeta"]="omeka-s-modules/ResourceMeta:master"
+    ["ValueSuggest"]="omeka-s-modules/ValueSuggest:master"
+    # Other modules
+    ["RightsStatements"]="zerocrates/RightsStatements:master"
+    ["Sitemaps"]="ManOnDaMoon/omeka-s-module-Sitemaps:master"
+)
+
+# Module dependencies
+declare -A MODULE_DEPS=(
+    ["AdvancedSearch"]="Common"
+    ["BulkEdit"]="Common"
+    ["BulkExport"]="Common"
+    ["EasyAdmin"]="Common Cron"
+    ["IiifServer"]="Common"
+    ["ImageServer"]="Common"
+    ["Log"]="Common"
+    ["OaiPmhRepository"]="Common"
+    ["Reference"]="Common"
+    ["SearchSolr"]="Common AdvancedSearch"
+    ["UniversalViewer"]="Common"
+)
+
+install_extra_module() {
+    local entry="$1"
+    local MODULE_NAME REPO BRANCH
+
+    if [[ "$entry" == *":"* ]]; then
+        # Full format: ModuleName:repo:branch
+        MODULE_NAME="${entry%%:*}"
+        local remainder="${entry#*:}"
+        REPO="${remainder%%:*}"
+        BRANCH="${remainder##*:}"
+    elif [[ -n "${KNOWN_MODULES[$entry]}" ]]; then
+        # Short name lookup
+        MODULE_NAME="$entry"
+        local info="${KNOWN_MODULES[$entry]}"
+        REPO="${info%%:*}"
+        BRANCH="${info##*:}"
+    else
+        log_warn "Unknown module '$entry' — use full format 'ModuleName:org/repo:branch'"
+        return 1
+    fi
+
+    # Install dependencies first
+    if [[ -n "${MODULE_DEPS[$MODULE_NAME]}" ]]; then
+        for dep in ${MODULE_DEPS[$MODULE_NAME]}; do
+            if [[ ! -d "${OMEKA_ROOT}/modules/${dep}" ]]; then
+                log_info "Installing dependency: $dep"
+                install_extra_module "$dep"
+            fi
+        done
+    fi
+
+    # Skip if already installed
+    if [[ -d "${OMEKA_ROOT}/modules/${MODULE_NAME}" ]]; then
+        log_info "Extra module $MODULE_NAME already installed, skipping..."
+        return 0
+    fi
+
+    install_module "$MODULE_NAME" "$REPO" "$BRANCH"
+}
+
+if [[ -n "${EXTRA_MODULES:-}" ]]; then
+    log_step "Installing extra modules from EXTRA_MODULES..."
+    IFS=',' read -ra EXTRA_MODULE_LIST <<< "$EXTRA_MODULES"
+    for entry in "${EXTRA_MODULE_LIST[@]}"; do
+        entry=$(echo "$entry" | xargs)  # trim whitespace
+        install_extra_module "$entry" || log_warn "Failed to install extra module: $entry"
+    done
+    log_info "Extra modules installation completed!"
+fi
+
+# Install extra themes from EXTRA_THEMES env var (comma-separated)
+# Format: "ThemeName:repo:branch" or just "ThemeName" (from omeka-s-themes org)
+if [[ -n "${EXTRA_THEMES:-}" ]]; then
+    log_step "Installing extra themes from EXTRA_THEMES..."
+    IFS=',' read -ra EXTRA_THEME_LIST <<< "$EXTRA_THEMES"
+    for entry in "${EXTRA_THEME_LIST[@]}"; do
+        entry=$(echo "$entry" | xargs)
+        local THEME_NAME REPO BRANCH
+        if [[ "$entry" == *":"* ]]; then
+            THEME_NAME="${entry%%:*}"
+            local remainder="${entry#*:}"
+            REPO="${remainder%%:*}"
+            BRANCH="${remainder##*:}"
+        else
+            THEME_NAME="$entry"
+            REPO="omeka-s-themes/${entry}"
+            BRANCH="master"
+        fi
+        if [[ -d "${OMEKA_ROOT}/themes/${THEME_NAME}" ]]; then
+            log_info "Extra theme $THEME_NAME already installed, skipping..."
+            continue
+        fi
+        install_theme "$THEME_NAME" "$REPO" "$BRANCH" || log_warn "Failed to install extra theme: $entry"
+    done
+    log_info "Extra themes installation completed!"
+fi
+
 # Install composer dependencies for modules that need them
 install_module_dependencies
 
