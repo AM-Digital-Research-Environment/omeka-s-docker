@@ -486,12 +486,14 @@ if [[ -n "${EXTRA_THEMES:-}" ]]; then
     IFS=',' read -ra EXTRA_THEME_LIST <<< "$EXTRA_THEMES"
     for entry in "${EXTRA_THEME_LIST[@]}"; do
         entry=$(echo "$entry" | xargs)
-        local THEME_NAME REPO BRANCH
+        THEME_NAME=""
+        REPO=""
+        BRANCH=""
         if [[ "$entry" == *":"* ]]; then
             THEME_NAME="${entry%%:*}"
-            local remainder="${entry#*:}"
-            REPO="${remainder%%:*}"
-            BRANCH="${remainder##*:}"
+            local_remainder="${entry#*:}"
+            REPO="${local_remainder%%:*}"
+            BRANCH="${local_remainder##*:}"
         else
             THEME_NAME="$entry"
             REPO="omeka-s-themes/${entry}"
