@@ -71,6 +71,7 @@ DEFAULT_MODULES=(
 # Default themes to install (official Omeka S themes)
 # Format: "ThemeName:repo:branch"
 DEFAULT_THEMES=(
+    "default:omeka-s-themes/default:master"
     "Freedom:omeka-s-themes/Freedom:master"
     "Lively:omeka-s-themes/Lively:master"
 )
