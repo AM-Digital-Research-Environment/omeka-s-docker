@@ -112,16 +112,20 @@ Common modules (CSVImport, FileSideload, Mapping, etc.) are pre-installed. To ad
 
 ## Environment Variables
 
-Create a `.env` file with:
+Create a `.env` file from `.env.example`. All supported variables:
 
-```bash
-# Required
-MYSQL_PASSWORD=your_secure_mysql_password
-
-# Optional
-OMEKA_VERSION=4.2.0    # or specific version (default: 4.2.0)
-NGINX_PORT=80           # change if port 80 is in use
-```
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `MYSQL_PASSWORD` | Yes | - | MySQL password for the Omeka S database |
+| `OMEKA_VERSION` | No | `4.2.0` | Omeka S version to install |
+| `NGINX_PORT` | No | `80` | Host port for nginx (use `127.0.0.1:8080` with a reverse proxy) |
+| `EXTRA_MODULES` | No | - | Comma-separated modules to auto-install (e.g. `EasyAdmin,CSSEditor`) |
+| `EXTRA_THEMES` | No | - | Comma-separated themes to auto-install (e.g. `Cozy,Foundation`) |
+| `PHP_PM_MAX_CHILDREN` | No | `10` | PHP-FPM max worker processes |
+| `PHP_PM_START_SERVERS` | No | `3` | PHP-FPM workers started on boot |
+| `PHP_PM_MIN_SPARE_SERVERS` | No | `2` | Minimum idle workers |
+| `PHP_PM_MAX_SPARE_SERVERS` | No | `5` | Maximum idle workers |
+| `PHP_PM_MAX_REQUESTS` | No | `500` | Requests before worker respawn (prevents memory leaks) |
 
 ## Key Configuration
 
@@ -288,7 +292,7 @@ This allows external IIIF viewers (Mirador, Universal Viewer) to access your con
 Use the `sideload/` directory for bulk file imports:
 
 1. Place files in the `sideload/` directory
-2. Install FileSideload module: `./scripts/install-module.sh FileSideload`
+2. Activate the FileSideload module in the Omeka S admin panel (it is pre-installed)
 3. Configure FileSideload in Omeka S admin to point to `/var/www/html/sideload`
 4. Import files through the Omeka S admin interface
 

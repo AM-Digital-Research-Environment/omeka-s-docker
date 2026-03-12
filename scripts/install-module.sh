@@ -6,20 +6,18 @@
 
 set -e
 
-# Pre-installed modules (installed automatically with Omeka S)
+# Pre-installed modules (installed automatically by docker-entrypoint.sh)
 PREINSTALLED_MODULES=(
     "ActivityLog"
-    "Collecting"
     "CSVImport"
-    "CustomVocab"
     "DataCleaning"
-    "Datavis"
+    "DspaceConnector"
     "FacetedBrowse"
     "FileSideload"
     "IframeEmbed"
+    "ItemCarouselBlock"
     "Mapping"
     "NumericDataTypes"
-    "ZoteroImport"
 )
 
 # Configuration - Map module names to their repositories and default branches
