@@ -66,6 +66,7 @@ DEFAULT_MODULES=(
     "ItemCarouselBlock:omeka-s-modules/ItemCarouselBlock:master"
     "Mapping:omeka-s-modules/Mapping:master"
     "NumericDataTypes:omeka-s-modules/NumericDataTypes:master"
+    "ValueSuggest:omeka-s-modules/ValueSuggest:master"
 )
 
 # Default themes to install (official Omeka S themes)
