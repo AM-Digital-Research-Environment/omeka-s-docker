@@ -184,9 +184,5 @@ volumes:
     driver: local
 
 networks:
-  frontend:
-    driver: bridge
-  backend:
-    # PHP needs outbound internet during setup (download Omeka S, modules, composer).
-    # DB isolation is achieved by not publishing any ports on this network.
-    driver: bridge
+  frontend: {}
+  backend: {}
