@@ -13,9 +13,6 @@ log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 log_step() { echo -e "${BLUE}[STEP]${NC} $1"; }
 
-# Load on-demand composer helper
-source /usr/local/bin/ensure-composer.sh
-
 # Load Docker secrets if available (preferred over environment variables)
 if [ -f /run/secrets/mysql_password ]; then
     export MYSQL_PASSWORD=$(cat /run/secrets/mysql_password)
@@ -68,79 +65,30 @@ DEFAULT_MODULES=(
     "NumericDataTypes:omeka-s-modules/NumericDataTypes:master"
 )
 
-# Default themes to install (official Omeka S themes)
-# Format: "ThemeName:repo:branch"
-DEFAULT_THEMES=(
-    "default:omeka-s-themes/default:master"
-    "Freedom:omeka-s-themes/Freedom:master"
-    "Lively:omeka-s-themes/Lively:master"
-)
+if ! command -v omeka-s-cli &>/dev/null; then
+    echo "[ERR] omeka-s-cli not found!"
+    echo "omeka-s-cli should be installed during the container build of the php container."
+    echo "Please check the build logs for failures."
+    return 1
+fi
 
-# Function to get the latest release version from GitHub
-get_latest_version() {
-    local latest
-    latest=$(curl -sL "https://api.github.com/repos/${OMEKA_REPO}/releases/latest" | grep '"tag_name":' | sed -E 's/.*"v?([^"]+)".*/\1/')
-    if [[ -z "$latest" ]]; then
-        log_error "Failed to fetch latest version from GitHub"
-        return 1
-    fi
-    echo "$latest"
-}
+omeka-s-cli config:create-db-ini \
+            --base-path /var/www/html \
+            --username "${MYSQL_USER}" \
+            --password "${MYSQL_PASSWORD}" \
+            --dbname "${MYSQL_DATABASE}" \
+            --host "${MYSQL_HOST}"
 
-# Function to install Omeka S
-install_omeka() {
-    local VERSION="$1"
-
-    log_step "Installing Omeka S v${VERSION}..."
-
-    # Download Omeka S
-    local ARCHIVE_URL="https://github.com/${OMEKA_REPO}/releases/download/v${VERSION}/omeka-s-${VERSION}.zip"
-    local TEMP_DIR=$(mktemp -d)
-
-    log_info "Downloading Omeka S v${VERSION}..."
-    if ! curl -sL "$ARCHIVE_URL" -o "${TEMP_DIR}/omeka-s.zip"; then
-        log_error "Failed to download Omeka S"
-        rm -rf "${TEMP_DIR}"
-        return 1
-    fi
-
-    log_info "Extracting Omeka S..."
-    unzip -q "${TEMP_DIR}/omeka-s.zip" -d "${TEMP_DIR}"
-
-    # Find extracted directory
-    EXTRACTED_DIR=$(find "${TEMP_DIR}" -maxdepth 1 -type d -name "omeka-s*" | head -1)
-    if [[ -z "$EXTRACTED_DIR" ]]; then
-        log_error "Failed to find extracted Omeka S directory"
-        rm -rf "${TEMP_DIR}"
-        return 1
-    fi
-
-    # Copy files to web root
-    log_info "Installing Omeka S files..."
-    cp -r "${EXTRACTED_DIR}"/* "${OMEKA_ROOT}/"
-
-    # Configure database connection
-    log_info "Configuring database connection..."
-    cat > "${OMEKA_ROOT}/config/database.ini" << EOF
-user     = "${MYSQL_USER}"
-password = "${MYSQL_PASSWORD}"
-dbname   = "${MYSQL_DATABASE}"
-host     = "${MYSQL_HOST}"
-driver_options[1009] = false
-EOF
-
-    # Create local.config.php if it doesn't exist
-    if [[ ! -f "${OMEKA_ROOT}/config/local.config.php" ]]; then
-        log_info "Creating local.config.php..."
-        cp "${OMEKA_ROOT}/config/local.config.php.dist" "${OMEKA_ROOT}/config/local.config.php"
-    fi
-
-    # Cleanup
-    rm -rf "${TEMP_DIR}"
-
-    log_info "Omeka S v${VERSION} installed successfully!"
-    return 0
-}
+if ! omeka-s-cli core:status --is-installed; then
+    omeka-s-cli core:install \
+                --base-path /var/www/html \
+                --admin-email o@baumanno.de \
+                --admin-name baumanno \
+                --admin-password "helloworld1234!" \
+                --locale en_GB \
+                --time-zone "Europe/Berlin" \
+                --title "baumannOmeka"
+fi
 
 # Function to install a single module from GitHub
 install_module() {
@@ -263,29 +211,6 @@ install_default_modules() {
     log_info "Default modules installation completed!"
 }
 
-# Function to install all default themes
-install_default_themes() {
-    log_step "Installing default themes..."
-
-    for theme_entry in "${DEFAULT_THEMES[@]}"; do
-        # Parse format: "ThemeName:repo:branch"
-        local THEME_NAME="${theme_entry%%:*}"
-        local remainder="${theme_entry#*:}"
-        local REPO="${remainder%%:*}"
-        local BRANCH="${remainder##*:}"
-
-        # Skip if theme already exists
-        if [[ -d "${OMEKA_ROOT}/themes/${THEME_NAME}" ]]; then
-            log_info "Theme $THEME_NAME already exists, skipping..."
-            continue
-        fi
-
-        install_theme "$THEME_NAME" "$REPO" "$BRANCH" || log_warn "Failed to install $THEME_NAME, continuing..."
-    done
-
-    log_info "Default themes installation completed!"
-}
-
 # Function to install composer dependencies for all modules that need them
 install_module_dependencies() {
     log_step "Checking module composer dependencies..."
@@ -332,53 +257,6 @@ mkdir -p "${OMEKA_ROOT}/sideload"
 mkdir -p "${OMEKA_ROOT}/modules"
 mkdir -p "${OMEKA_ROOT}/themes"
 mkdir -p "${OMEKA_ROOT}/config"
-
-# Check if Omeka S is already installed
-if [[ ! -f "${OMEKA_ROOT}/application/Module.php" ]]; then
-    log_info "Omeka S not found. Starting installation..."
-
-    # Resolve version
-    if [[ "$OMEKA_VERSION" == "latest" ]]; then
-        log_info "Fetching latest version from GitHub..."
-        OMEKA_VERSION=$(get_latest_version)
-        if [[ $? -ne 0 ]]; then
-            log_error "Failed to get latest version. Please set OMEKA_VERSION explicitly."
-            exit 1
-        fi
-    fi
-
-    # Remove 'v' prefix if present
-    OMEKA_VERSION="${OMEKA_VERSION#v}"
-
-    log_info "Will install Omeka S version: ${OMEKA_VERSION}"
-
-    # Wait for MySQL to be ready (using PHP which supports caching_sha2_password natively)
-    log_step "Waiting for MySQL to be ready..."
-    MAX_TRIES=30
-    TRIES=0
-    until php -r "new PDO('mysql:host=${MYSQL_HOST};dbname=${MYSQL_DATABASE}', '${MYSQL_USER}', '${MYSQL_PASSWORD}');" 2>/dev/null; do
-        TRIES=$((TRIES + 1))
-        if [[ $TRIES -ge $MAX_TRIES ]]; then
-            log_error "MySQL is not ready after ${MAX_TRIES} attempts"
-            exit 1
-        fi
-        log_info "Waiting for MySQL... (attempt ${TRIES}/${MAX_TRIES})"
-        sleep 2
-    done
-    log_info "MySQL is ready!"
-
-    # Install Omeka S
-    if ! install_omeka "$OMEKA_VERSION"; then
-        log_error "Omeka S installation failed"
-        exit 1
-    fi
-else
-    log_info "Omeka S is already installed"
-fi
-
-# Always check and install missing default modules and themes
-install_default_modules
-install_default_themes
 
 # Install extra modules from EXTRA_MODULES env var (comma-separated)
 # Format: "ModuleName:repo:branch" or just "ModuleName" (looked up from known modules)
@@ -510,21 +388,21 @@ if [[ -n "${EXTRA_THEMES:-}" ]]; then
 fi
 
 # Install composer dependencies for modules that need them
-install_module_dependencies
+#install_module_dependencies
 
 # Set proper permissions (use || true for bind-mounted dirs that may fail on Windows)
-log_step "Setting proper permissions..."
-chown -R www-data:www-data "${OMEKA_ROOT}/modules" 2>/dev/null || true
-chown -R www-data:www-data "${OMEKA_ROOT}/themes" 2>/dev/null || true
-chown -R www-data:www-data "${OMEKA_ROOT}/files" 2>/dev/null || true
-chown -R www-data:www-data "${OMEKA_ROOT}/sideload" 2>/dev/null || log_warn "Could not change sideload ownership (bind mount from host)"
-chown -R www-data:www-data "${OMEKA_ROOT}/config" 2>/dev/null || true
-chmod 775 "${OMEKA_ROOT}/sideload" 2>/dev/null || log_warn "Could not change sideload permissions (bind mount from host)"
-chmod 775 "${OMEKA_ROOT}/files" 2>/dev/null || true
-chmod 775 "${OMEKA_ROOT}/modules" 2>/dev/null || true
-chmod 775 "${OMEKA_ROOT}/themes" 2>/dev/null || true
+#log_step "Setting proper permissions..."
+#chown -R www-data:www-data "${OMEKA_ROOT}/modules" 2>/dev/null || true
+#chown -R www-data:www-data "${OMEKA_ROOT}/themes" 2>/dev/null || true
+#chown -R www-data:www-data "${OMEKA_ROOT}/files" 2>/dev/null || true
+#chown -R www-data:www-data "${OMEKA_ROOT}/sideload" 2>/dev/null || log_warn "Could not change sideload ownership (bind mount from host)"
+#chown -R www-data:www-data "${OMEKA_ROOT}/config" 2>/dev/null || true
+#chmod 775 "${OMEKA_ROOT}/sideload" 2>/dev/null || log_warn "Could not change sideload permissions (bind mount from host)"
+#chmod 775 "${OMEKA_ROOT}/files" 2>/dev/null || true
+#chmod 775 "${OMEKA_ROOT}/modules" 2>/dev/null || true
+#chmod 775 "${OMEKA_ROOT}/themes" 2>/dev/null || true
 
-log_info "Entrypoint completed. Starting PHP-FPM..."
+#log_info "Entrypoint completed. Starting PHP-FPM..."
 
 # PHP-FPM handles privilege dropping internally — the master process runs as
 # root (needed for log access and worker management), while worker processes

@@ -1,23 +1,29 @@
+FROM alpine:3.23.3@sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659 AS toolfetcher
+
+ARG VERSION=0.9.3
+ARG SHA=9392e779e25b9cfe0e8c1d559d8f5347863f3b0ab56d7a37d107f17f09bb247b
+
+SHELL ["/bin/ash", "-eo", "pipefail", "-c"]
+
+RUN apk add --no-cache curl \
+    && curl -sL https://github.com/GhentCDH/Omeka-S-Cli/releases/download/v${VERSION}/omeka-s-cli.phar -o /omeka-s-cli.phar \
+    && echo "${SHA} /omeka-s-cli.phar" | sha256sum -c -
+
 FROM php:8.4-fpm AS runtime
+
+ARG OMEKA_ROOT=/var/www/html
+ARG OMEKA_VERSION=4.2.0
 
 # Install only runtime shared libraries (no -dev headers, no compilers)
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
-    libfreetype6 \
-    libjpeg62-turbo \
-    libpng16-16t64 \
-    libwebp7 \
-    libxml2 \
-    libxslt1.1 \
-    libzip5 \
     libgmp10 \
     libtidy58 \
-    libicu76 \
-    libopenjp2-7 \
     ghostscript \
     libvips-tools \
     poppler-utils \
     # Runtime tools needed by entrypoint and module scripts
     curl \
+    git \
     wget \
     unzip \
     # Healthcheck dependency
@@ -88,11 +94,11 @@ RUN { \
     } > /usr/local/etc/php/conf.d/docker-php-ext-apcu.ini
 
 # Create required directories and set permissions
-RUN mkdir -p /var/www/html/files \
-    /var/www/html/sideload \
-    /var/www/html/modules \
-    /var/www/html/themes \
-    /var/www/html/config \
+RUN mkdir -p "$OMEKA_ROOT/files" \
+    "$OMEKA_ROOT/sideload" \
+    "$OMEKA_ROOT/modules" \
+    "$OMEKA_ROOT/themes" \
+    "$OMEKA_ROOT/config" \
     && chown -R www-data:www-data /var/www/html \
     && chmod -R 775 /var/www/html
 
@@ -108,6 +114,21 @@ RUN set -xe && echo "pm.status_path = /status" >> /usr/local/etc/php-fpm.d/zz-do
 # to support runtime configuration via PHP_PM_* environment variables
 
 WORKDIR /var/www/html
+
+COPY --from=toolfetcher --chmod=+x /omeka-s-cli.phar /usr/local/bin/omeka-s-cli
+
+
+
+# TODO: document usage of the "latest" sentinel value
+RUN if [ "$OMEKA_VERSION" = "latest" ]; then \
+    omeka-s-cli core:download "$OMEKA_ROOT"; \
+    else \
+    omeka-s-cli core:download "$OMEKA_ROOT" "$OMEKA_VERSION"; \
+    fi
+
+RUN omeka-s-cli theme:download --base-path "$OMEKA_ROOT" gh:omeka-s-themes/default \
+    && omeka-s-cli theme:download --base-path "$OMEKA_ROOT" gh:omeka-s-themes/freedom \
+    && omeka-s-cli theme:download --base-path "$OMEKA_ROOT" gh:omeka-s-themes/lively
 
 # Copy helper scripts and entrypoint, fix line endings (Windows compatibility)
 COPY ensure-composer.sh /usr/local/bin/
