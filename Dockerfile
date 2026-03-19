@@ -14,6 +14,8 @@ FROM php:8.4-fpm AS runtime
 ARG OMEKA_ROOT=/var/www/html
 ARG OMEKA_VERSION=4.2.0
 
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 # Install only runtime shared libraries (no -dev headers, no compilers)
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     libgmp10 \
@@ -116,8 +118,7 @@ RUN set -xe && echo "pm.status_path = /status" >> /usr/local/etc/php-fpm.d/zz-do
 WORKDIR /var/www/html
 
 COPY --from=toolfetcher --chmod=+x /omeka-s-cli.phar /usr/local/bin/omeka-s-cli
-
-
+COPY _docker/default-modules.txt /usr/local/share/omeka/default-modules.txt
 
 # TODO: document usage of the "latest" sentinel value
 RUN if [ "$OMEKA_VERSION" = "latest" ]; then \
@@ -126,17 +127,22 @@ RUN if [ "$OMEKA_VERSION" = "latest" ]; then \
     omeka-s-cli core:download "$OMEKA_ROOT" "$OMEKA_VERSION"; \
     fi
 
+RUN while IFS= read -r mod || [ -n "$mod" ]; do \
+    # strip comments, trim spaces at beginning/end of line
+    mod=$(echo "$mod" | sed 's/#.*//;s/^[[:space:]]*//;s/[[:space:]]*$//'); \
+    # skip empty lines
+    [ -z "$mod" ] && continue; \
+    omeka-s-cli module:download --base-path "$OMEKA_ROOT" "$mod"; \
+    done < /usr/local/share/omeka/default-modules.txt \
+    && rm /usr/local/share/omeka/default-modules.txt
+
 RUN omeka-s-cli theme:download --base-path "$OMEKA_ROOT" gh:omeka-s-themes/default \
     && omeka-s-cli theme:download --base-path "$OMEKA_ROOT" gh:omeka-s-themes/freedom \
     && omeka-s-cli theme:download --base-path "$OMEKA_ROOT" gh:omeka-s-themes/lively
 
 # Copy helper scripts and entrypoint, fix line endings (Windows compatibility)
-COPY ensure-composer.sh /usr/local/bin/
-COPY docker-entrypoint.sh /usr/local/bin/
-RUN sed -i 's/\r$//' /usr/local/bin/ensure-composer.sh \
-    && sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh \
-    && chmod +x /usr/local/bin/ensure-composer.sh \
-    && chmod +x /usr/local/bin/docker-entrypoint.sh
+COPY --chmod=+x docker-entrypoint.sh /usr/local/bin/
+RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh
 
 # Set recommended PHP.ini settings
 RUN echo "date.timezone = Europe/Berlin" >> /usr/local/etc/php/conf.d/docker-php-timezone.ini

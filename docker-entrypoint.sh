@@ -1,5 +1,5 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -Eeuo pipefail
 
 # Colors for output
 RED='\033[0;31m'
@@ -8,26 +8,26 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
-log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
-log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
-log_step() { echo -e "${BLUE}[STEP]${NC} $1"; }
+log_info() { echo >&2 -e "${GREEN}[INFO]${NC} ${1-}"; }
+log_warn() { echo >&2 -e "${YELLOW}[WARN]${NC} ${1-}"; }
+log_error() { echo >&2 -e "${RED}[ERROR]${NC} ${1-}"; }
+log_step() { echo >&2 -e "${BLUE}[STEP]${NC} ${1-}"; }
 
-# Load Docker secrets if available (preferred over environment variables)
-if [ -f /run/secrets/mysql_password ]; then
-    export MYSQL_PASSWORD=$(cat /run/secrets/mysql_password)
-    log_info "Loaded MySQL password from Docker secret"
+# Fail early if the omeka-s-cli isn't found - we can't continue without it, but it's unlikely that it's missing.
+if ! command -v omeka-s-cli &>/dev/null; then
+    log_error "omeka-s-cli not found!"
+    log_error "omeka-s-cli should be installed during the container build of the php container."
+    log_error "Please check the build logs for failures."
+    return 1
 fi
 
-# Verify MySQL password is available
-if [ -z "$MYSQL_PASSWORD" ]; then
-    log_error "No MySQL password found. Set MYSQL_PASSWORD env var or mount /run/secrets/mysql_password"
-    exit 1
-fi
+OMEKA_ROOT="/var/www/html"
 
-# Generate PHP-FPM pool configuration (supports runtime tuning via env vars)
-log_step "Configuring PHP-FPM pool..."
-cat > /usr/local/etc/php-fpm.d/zzz-omeka-pool.conf << FPMEOF
+fpm_pool_config() {
+    # Generate PHP-FPM pool configuration (supports runtime tuning via
+    # env vars)
+    log_step "Configuring PHP-FPM pool..."
+    cat > /usr/local/etc/php-fpm.d/zzz-omeka-pool.conf << FPMEOF
 [www]
 pm = dynamic
 pm.max_children = ${PHP_PM_MAX_CHILDREN:-10}
@@ -38,373 +38,103 @@ pm.max_requests = ${PHP_PM_MAX_REQUESTS:-500}
 pm.process_idle_timeout = 10s
 request_terminate_timeout = 300s
 FPMEOF
-log_info "PHP-FPM pool: max_children=${PHP_PM_MAX_CHILDREN:-10}, start=${PHP_PM_START_SERVERS:-3}, min_spare=${PHP_PM_MIN_SPARE_SERVERS:-2}, max_spare=${PHP_PM_MAX_SPARE_SERVERS:-5}"
-
-# Configuration — repo URL is hardcoded for safety (no env var override)
-OMEKA_ROOT="/var/www/html"
-readonly OMEKA_REPO="omeka/omeka-s"
-OMEKA_VERSION="${OMEKA_VERSION:-4.2.0}"
-
-# Warn when using "latest" — the resolved version has not been tested against this image
-if [[ "$OMEKA_VERSION" == "latest" ]]; then
-    log_warn "OMEKA_VERSION=latest — the resolved version may not be tested with this image"
-fi
-
-# Default modules to install (official Omeka S modules)
-# Format: "ModuleName:repo:branch"
-DEFAULT_MODULES=(
-    "ActivityLog:omeka-s-modules/ActivityLog:master"
-    "CSVImport:omeka-s-modules/CSVImport:develop"
-    "DataCleaning:omeka-s-modules/DataCleaning:master"
-    "DspaceConnector:omeka-s-modules/DspaceConnector:develop"
-    "FacetedBrowse:omeka-s-modules/FacetedBrowse:master"
-    "FileSideload:omeka-s-modules/FileSideload:master"
-    "IframeEmbed:fmadore/IframeEmbed:main"
-    "ItemCarouselBlock:omeka-s-modules/ItemCarouselBlock:master"
-    "Mapping:omeka-s-modules/Mapping:master"
-    "NumericDataTypes:omeka-s-modules/NumericDataTypes:master"
-)
-
-if ! command -v omeka-s-cli &>/dev/null; then
-    echo "[ERR] omeka-s-cli not found!"
-    echo "omeka-s-cli should be installed during the container build of the php container."
-    echo "Please check the build logs for failures."
-    return 1
-fi
-
-omeka-s-cli config:create-db-ini \
-            --base-path /var/www/html \
-            --username "${MYSQL_USER}" \
-            --password "${MYSQL_PASSWORD}" \
-            --dbname "${MYSQL_DATABASE}" \
-            --host "${MYSQL_HOST}"
-
-if ! omeka-s-cli core:status --is-installed; then
-    omeka-s-cli core:install \
-                --base-path /var/www/html \
-                --admin-email o@baumanno.de \
-                --admin-name baumanno \
-                --admin-password "helloworld1234!" \
-                --locale en_GB \
-                --time-zone "Europe/Berlin" \
-                --title "baumannOmeka"
-fi
-
-# Function to install a single module from GitHub
-install_module() {
-    local MODULE_NAME="$1"
-    local REPO="$2"
-    local BRANCH="${3:-master}"
-
-    log_info "Installing module: $MODULE_NAME..."
-
-    local TEMP_DIR=$(mktemp -d)
-    local ARCHIVE_URL="https://github.com/${REPO}/archive/refs/heads/${BRANCH}.zip"
-
-    # Download the module
-    if ! curl -sL "$ARCHIVE_URL" -o "${TEMP_DIR}/module.zip" 2>/dev/null; then
-        # Try as a tag if branch fails
-        ARCHIVE_URL="https://github.com/${REPO}/archive/refs/tags/${BRANCH}.zip"
-        if ! curl -sL "$ARCHIVE_URL" -o "${TEMP_DIR}/module.zip" 2>/dev/null; then
-            log_warn "Failed to download module $MODULE_NAME"
-            rm -rf "${TEMP_DIR}"
-            return 1
-        fi
-    fi
-
-    # Extract the module
-    unzip -q "${TEMP_DIR}/module.zip" -d "${TEMP_DIR}" 2>/dev/null
-
-    # Find the extracted directory
-    local EXTRACTED_DIR=$(find "${TEMP_DIR}" -maxdepth 1 -type d ! -name "$(basename "${TEMP_DIR}")" | head -1)
-    if [[ -z "$EXTRACTED_DIR" ]]; then
-        log_warn "Failed to find extracted module directory for $MODULE_NAME"
-        rm -rf "${TEMP_DIR}"
-        return 1
-    fi
-
-    # Move to modules directory with correct name
-    mv "$EXTRACTED_DIR" "${OMEKA_ROOT}/modules/${MODULE_NAME}"
-
-    # Install composer dependencies if needed
-    if [[ -f "${OMEKA_ROOT}/modules/${MODULE_NAME}/composer.json" ]]; then
-        log_info "Installing composer dependencies for $MODULE_NAME..."
-        ensure_composer
-        if ! (cd "${OMEKA_ROOT}/modules/${MODULE_NAME}" && composer install --no-dev --no-interaction 2>&1); then
-            log_warn "Failed to install composer dependencies for $MODULE_NAME"
-            log_warn "Module may not work correctly until dependencies are installed"
-        else
-            log_info "Composer dependencies for $MODULE_NAME installed successfully"
-        fi
-    fi
-
-    # Cleanup
-    rm -rf "${TEMP_DIR}"
-
-    log_info "Module $MODULE_NAME installed successfully!"
-    return 0
+    log_info "PHP-FPM pool: max_children=${PHP_PM_MAX_CHILDREN:-10}, start=${PHP_PM_START_SERVERS:-3}, min_spare=${PHP_PM_MIN_SPARE_SERVERS:-2}, max_spare=${PHP_PM_MAX_SPARE_SERVERS:-5}"
 }
 
-# Function to install a single theme from GitHub
-install_theme() {
-    local THEME_NAME="$1"
-    local REPO="$2"
-    local BRANCH="${3:-master}"
-
-    log_info "Installing theme: $THEME_NAME..."
-
-    local TEMP_DIR=$(mktemp -d)
-    local ARCHIVE_URL="https://github.com/${REPO}/archive/refs/heads/${BRANCH}.zip"
-
-    # Download the theme
-    if ! curl -sL "$ARCHIVE_URL" -o "${TEMP_DIR}/theme.zip" 2>/dev/null; then
-        # Try as a tag if branch fails
-        ARCHIVE_URL="https://github.com/${REPO}/archive/refs/tags/${BRANCH}.zip"
-        if ! curl -sL "$ARCHIVE_URL" -o "${TEMP_DIR}/theme.zip" 2>/dev/null; then
-            log_warn "Failed to download theme $THEME_NAME"
-            rm -rf "${TEMP_DIR}"
-            return 1
-        fi
-    fi
-
-    # Extract the theme
-    unzip -q "${TEMP_DIR}/theme.zip" -d "${TEMP_DIR}" 2>/dev/null
-
-    # Find the extracted directory
-    local EXTRACTED_DIR=$(find "${TEMP_DIR}" -maxdepth 1 -type d ! -name "$(basename "${TEMP_DIR}")" | head -1)
-    if [[ -z "$EXTRACTED_DIR" ]]; then
-        log_warn "Failed to find extracted theme directory for $THEME_NAME"
-        rm -rf "${TEMP_DIR}"
-        return 1
-    fi
-
-    # Move to themes directory with correct name
-    mv "$EXTRACTED_DIR" "${OMEKA_ROOT}/themes/${THEME_NAME}"
-
-    # Cleanup
-    rm -rf "${TEMP_DIR}"
-
-    log_info "Theme $THEME_NAME installed successfully!"
-    return 0
+omeka_create_db_config() {
+    log_step "Creating database configuration..."
+    
+    omeka-s-cli config:create-db-ini \
+                --base-path "${OMEKA_ROOT}" \
+                --username "${MYSQL_USER}" \
+                --password "${MYSQL_PASSWORD}" \
+                --dbname "${MYSQL_DATABASE}" \
+                --host "${MYSQL_HOST}"
 }
 
-# Function to install all default modules
-install_default_modules() {
-    log_step "Installing default modules..."
-
-    for module_entry in "${DEFAULT_MODULES[@]}"; do
-        # Parse format: "ModuleName:repo:branch"
-        local MODULE_NAME="${module_entry%%:*}"
-        local remainder="${module_entry#*:}"
-        local REPO="${remainder%%:*}"
-        local BRANCH="${remainder##*:}"
-
-        # Skip if module already exists
-        if [[ -d "${OMEKA_ROOT}/modules/${MODULE_NAME}" ]]; then
-            log_info "Module $MODULE_NAME already exists, skipping..."
-            continue
-        fi
-
-        install_module "$MODULE_NAME" "$REPO" "$BRANCH" || log_warn "Failed to install $MODULE_NAME, continuing..."
-    done
-
-    log_info "Default modules installation completed!"
-}
-
-# Function to install composer dependencies for all modules that need them
-install_module_dependencies() {
-    log_step "Checking module composer dependencies..."
-
-    local needs_composer=false
-    for module_dir in "${OMEKA_ROOT}"/modules/*/; do
-        if [[ -f "${module_dir}composer.json" ]] && [[ ! -d "${module_dir}vendor" ]]; then
-            needs_composer=true
-            break
-        fi
-    done
-
-    if [[ "$needs_composer" == "true" ]]; then
-        ensure_composer
+omeka_install() {
+    # Warn when using "latest" — the resolved version has not been tested against this image
+    if [[ "$OMEKA_VERSION" == "latest" ]]; then
+        log_warn "OMEKA_VERSION=latest — the resolved version may not be tested with this image"
     fi
 
-    local modules_updated=0
-    for module_dir in "${OMEKA_ROOT}"/modules/*/; do
-        local module_name=$(basename "$module_dir")
-
-        # Check if module has composer.json but no vendor directory
-        if [[ -f "${module_dir}composer.json" ]] && [[ ! -d "${module_dir}vendor" ]]; then
-            log_info "Installing composer dependencies for $module_name..."
-            if (cd "$module_dir" && composer install --no-dev --no-interaction 2>&1); then
-                log_info "Composer dependencies for $module_name installed successfully"
-                modules_updated=$((modules_updated + 1))
-            else
-                log_warn "Failed to install composer dependencies for $module_name"
-            fi
-        fi
-    done
-
-    if [[ $modules_updated -eq 0 ]]; then
-        log_info "All module dependencies are already installed"
+    if ! omeka-s-cli core:status --base-path "${OMEKA_ROOT}" --is-installed; then
+        log_step "Omeka S is not yet installed. Installing..."
+        omeka-s-cli core:install \
+                    --base-path "${OMEKA_ROOT}" \
+                    --admin-email "${OMEKA_ADMIN_EMAIL}" \
+                    --admin-name "${OMEKA_ADMIN_USERNAME}" \
+                    --admin-password "${OMEKA_ADMIN_PASSWORD}" \
+                    --locale "${OMEKA_LOCALE}" \
+                    --time-zone "${OMEKA_TZ}" \
+                    --title "${OMEKA_TITLE}"
     else
-        log_info "Installed composer dependencies for $modules_updated module(s)"
+        log_info "Omeka S is already installed. Good!"
     fi
 }
 
-# Create required directories if they don't exist
-log_step "Creating required directories..."
-mkdir -p "${OMEKA_ROOT}/files"
-mkdir -p "${OMEKA_ROOT}/sideload"
-mkdir -p "${OMEKA_ROOT}/modules"
-mkdir -p "${OMEKA_ROOT}/themes"
-mkdir -p "${OMEKA_ROOT}/config"
-
-# Install extra modules from EXTRA_MODULES env var (comma-separated)
-# Format: "ModuleName:repo:branch" or just "ModuleName" (looked up from known modules)
-# Known module mappings (for short-name support)
-declare -A KNOWN_MODULES=(
-    # Daniel-KM modules
-    ["AdvancedSearch"]="Daniel-KM/Omeka-S-module-AdvancedSearch:master"
-    ["AnalyticsSnippet"]="Daniel-KM/Omeka-S-module-AnalyticsSnippet:master"
-    ["BulkEdit"]="Daniel-KM/Omeka-S-module-BulkEdit:master"
-    ["BulkExport"]="Daniel-KM/Omeka-S-module-BulkExport:master"
-    ["Common"]="Daniel-KM/Omeka-S-module-Common:master"
-    ["Cron"]="Daniel-KM/Omeka-S-module-Cron:master"
-    ["EasyAdmin"]="Daniel-KM/Omeka-S-module-EasyAdmin:master"
-    ["IiifServer"]="Daniel-KM/Omeka-S-module-IiifServer:master"
-    ["ImageServer"]="Daniel-KM/Omeka-S-module-ImageServer:master"
-    ["Log"]="Daniel-KM/Omeka-S-module-Log:master"
-    ["OaiPmhRepository"]="Daniel-KM/Omeka-S-module-OaiPmhRepository:master"
-    ["Reference"]="Daniel-KM/Omeka-S-module-Reference:master"
-    ["SearchSolr"]="Daniel-KM/Omeka-S-module-SearchSolr:master"
-    ["UniversalViewer"]="Daniel-KM/Omeka-S-module-UniversalViewer:master"
-    # Official Omeka-S modules
-    ["CSSEditor"]="omeka-s-modules/CSSEditor:master"
-    ["CustomVocab"]="omeka-s-modules/CustomVocab:master"
-    ["Collecting"]="omeka-s-modules/Collecting:master"
-    ["Datavis"]="omeka-s-modules/Datavis:main"
-    ["Exports"]="omeka-s-modules/Exports:main"
-    ["Hierarchy"]="omeka-s-modules/Hierarchy:main"
-    ["InverseProperties"]="omeka-s-modules/InverseProperties:main"
-    ["OutputFormats"]="omeka-s-modules/OutputFormats:main"
-    ["ResourceMeta"]="omeka-s-modules/ResourceMeta:master"
-    ["ValueSuggest"]="omeka-s-modules/ValueSuggest:master"
-    # Other modules
-    ["RightsStatements"]="zerocrates/RightsStatements:master"
-    ["Sitemaps"]="ManOnDaMoon/omeka-s-module-Sitemaps:master"
-)
-
-# Module dependencies
-declare -A MODULE_DEPS=(
-    ["AdvancedSearch"]="Common"
-    ["BulkEdit"]="Common"
-    ["BulkExport"]="Common"
-    ["EasyAdmin"]="Common Cron"
-    ["IiifServer"]="Common"
-    ["ImageServer"]="Common"
-    ["Log"]="Common"
-    ["OaiPmhRepository"]="Common"
-    ["Reference"]="Common"
-    ["SearchSolr"]="Common AdvancedSearch"
-    ["UniversalViewer"]="Common"
-)
-
-install_extra_module() {
-    local entry="$1"
-    local MODULE_NAME REPO BRANCH
-
-    if [[ "$entry" == *":"* ]]; then
-        # Full format: ModuleName:repo:branch
-        MODULE_NAME="${entry%%:*}"
-        local remainder="${entry#*:}"
-        REPO="${remainder%%:*}"
-        BRANCH="${remainder##*:}"
-    elif [[ -n "${KNOWN_MODULES[$entry]}" ]]; then
-        # Short name lookup
-        MODULE_NAME="$entry"
-        local info="${KNOWN_MODULES[$entry]}"
-        REPO="${info%%:*}"
-        BRANCH="${info##*:}"
-    else
-        log_warn "Unknown module '$entry' — use full format 'ModuleName:org/repo:branch'"
-        return 1
-    fi
-
-    # Install dependencies first
-    if [[ -n "${MODULE_DEPS[$MODULE_NAME]}" ]]; then
-        for dep in ${MODULE_DEPS[$MODULE_NAME]}; do
-            if [[ ! -d "${OMEKA_ROOT}/modules/${dep}" ]]; then
-                log_info "Installing dependency: $dep"
-                install_extra_module "$dep"
-            fi
+omeka_extra_modules_download() {
+    # Download extra modules from the EXTRA_MODULES env var
+    # (comma-separated)
+    if [[ -n "${EXTRA_MODULES:-}" ]]; then
+        log_step "Downloading extra modules..."
+        IFS=',' read -ra EXTRA_MODULE_LIST <<< "$EXTRA_MODULES"
+        for entry in "${EXTRA_MODULE_LIST[@]}"; do
+            entry=$(echo "$entry" | xargs)
+            [[ -z "$entry" ]] && continue
+            log_step "Downloading $entry"
+            omeka-s-cli module:download \
+                        --base-path "$OMEKA_ROOT" \
+                        "$entry" \
+                || log_error "Failed to download extra module: $entry"
         done
+    else
+        log_info "No EXTRA_MODULES to download."
     fi
-
-    # Skip if already installed
-    if [[ -d "${OMEKA_ROOT}/modules/${MODULE_NAME}" ]]; then
-        log_info "Extra module $MODULE_NAME already installed, skipping..."
-        return 0
-    fi
-
-    install_module "$MODULE_NAME" "$REPO" "$BRANCH"
 }
 
-if [[ -n "${EXTRA_MODULES:-}" ]]; then
-    log_step "Installing extra modules from EXTRA_MODULES..."
-    IFS=',' read -ra EXTRA_MODULE_LIST <<< "$EXTRA_MODULES"
-    for entry in "${EXTRA_MODULE_LIST[@]}"; do
-        entry=$(echo "$entry" | xargs)  # trim whitespace
-        install_extra_module "$entry" || log_warn "Failed to install extra module: $entry"
+omeka_modules_install() {
+    log_step "Installing modules (EXTRA and DEFAULT)..."
+    for module_dir in "${OMEKA_ROOT}"/modules/*/; do
+        [[ -d "$module_dir" ]] || continue
+        mod=$(basename "$module_dir")
+        omeka-s-cli module:install \
+                    --base-path "$OMEKA_ROOT" \
+                    "$mod" \
+            || log_error "Failed to install module $mod"
     done
-    log_info "Extra modules installation completed!"
-fi
+}
 
-# Install extra themes from EXTRA_THEMES env var (comma-separated)
-# Format: "ThemeName:repo:branch" or just "ThemeName" (from omeka-s-themes org)
-if [[ -n "${EXTRA_THEMES:-}" ]]; then
-    log_step "Installing extra themes from EXTRA_THEMES..."
-    IFS=',' read -ra EXTRA_THEME_LIST <<< "$EXTRA_THEMES"
-    for entry in "${EXTRA_THEME_LIST[@]}"; do
-        entry=$(echo "$entry" | xargs)
-        THEME_NAME=""
-        REPO=""
-        BRANCH=""
-        if [[ "$entry" == *":"* ]]; then
-            THEME_NAME="${entry%%:*}"
-            local_remainder="${entry#*:}"
-            REPO="${local_remainder%%:*}"
-            BRANCH="${local_remainder##*:}"
-        else
-            THEME_NAME="$entry"
-            REPO="omeka-s-themes/${entry}"
-            BRANCH="master"
-        fi
-        if [[ -d "${OMEKA_ROOT}/themes/${THEME_NAME}" ]]; then
-            log_info "Extra theme $THEME_NAME already installed, skipping..."
-            continue
-        fi
-        install_theme "$THEME_NAME" "$REPO" "$BRANCH" || log_warn "Failed to install extra theme: $entry"
-    done
-    log_info "Extra themes installation completed!"
-fi
+omeka_extra_themes_download() {
+    # Download extra themes from the EXTRA_THEMES env var
+    # (comma-separated)
+    if [[ -n "${EXTRA_THEMES:-}" ]]; then
+        log_step "Downloading extra themes..."
+        IFS=',' read -ra EXTRA_THEME_LIST <<< "$EXTRA_THEMES"
+        for entry in "${EXTRA_THEME_LIST[@]}"; do
+            entry=$(echo "$entry" | xargs)
+            [[ -z "$entry" ]] && continue
+            log_step "Downloading $entry"
+            omeka-s-cli theme:download \
+                        --base-path "$OMEKA_ROOT" \
+                        "$entry" \
+                || log_error "Failed to download extra theme: $entry"
+        done
+    else
+        log_info "No EXTRA_THEMES to download."
+    fi
+}
 
-# Install composer dependencies for modules that need them
-#install_module_dependencies
+fpm_pool_config
 
-# Set proper permissions (use || true for bind-mounted dirs that may fail on Windows)
-#log_step "Setting proper permissions..."
-#chown -R www-data:www-data "${OMEKA_ROOT}/modules" 2>/dev/null || true
-#chown -R www-data:www-data "${OMEKA_ROOT}/themes" 2>/dev/null || true
-#chown -R www-data:www-data "${OMEKA_ROOT}/files" 2>/dev/null || true
-#chown -R www-data:www-data "${OMEKA_ROOT}/sideload" 2>/dev/null || log_warn "Could not change sideload ownership (bind mount from host)"
-#chown -R www-data:www-data "${OMEKA_ROOT}/config" 2>/dev/null || true
-#chmod 775 "${OMEKA_ROOT}/sideload" 2>/dev/null || log_warn "Could not change sideload permissions (bind mount from host)"
-#chmod 775 "${OMEKA_ROOT}/files" 2>/dev/null || true
-#chmod 775 "${OMEKA_ROOT}/modules" 2>/dev/null || true
-#chmod 775 "${OMEKA_ROOT}/themes" 2>/dev/null || true
+# The DB config must be written first, as it is used during
+# installation!
+omeka_create_db_config
+omeka_install
 
-#log_info "Entrypoint completed. Starting PHP-FPM..."
+omeka_extra_modules_download
+omeka_modules_install
 
-# PHP-FPM handles privilege dropping internally — the master process runs as
-# root (needed for log access and worker management), while worker processes
-# run as www-data via the pool configuration.
+omeka_extra_themes_download
+
 exec "$@"

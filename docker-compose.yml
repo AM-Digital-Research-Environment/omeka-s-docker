@@ -69,6 +69,12 @@ services:
       - MYSQL_USER=omeka
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
       - OMEKA_VERSION=${OMEKA_VERSION:-4.2.0}
+      - OMEKA_ADMIN_EMAIL=${OMEKA_ADMIN_EMAIL:?You must set OMEKA_ADMIN_EMAIL in .env}
+      - OMEKA_ADMIN_PASSWORD=${OMEKA_ADMIN_PASSWORD:?You must set OMEKA_ADMIN_PASSWORD in .env}
+      - OMEKA_ADMIN_USERNAME=${OMEKA_ADMIN_USERNAME:?You must set OMEKA_ADMIN_USERNAME in .env}
+      - OMEKA_TZ=${OMEKA_TZ:-"UTC"}
+      - OMEKA_LOCALE=${OMEKA_LOCALE:-"en_US"}
+      - OMEKA_TITLE=${OMEKA_TITLE:-"Omeka S"}
       # PHP-FPM pool tuning (defaults in entrypoint if unset)
       - PHP_PM_MAX_CHILDREN=${PHP_PM_MAX_CHILDREN:-10}
       - PHP_PM_START_SERVERS=${PHP_PM_START_SERVERS:-3}

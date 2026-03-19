@@ -1,0 +1,22 @@
+# Default modules to install during container build.
+# The legal syntax is that of Omeka S CLI
+# (c.f. https://github.com/GhentCDH/Omeka-S-Cli#example-download-a-module-from-a-repository)
+# Specifically:
+#  - no prefix installs from `omeka-s-modules`
+#  - `gh:` installs from a GitHub repo
+#  - a URL to a zip file or Git repo will download from there
+#  - to download a branch, tag or commit, append `#<branch|tag|commit>`
+
+# omeka-s-modules
+ActivityLog
+CSVImport
+DataCleaning
+DspaceConnector
+FacetedBrowse
+FileSideload
+ItemCarouselBlock
+Mapping
+NumericDataTypes
+
+# third party
+gh:fmadore/IframeEmbed
