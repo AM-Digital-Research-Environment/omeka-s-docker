@@ -74,6 +74,41 @@ omeka_install() {
     fi
 }
 
+module_name_from_entry() {
+    # Extract a candidate module name from an EXTRA_MODULES entry.
+    # Plain names pass through unchanged.  For URLs, we take the
+    # basename, strip archive extensions, and strip a trailing version
+    # suffix (e.g. "CSVImport-3.0.0.zip" → "CSVImport").
+    local entry="$1"
+    if [[ "$entry" == *"://"* || "$entry" == gh:* ]]; then
+        local base
+        base=$(basename "$entry")
+        base="${base%.zip}"
+        base="${base%.tar.gz}"
+        base="${base%.git}"
+        # Strip trailing version: -3.0.0, -v1.2.3, etc.
+        base="${base%%-[vV][0-9]*}"
+        base="${base%%-[0-9]*}"
+        [[ -n "$base" ]] && echo "$base" || echo "$entry"
+    else
+        echo "$entry"
+    fi
+}
+
+module_dir_exists() {
+    # Case-insensitive check: does a directory matching the given name
+    # already exist under $OMEKA_ROOT/modules/?
+    local name="${1,,}"
+    for d in "${OMEKA_ROOT}"/modules/*/; do
+        [[ -d "$d" ]] || continue
+        [[ "${d##*/}" == "/" ]] && continue
+        local base
+        base=$(basename "$d")
+        [[ "${base,,}" == "$name" ]] && return 0
+    done
+    return 1
+}
+
 omeka_extra_modules_download() {
     # Download extra modules from the EXTRA_MODULES env var
     # (comma-separated)
@@ -83,6 +118,12 @@ omeka_extra_modules_download() {
         for entry in "${EXTRA_MODULE_LIST[@]}"; do
             entry=$(echo "$entry" | xargs)
             [[ -z "$entry" ]] && continue
+            local mod_name
+            mod_name=$(module_name_from_entry "$entry")
+            if module_dir_exists "$mod_name"; then
+                log_info "Module ${mod_name} is already present, skipping"
+                continue
+            fi
             log_step "Downloading $entry"
             omeka-s-cli module:download \
                         --base-path "$OMEKA_ROOT" \
