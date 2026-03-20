@@ -136,6 +136,10 @@ EOF
         cp "${OMEKA_ROOT}/config/local.config.php.dist" "${OMEKA_ROOT}/config/local.config.php"
     fi
 
+    # Use the Imagick PHP extension instead of the ImageMagick CLI
+    sed -i "s/Thumbnailer\\\ImageMagick/Thumbnailer\\\Imagick/g" \
+        "${OMEKA_ROOT}/config/local.config.php"
+
     # Cleanup
     rm -rf "${TEMP_DIR}"
 
