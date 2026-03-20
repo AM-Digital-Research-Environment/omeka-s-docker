@@ -14,6 +14,7 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
     libicu76 \
     libopenjp2-7 \
     ghostscript \
+    imagemagick \
     libvips-tools \
     poppler-utils \
     # Runtime tools needed by entrypoint and module scripts

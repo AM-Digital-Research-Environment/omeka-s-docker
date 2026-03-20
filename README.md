@@ -285,7 +285,7 @@ Set `ENABLE_IIIF=true` in your `.env` file to automatically install the followin
 | **ImageServer** | [GitHub](https://github.com/Daniel-KM/Omeka-S-module-ImageServer) | Generates tiles and serves images via IIIF Image API |
 | **Mirador** | [GitLab](https://gitlab.com/Daniel-KM/Omeka-S-module-Mirador) | Embeds the Mirador IIIF viewer for item display |
 
-Dependencies (Common) are installed automatically. The image includes `libvips` and the `exif` PHP extension, which are used by ImageServer for efficient image processing.
+Dependencies (Common) are installed automatically. The image includes `libvips` (primary image processor), `imagemagick` (fallback), and the `imagick` and `exif` PHP extensions for image processing.
 
 ```bash
 # Enable in .env
