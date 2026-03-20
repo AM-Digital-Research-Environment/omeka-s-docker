@@ -15,8 +15,8 @@ declare -A THEME_REPOS=(
     ["Lively"]="omeka-s-themes/Lively"
     ["Papers"]="omeka-s-themes/Papers"
     ["Foundation"]="omeka-s-themes/Foundation"
-    ["ThankRoy"]="omeka-s-themes/ThankRoy"
-    ["Thedarkside"]="omeka-s-themes/Thedarkside"
+    ["thanksroy"]="omeka-s-themes/thanksroy"
+    ["thedaily"]="omeka-s-themes/thedaily"
 )
 
 # Colors for output
