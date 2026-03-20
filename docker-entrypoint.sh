@@ -61,14 +61,24 @@ omeka_install() {
 
     if ! omeka-s-cli core:status --base-path "${OMEKA_ROOT}" --is-installed; then
         log_step "Omeka S is not yet installed. Installing..."
-        omeka-s-cli core:install \
-                    --base-path "${OMEKA_ROOT}" \
-                    --admin-email "${OMEKA_ADMIN_EMAIL}" \
-                    --admin-name "${OMEKA_ADMIN_USERNAME}" \
-                    --admin-password "${OMEKA_ADMIN_PASSWORD}" \
-                    --locale "${OMEKA_LOCALE}" \
-                    --time-zone "${OMEKA_TZ}" \
-                    --title "${OMEKA_TITLE}"
+        if [[ -n "${OMEKA_ADMIN_EMAIL:-}" && -n "${OMEKA_ADMIN_PASSWORD:-}" && -n "${OMEKA_ADMIN_USERNAME:-}" ]]; then
+            log_info "Creating admin user"
+            omeka-s-cli core:install \
+                        --base-path "${OMEKA_ROOT}" \
+                        --locale "${OMEKA_LOCALE}" \
+                        --time-zone "${OMEKA_TZ}" \
+                        --title "${OMEKA_TITLE}" \
+                        --admin-email "${OMEKA_ADMIN_EMAIL}" \
+                        --admin-name "${OMEKA_ADMIN_USERNAME}" \
+                        --admin-password "${OMEKA_ADMIN_PASSWORD}"
+        else
+            log_info "Will not create admin user"
+            omeka-s-cli core:install \
+                        --base-path "${OMEKA_ROOT}" \
+                        --locale "${OMEKA_LOCALE}" \
+                        --time-zone "${OMEKA_TZ}" \
+                        --title "${OMEKA_TITLE}"
+        fi
     else
         log_info "Omeka S is already installed. Good!"
     fi
