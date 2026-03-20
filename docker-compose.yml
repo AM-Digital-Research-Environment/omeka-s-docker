@@ -140,9 +140,9 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql:rw
     environment:
-      - MYSQL_DATABASE=omeka
-      - MYSQL_USER=omeka
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-omeka}
+      - MYSQL_USER=${MYSQL_USER:-omeka}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:?You must set MYSQL_PASSWORD in .env}
       - MYSQL_RANDOM_ROOT_PASSWORD=yes
     networks:
       - backend
