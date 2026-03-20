@@ -420,6 +420,7 @@ declare -A KNOWN_MODULES=(
     # Other modules
     ["RightsStatements"]="zerocrates/RightsStatements:master"
     ["Sitemaps"]="ManOnDaMoon/omeka-s-module-Sitemaps:master"
+    ["Wikidata"]="nishad/omeka-s-wikidata:master"
 )
 
 # Module dependencies

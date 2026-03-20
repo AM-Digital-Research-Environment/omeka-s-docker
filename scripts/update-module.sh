@@ -50,6 +50,7 @@ declare -A MODULE_REPOS=(
     # Other modules
     ["RightsStatements"]="zerocrates/RightsStatements:master"
     ["Sitemaps"]="ManOnDaMoon/omeka-s-module-Sitemaps:master"
+    ["Wikidata"]="nishad/omeka-s-wikidata:master"
 )
 
 # Configuration - Map module names to their GitLab repositories
