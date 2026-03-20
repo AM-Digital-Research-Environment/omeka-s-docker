@@ -14,9 +14,11 @@ FROM php:8.4-fpm AS runtime
 ARG OMEKA_ROOT=/var/www/html
 ARG OMEKA_VERSION=4.2.0
 
+# We're never going to be able to give feedback to apt during build
+ENV DEBIAN_FRONTEND=noninteractive
+
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# Install only runtime shared libraries (no -dev headers, no compilers)
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     libgmp10 \
     libtidy58 \
@@ -30,11 +32,8 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
     unzip \
     # Healthcheck dependency
     libfcgi-bin \
-    # Privilege dropping (entrypoint runs as root, drops to www-data)
-    gosu \
-    && rm -rf /var/lib/apt/lists/* \
-    # Verify gosu works
-    && gosu nobody true
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install PHP extensions
 RUN --mount=type=bind,from=ghcr.io/mlocati/php-extension-installer:latest,source=/usr/bin/install-php-extensions,target=/usr/local/bin/install-php-extensions \
@@ -95,14 +94,6 @@ RUN { \
     echo 'apc.ttl=7200'; \
     } > /usr/local/etc/php/conf.d/docker-php-ext-apcu.ini
 
-# Create required directories and set permissions
-RUN mkdir -p "$OMEKA_ROOT/files" \
-    "$OMEKA_ROOT/sideload" \
-    "$OMEKA_ROOT/modules" \
-    "$OMEKA_ROOT/themes" \
-    "$OMEKA_ROOT/config" \
-    && chown -R www-data:www-data /var/www/html \
-    && chmod -R 775 /var/www/html
 
 # Install php-fpm-healthcheck script for container health monitoring
 RUN curl -o /usr/local/bin/php-fpm-healthcheck \
@@ -111,9 +102,14 @@ RUN curl -o /usr/local/bin/php-fpm-healthcheck \
 
 # Enable PHP-FPM status page for healthcheck
 RUN set -xe && echo "pm.status_path = /status" >> /usr/local/etc/php-fpm.d/zz-docker.conf
+RUN chown -R www-data:www-data "$OMEKA_ROOT" \
+    && chmod -R 775 "$OMEKA_ROOT" \
+    && chown www-data:www-data /usr/local/etc/php-fpm.d \
+    # omeka-s-cli caches into $HOME/.cache, which is /var/www for www-data
+    && mkdir -p /var/www/.cache \
+    && chown www-data:www-data /var/www/.cache
 
-# PHP-FPM pool settings are generated dynamically in docker-entrypoint.sh
-# to support runtime configuration via PHP_PM_* environment variables
+USER www-data
 
 WORKDIR /var/www/html
 
@@ -122,9 +118,9 @@ COPY _docker/default-modules.txt /usr/local/share/omeka/default-modules.txt
 
 # TODO: document usage of the "latest" sentinel value
 RUN if [ "$OMEKA_VERSION" = "latest" ]; then \
-    omeka-s-cli core:download "$OMEKA_ROOT"; \
+        omeka-s-cli core:download "$OMEKA_ROOT"; \
     else \
-    omeka-s-cli core:download "$OMEKA_ROOT" "$OMEKA_VERSION"; \
+        omeka-s-cli core:download "$OMEKA_ROOT" "$OMEKA_VERSION"; \
     fi
 
 RUN while IFS= read -r mod || [ -n "$mod" ]; do \
@@ -145,8 +141,6 @@ COPY --chmod=+x docker-entrypoint.sh /usr/local/bin/
 # Set recommended PHP.ini settings
 RUN echo "date.timezone = Europe/Berlin" >> /usr/local/etc/php/conf.d/docker-php-timezone.ini
 
-# No USER directive — entrypoint runs as root for setup, then drops to
-# www-data via gosu before starting php-fpm.
-
 ENTRYPOINT ["docker-entrypoint.sh"]
+
 CMD ["php-fpm"]

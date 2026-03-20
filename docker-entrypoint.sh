@@ -18,7 +18,7 @@ if ! command -v omeka-s-cli &>/dev/null; then
     log_error "omeka-s-cli not found!"
     log_error "omeka-s-cli should be installed during the container build of the php container."
     log_error "Please check the build logs for failures."
-    return 1
+    exit 1
 fi
 
 OMEKA_ROOT="/var/www/html"
