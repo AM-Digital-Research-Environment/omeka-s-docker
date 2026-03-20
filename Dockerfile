@@ -1,95 +1,3 @@
-# ==============================================================================
-# Stage 1: builder — compile ImageMagick & PHP extensions with dev headers
-# ==============================================================================
-FROM php:8.4-fpm AS builder
-
-# Pin ImageMagick version for reproducible builds
-ARG IMAGEMAGICK_VERSION=7.1.2-13
-
-# Install build-time dependencies (dev headers, compilers, tools)
-RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
-    libfreetype6-dev \
-    libjpeg62-turbo-dev \
-    libpng-dev \
-    libwebp-dev \
-    libxml2-dev \
-    libxslt1-dev \
-    libzip-dev \
-    libmagickwand-dev \
-    libgmp-dev \
-    libtidy-dev \
-    libicu-dev \
-    libopenjp2-7-dev \
-    pkg-config \
-    git \
-    curl \
-    wget \
-    xz-utils \
-    && rm -rf /var/lib/apt/lists/*
-
-# Compile ImageMagick from source (pinned version)
-RUN set -eux; \
-    cd /tmp && \
-    wget "https://github.com/ImageMagick/ImageMagick/archive/refs/tags/${IMAGEMAGICK_VERSION}.tar.gz" -O "ImageMagick-${IMAGEMAGICK_VERSION}.tar.gz" && \
-    tar xf "ImageMagick-${IMAGEMAGICK_VERSION}.tar.gz" && \
-    cd "ImageMagick-${IMAGEMAGICK_VERSION}" && \
-    ./configure --with-modules --enable-shared --with-webp --with-openjp2 --with-gslib --with-gs-font-dir=/usr/share/fonts/type1/gsfonts && \
-    make -j$(nproc) && \
-    make install && \
-    ldconfig /usr/local/lib && \
-    cd .. && \
-    rm -rf ImageMagick*
-
-# Build PHP Imagick extension from PECL source
-RUN set -eux; \
-    mkdir -p /usr/local/etc/php/conf.d && \
-    pecl channel-update pecl.php.net && \
-    mkdir -p /tmp/imagick && \
-    cd /tmp/imagick && \
-    pecl download imagick && \
-    tar xf imagick-*.tgz && \
-    cd imagick-* && \
-    phpize && \
-    ./configure && \
-    make -j$(nproc) && \
-    make install && \
-    cd / && \
-    rm -rf /tmp/imagick && \
-    echo "extension=imagick.so" > /usr/local/etc/php/conf.d/imagick.ini && \
-    php -r "if (class_exists('Imagick')) echo 'Imagick installed successfully';"
-
-# Configure and build PHP extensions
-# Omeka S core needs: gd, intl, pdo_mysql, xml/xsl, zip
-# Useful extras: bcmath, exif, gettext, gmp, mysqli, opcache, sockets, tidy
-#
-# Removed (not needed by Omeka S): shmop, sysvmsg, sysvsem, sysvshm, calendar, soap, ldap
-# To re-add any of these, append them to the docker-php-ext-install list below
-# and add the corresponding -dev package (e.g. libldap2-dev for ldap).
-RUN docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp
-
-RUN docker-php-ext-install -j$(nproc) \
-    bcmath \
-    exif \
-    gd \
-    gettext \
-    gmp \
-    intl \
-    mysqli \
-    opcache \
-    pdo_mysql \
-    sockets \
-    tidy \
-    xsl \
-    zip
-
-# Build APCu
-RUN pecl install apcu && \
-    docker-php-ext-enable apcu
-
-
-# ==============================================================================
-# Stage 2: runtime — lean production image
-# ==============================================================================
 FROM php:8.4-fpm AS runtime
 
 # Install only runtime shared libraries (no -dev headers, no compilers)
@@ -120,35 +28,27 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
     # Verify gosu works
     && gosu nobody true
 
-# Copy compiled PHP extensions and config from builder
-COPY --from=builder /usr/local/lib/php/extensions/ /usr/local/lib/php/extensions/
-COPY --from=builder /usr/local/etc/php/conf.d/ /usr/local/etc/php/conf.d/
-
-# Copy ImageMagick binaries and libraries from builder
-COPY --from=builder /usr/local/bin/magick /usr/local/bin/magick
-COPY --from=builder /usr/local/lib/libMagick* /usr/local/lib/
-COPY --from=builder /usr/local/etc/ImageMagick-7/ /usr/local/etc/ImageMagick-7/
-RUN ldconfig /usr/local/lib \
-    && ln -sf /usr/local/bin/magick /usr/local/bin/convert \
-    && ln -sf /usr/local/bin/magick /usr/local/bin/identify
-
-# Configure ImageMagick policies
-RUN set -eux; \
-    mkdir -p /usr/local/etc/ImageMagick-7 && \
-    { \
-        echo '<?xml version="1.0" encoding="UTF-8"?>'; \
-        echo '<policymap>'; \
-        echo '  <policy domain="resource" name="memory" value="256MiB"/>'; \
-        echo '  <policy domain="resource" name="map" value="512MiB"/>'; \
-        echo '  <policy domain="resource" name="width" value="16KP"/>'; \
-        echo '  <policy domain="resource" name="height" value="16KP"/>'; \
-        echo '  <policy domain="coder" rights="read|write" pattern="PDF"/>'; \
-        echo '  <policy domain="coder" rights="read|write" pattern="PS"/>'; \
-        echo '  <policy domain="coder" rights="read|write" pattern="EPS"/>'; \
-        echo '  <policy domain="coder" rights="read|write" pattern="XPS"/>'; \
-        echo '  <policy domain="delegate" rights="read|write" pattern="gs"/>'; \
-        echo '</policymap>'; \
-    } > /usr/local/etc/ImageMagick-7/policy.xml
+# Install PHP extensions
+RUN --mount=type=bind,from=ghcr.io/mlocati/php-extension-installer:latest,source=/usr/bin/install-php-extensions,target=/usr/local/bin/install-php-extensions \
+    install-php-extensions \
+    bcmath \
+    exif \
+    gd \
+    gettext \
+    gmp \
+    imagick \
+    intl \
+    mysqli \
+    opcache \
+    pdo_mysql \
+    sockets \
+    tidy \
+    xsl \
+    zip
+        
+# Build APCu
+RUN pecl install apcu && \
+    docker-php-ext-enable apcu
 
 # Set PHP configuration
 RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
