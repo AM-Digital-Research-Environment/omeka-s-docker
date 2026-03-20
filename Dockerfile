@@ -140,9 +140,7 @@ RUN omeka-s-cli theme:download --base-path "$OMEKA_ROOT" gh:omeka-s-themes/defau
     && omeka-s-cli theme:download --base-path "$OMEKA_ROOT" gh:omeka-s-themes/freedom \
     && omeka-s-cli theme:download --base-path "$OMEKA_ROOT" gh:omeka-s-themes/lively
 
-# Copy helper scripts and entrypoint, fix line endings (Windows compatibility)
 COPY --chmod=+x docker-entrypoint.sh /usr/local/bin/
-RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh
 
 # Set recommended PHP.ini settings
 RUN echo "date.timezone = Europe/Berlin" >> /usr/local/etc/php/conf.d/docker-php-timezone.ini
