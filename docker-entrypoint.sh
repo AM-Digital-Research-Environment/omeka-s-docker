@@ -177,12 +177,23 @@ omeka_extra_themes_download() {
     fi
 }
 
+omeka_extra_config() {
+    log_step "Setting global config for Omeka..."
+
+    log_step "Setting thumbnailer to Imagick"
+    omeka-s-cli config:set \
+                --base-path "$OMEKA_ROOT" \
+                service_manager \
+                "{\"aliases\": {\"Omeka\\\File\\\Thumbnailer\": \"Omeka\\\File\\\Thumbnailer\\\Imagick\"}}"
+}
+
 fpm_pool_config
 
 # The DB config must be written first, as it is used during
 # installation!
 omeka_create_db_config
 omeka_install
+omeka_extra_config
 
 omeka_extra_modules_download
 omeka_modules_install
