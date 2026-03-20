@@ -5,7 +5,7 @@ services:
   web:
     image: nginx:1.28-alpine
     ports:
-      - "${NGINX_PORT:-80}:80"
+      - "127.0.0.1:${NGINX_PORT:-80}:80"
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ./nginx-http-settings.conf:/etc/nginx/conf.d/00-http-settings.conf:ro
