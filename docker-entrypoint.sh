@@ -37,6 +37,7 @@ pm.max_spare_servers = ${PHP_PM_MAX_SPARE_SERVERS:-5}
 pm.max_requests = ${PHP_PM_MAX_REQUESTS:-500}
 pm.process_idle_timeout = 10s
 request_terminate_timeout = 300s
+php_admin_value[date.timezone] = ${OMEKA_TZ:-UTC}
 FPMEOF
     log_info "PHP-FPM pool: max_children=${PHP_PM_MAX_CHILDREN:-10}, start=${PHP_PM_START_SERVERS:-3}, min_spare=${PHP_PM_MIN_SPARE_SERVERS:-2}, max_spare=${PHP_PM_MAX_SPARE_SERVERS:-5}"
 }

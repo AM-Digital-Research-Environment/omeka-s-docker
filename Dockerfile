@@ -64,44 +64,39 @@ RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
         -e 's/upload_max_filesize = 2M/upload_max_filesize = 100M/' \
         -e 's/post_max_size = 8M/post_max_size = 100M/' \
         -e 's/max_execution_time = 30/max_execution_time = 300/' \
-        "$PHP_INI_DIR/php.ini"
+    "$PHP_INI_DIR/php.ini"
 
-# Configure OPcache with optimized settings
-RUN { \
-    echo 'opcache.memory_consumption=256'; \
-    echo 'opcache.interned_strings_buffer=16'; \
-    echo 'opcache.max_accelerated_files=10000'; \
-    echo 'opcache.revalidate_freq=60'; \
-    echo 'opcache.fast_shutdown=1'; \
-    echo 'opcache.enable_cli=1'; \
-    echo 'opcache.enable_file_override=1'; \
-    echo 'opcache.validate_timestamps=0'; \
-    echo 'opcache.jit=1255'; \
-    echo 'opcache.jit_buffer_size=50M'; \
-    } > /usr/local/etc/php/conf.d/opcache-recommended.ini
+COPY <<EOF /usr/local/etc/php/conf.d/90-opcache.ini
+opcache.memory_consumption=256
+opcache.interned_strings_buffer=16
+opcache.max_accelerated_files=10000
+opcache.revalidate_freq=60
+opcache.fast_shutdown=1
+opcache.enable_cli=1
+opcache.enable_file_override=1
+opcache.validate_timestamps=0
+opcache.jit=1255
+opcache.jit_buffer_size=50M
+EOF
 
-# Configure realpath cache (reduces stat() calls with many modules)
-RUN { \
-    echo 'realpath_cache_size=4096K'; \
-    echo 'realpath_cache_ttl=600'; \
-    } > /usr/local/etc/php/conf.d/realpath-cache.ini
+COPY <<EOF /usr/local/etc/php/conf.d/91-realpath-cache.ini
+realpath_cache_size=4096K
+realpath_cache_ttl=600
+EOF
 
-# Configure APCu
-RUN { \
-    echo 'extension=apcu.so'; \
-    echo 'apc.enabled=1'; \
-    echo 'apc.shm_size=256M'; \
-    echo 'apc.ttl=7200'; \
-    } > /usr/local/etc/php/conf.d/docker-php-ext-apcu.ini
-
+COPY <<EOF /usr/local/etc/php/conf.d/docker-php-ext-apcu.ini
+extension=apcu.so
+apc.enabled=1
+apc.shm_size=256M
+apc.ttl=7200
+EOF
 
 # Install php-fpm-healthcheck script for container health monitoring
 RUN curl -o /usr/local/bin/php-fpm-healthcheck \
     https://raw.githubusercontent.com/renatomefi/php-fpm-healthcheck/master/php-fpm-healthcheck \
-    && chmod +x /usr/local/bin/php-fpm-healthcheck
+    && chmod +x /usr/local/bin/php-fpm-healthcheck \
+    && echo "pm.status_path = /status" >> /usr/local/etc/php-fpm.d/zz-docker.conf
 
-# Enable PHP-FPM status page for healthcheck
-RUN set -xe && echo "pm.status_path = /status" >> /usr/local/etc/php-fpm.d/zz-docker.conf
 RUN chown -R www-data:www-data "$OMEKA_ROOT" \
     && chmod -R 775 "$OMEKA_ROOT" \
     && chown www-data:www-data /usr/local/etc/php-fpm.d \
@@ -114,7 +109,7 @@ USER www-data
 WORKDIR /var/www/html
 
 COPY --from=toolfetcher --chmod=+x /omeka-s-cli.phar /usr/local/bin/omeka-s-cli
-COPY _docker/default-modules.txt /usr/local/share/omeka/default-modules.txt
+COPY --from=composer/composer:2-bin /composer /usr/bin/composer
 
 # TODO: document usage of the "latest" sentinel value
 RUN if [ "$OMEKA_VERSION" = "latest" ]; then \
@@ -123,23 +118,20 @@ RUN if [ "$OMEKA_VERSION" = "latest" ]; then \
         omeka-s-cli core:download "$OMEKA_ROOT" "$OMEKA_VERSION"; \
     fi
 
-RUN while IFS= read -r mod || [ -n "$mod" ]; do \
-    # strip comments, trim spaces at beginning/end of line
-    mod=$(echo "$mod" | sed 's/#.*//;s/^[[:space:]]*//;s/[[:space:]]*$//'); \
-    # skip empty lines
-    [ -z "$mod" ] && continue; \
-    omeka-s-cli module:download --base-path "$OMEKA_ROOT" "$mod"; \
-    done < /usr/local/share/omeka/default-modules.txt \
-    && rm /usr/local/share/omeka/default-modules.txt
+COPY --chown=www-data:www-data _docker/default-modules.txt /tmp/default-modules.txt
 
-RUN omeka-s-cli theme:download --base-path "$OMEKA_ROOT" gh:omeka-s-themes/default \
-    && omeka-s-cli theme:download --base-path "$OMEKA_ROOT" gh:omeka-s-themes/freedom \
+RUN while IFS= read -r mod || [ -n "$mod" ]; do \
+        # strip comments, trim spaces at beginning/end of line
+        mod=$(echo "$mod" | sed 's/#.*//;s/^[[:space:]]*//;s/[[:space:]]*$//'); \
+        # skip empty lines
+        [ -z "$mod" ] && continue; \
+        omeka-s-cli module:download --base-path "$OMEKA_ROOT" "$mod"; \
+    done < /tmp/default-modules.txt
+
+RUN omeka-s-cli theme:download --base-path "$OMEKA_ROOT" gh:omeka-s-themes/freedom \
     && omeka-s-cli theme:download --base-path "$OMEKA_ROOT" gh:omeka-s-themes/lively
 
 COPY --chmod=+x docker-entrypoint.sh /usr/local/bin/
-
-# Set recommended PHP.ini settings
-RUN echo "date.timezone = Europe/Berlin" >> /usr/local/etc/php/conf.d/docker-php-timezone.ini
 
 ENTRYPOINT ["docker-entrypoint.sh"]
 
