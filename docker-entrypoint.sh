@@ -56,7 +56,6 @@ fi
 # Default modules to install (official Omeka S modules)
 # Format: "ModuleName:repo:branch"
 DEFAULT_MODULES=(
-    "ActivityLog:omeka-s-modules/ActivityLog:master"
     "CSVImport:omeka-s-modules/CSVImport:develop"
     "DataCleaning:omeka-s-modules/DataCleaning:master"
     "DspaceConnector:omeka-s-modules/DspaceConnector:develop"
@@ -67,6 +66,8 @@ DEFAULT_MODULES=(
     "Mapping:omeka-s-modules/Mapping:master"
     "NumericDataTypes:omeka-s-modules/NumericDataTypes:master"
     "ValueSuggest:omeka-s-modules/ValueSuggest:master"
+    "Common:Daniel-KM/Omeka-S-module-Common:master"
+    "Log:Daniel-KM/Omeka-S-module-Log:master"
 )
 
 # Default themes to install (official Omeka S themes)
@@ -405,6 +406,7 @@ declare -A KNOWN_MODULES=(
     ["SearchSolr"]="Daniel-KM/Omeka-S-module-SearchSolr:master"
     ["UniversalViewer"]="Daniel-KM/Omeka-S-module-UniversalViewer:master"
     # Official Omeka-S modules
+    ["ActivityLog"]="omeka-s-modules/ActivityLog:master"
     ["CSSEditor"]="omeka-s-modules/CSSEditor:master"
     ["CustomVocab"]="omeka-s-modules/CustomVocab:master"
     ["Collecting"]="omeka-s-modules/Collecting:master"
@@ -512,6 +514,50 @@ if [[ -n "${EXTRA_THEMES:-}" ]]; then
         install_theme "$THEME_NAME" "$REPO" "$BRANCH" || log_warn "Failed to install extra theme: $entry"
     done
     log_info "Extra themes installation completed!"
+fi
+
+# Install IIIF/Mirador modules when enabled
+install_iiif_modules() {
+    log_step "Installing IIIF/Mirador modules..."
+
+    # Install GitHub-hosted IIIF modules (dependencies resolved automatically)
+    install_extra_module "IiifServer"
+    install_extra_module "ImageServer"
+
+    # Install Mirador from GitLab (not hosted on GitHub)
+    if [[ ! -d "${OMEKA_ROOT}/modules/Mirador" ]]; then
+        log_info "Installing module: Mirador..."
+        local TEMP_DIR=$(mktemp -d)
+        if curl -sL "https://gitlab.com/Daniel-KM/Omeka-S-module-Mirador/-/archive/master/Omeka-S-module-Mirador-master.zip" \
+            -o "${TEMP_DIR}/module.zip"; then
+            unzip -q "${TEMP_DIR}/module.zip" -d "${TEMP_DIR}"
+            local EXTRACTED_DIR=$(find "${TEMP_DIR}" -maxdepth 1 -type d -name "Omeka-S-module-Mirador*" | head -1)
+            if [[ -n "$EXTRACTED_DIR" ]]; then
+                mv "$EXTRACTED_DIR" "${OMEKA_ROOT}/modules/Mirador"
+                # Install composer dependencies if needed
+                if [[ -f "${OMEKA_ROOT}/modules/Mirador/composer.json" ]]; then
+                    log_info "Installing composer dependencies for Mirador..."
+                    ensure_composer
+                    (cd "${OMEKA_ROOT}/modules/Mirador" && composer install --no-dev --no-interaction 2>&1) || \
+                        log_warn "Failed to install composer dependencies for Mirador"
+                fi
+                log_info "Module Mirador installed successfully!"
+            else
+                log_warn "Failed to find extracted Mirador directory"
+            fi
+        else
+            log_warn "Failed to download Mirador module"
+        fi
+        rm -rf "${TEMP_DIR}"
+    else
+        log_info "Module Mirador already installed, skipping..."
+    fi
+
+    log_info "IIIF/Mirador modules installation completed!"
+}
+
+if [[ "${ENABLE_IIIF:-false}" == "true" ]]; then
+    install_iiif_modules
 fi
 
 # Install composer dependencies for modules that need them

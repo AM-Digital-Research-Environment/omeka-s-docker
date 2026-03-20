@@ -6,11 +6,10 @@ A reusable Docker template for deploying Omeka S digital archive installations. 
 
 - **Automatic Installation**: Omeka S is automatically installed on first run
 - **Pre-installed Modules**: Common modules included by default
-- **Optimized PHP 8.4**: Pre-configured with OPcache, APCu, and ImageMagick
-- **Multi-stage Build**: Lean production image with pinned ImageMagick version
+- **Optimized PHP 8.4**: Pre-configured with OPcache, APCu, and Imagick
 - **Non-root Execution**: PHP-FPM workers run as www-data via pool configuration
 - **Network Isolation**: Separate frontend/backend networks isolate PHP and MySQL
-- **Production-Ready Nginx**: Gzip compression, security headers, CORS for IIIF
+- **Production-Ready Nginx**: Gzip compression, security headers, static file caching
 - **Module Management**: Scripts for installing and updating modules
 - **Health Checks**: All services include Docker health checks
 - **Optional Automatic HTTPS**: Built-in Caddy reverse proxy with Let's Encrypt
@@ -25,7 +24,7 @@ A reusable Docker template for deploying Omeka S digital archive installations. 
 ```
 .
 ├── docker-compose.yml          # Main service orchestration
-├── Dockerfile                  # Multi-stage PHP-FPM container build
+├── Dockerfile                  # PHP-FPM container build
 ├── nginx.conf                  # Nginx web server configuration
 ├── nginx-http-settings.conf    # Nginx HTTP-level settings (gzip, rate limiting)
 ├── nginx-security-headers.conf # Nginx security headers snippet
@@ -121,6 +120,7 @@ Create a `.env` file from `.env.example`. All supported variables:
 | `NGINX_PORT` | No | `80` | Host port for nginx (use `127.0.0.1:8080` with a reverse proxy) |
 | `EXTRA_MODULES` | No | - | Comma-separated modules to auto-install (e.g. `EasyAdmin,CSSEditor`) |
 | `EXTRA_THEMES` | No | - | Comma-separated themes to auto-install (e.g. `Cozy,Foundation`) |
+| `ENABLE_IIIF` | No | `false` | Set to `true` to install IIIF modules (IiifServer, ImageServer, Mirador) |
 | `PHP_PM_MAX_CHILDREN` | No | `10` | PHP-FPM max worker processes |
 | `PHP_PM_START_SERVERS` | No | `3` | PHP-FPM workers started on boot |
 | `PHP_PM_MIN_SPARE_SERVERS` | No | `2` | Minimum idle workers |
@@ -144,7 +144,6 @@ Create a `.env` file from `.env.example`. All supported variables:
 ### Nginx Settings
 - Gzip compression enabled
 - Security headers (X-Frame-Options, etc.)
-- CORS headers for IIIF endpoints
 - Static file caching (1 year)
 
 ## Common Operations
@@ -212,7 +211,7 @@ The following modules are automatically installed with Omeka S:
 
 | Module | Purpose |
 |--------|---------|
-| **ActivityLog** | Track user activity and changes |
+| **Common** | Shared library required by many Daniel-KM modules |
 | **CSVImport** | Import items from CSV files |
 | **DataCleaning** | Batch clean and normalize data |
 | **DspaceConnector** | Import items from DSpace repositories |
@@ -220,8 +219,10 @@ The following modules are automatically installed with Omeka S:
 | **FileSideload** | Import files from server directory |
 | **IframeEmbed** | Embed iframes in page blocks |
 | **ItemCarouselBlock** | Display items in a carousel block |
+| **Log** | PSR-3 logger for Omeka S (replaces default logging) |
 | **Mapping** | Add geographic locations to items |
 | **NumericDataTypes** | Support for numeric and date values |
+| **ValueSuggest** | Auto-suggest values from controlled vocabularies |
 
 These modules are ready to activate in the Omeka S admin panel after installation.
 
@@ -237,7 +238,8 @@ The scripts support many additional modules including:
 **Daniel-KM Modules:**
 - AdvancedSearch, BulkEdit, BulkExport
 - IiifServer, ImageServer, UniversalViewer
-- Common, Log, Cron, EasyAdmin, Reference
+- Cron, EasyAdmin, Reference
+
 
 Run `./scripts/install-module.sh list` to see all available modules.
 
@@ -246,7 +248,7 @@ Run `./scripts/install-module.sh list` to see all available modules.
 Dependencies are **automatically installed** when you install a module that requires them. For example:
 
 ```bash
-# This will automatically install Common and Cron first, then EasyAdmin
+# This will automatically install Cron first, then EasyAdmin
 ./scripts/install-module.sh EasyAdmin
 ```
 
@@ -260,32 +262,44 @@ The script will:
 
 | Module | Dependencies |
 |--------|--------------|
-| EasyAdmin | Common, Cron |
-| AdvancedSearch | Common |
-| BulkEdit | Common |
-| BulkExport | Common |
-| SearchSolr | Common, AdvancedSearch |
-| IiifServer | Common |
-| ImageServer | Common |
-| UniversalViewer | Common |
-| Log | Common |
-| Reference | Common |
-| OaiPmhRepository | Common |
+| EasyAdmin | Cron |
+| SearchSolr | AdvancedSearch |
+
+Common and Log are pre-installed and available as dependencies for all modules above.
 
 **Activation order in Omeka S admin:**
 When activating modules with dependencies, always activate them in order:
-1. Common (first)
-2. Other dependencies (Cron, Log, AdvancedSearch, etc.)
+1. Common and Log (pre-installed, activate first)
+2. Other dependencies (Cron, AdvancedSearch, etc.)
 3. The module you want to use (EasyAdmin, SearchSolr, etc.)
 
 ## IIIF Support
 
-The nginx configuration includes full CORS support for IIIF endpoints:
-- `/iiif/` - IIIF Image API
-- `/files/` - Media files
-- `/api/` - Omeka S API
+### IIIF Modules (Optional)
 
-This allows external IIIF viewers (Mirador, Universal Viewer) to access your content.
+Set `ENABLE_IIIF=true` in your `.env` file to automatically install the following modules on first run:
+
+| Module | Source | Purpose |
+|--------|--------|---------|
+| **IiifServer** | [GitHub](https://github.com/Daniel-KM/Omeka-S-module-IiifServer) | Serves IIIF Presentation and Image API responses |
+| **ImageServer** | [GitHub](https://github.com/Daniel-KM/Omeka-S-module-ImageServer) | Generates tiles and serves images via IIIF Image API |
+| **Mirador** | [GitLab](https://gitlab.com/Daniel-KM/Omeka-S-module-Mirador) | Embeds the Mirador IIIF viewer for item display |
+
+Dependencies (Common) are installed automatically. The image includes `libvips` and the `exif` PHP extension, which are used by ImageServer for efficient image processing.
+
+```bash
+# Enable in .env
+ENABLE_IIIF=true
+
+# Then start or recreate containers
+docker compose up -d
+```
+
+After installation, activate the modules in the Omeka S admin panel in this order:
+1. Common and Log (pre-installed, activate first if not already active)
+2. IiifServer
+3. ImageServer
+4. Mirador
 
 ## Bulk Imports
 

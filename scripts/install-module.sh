@@ -8,7 +8,7 @@ set -e
 
 # Pre-installed modules (installed automatically by docker-entrypoint.sh)
 PREINSTALLED_MODULES=(
-    "ActivityLog"
+    "Common"
     "CSVImport"
     "DataCleaning"
     "DspaceConnector"
@@ -16,8 +16,10 @@ PREINSTALLED_MODULES=(
     "FileSideload"
     "IframeEmbed"
     "ItemCarouselBlock"
+    "Log"
     "Mapping"
     "NumericDataTypes"
+    "ValueSuggest"
 )
 
 # Configuration - Map module names to their repositories and default branches

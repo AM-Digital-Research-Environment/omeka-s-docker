@@ -78,6 +78,8 @@ services:
       # Extra modules/themes installed by entrypoint (comma-separated names)
       - EXTRA_MODULES=${EXTRA_MODULES:-}
       - EXTRA_THEMES=${EXTRA_THEMES:-}
+      # Set to "true" to install IIIF modules (IiifServer, ImageServer, Mirador)
+      - ENABLE_IIIF=${ENABLE_IIIF:-false}
     depends_on:
       db:
         condition: service_healthy
