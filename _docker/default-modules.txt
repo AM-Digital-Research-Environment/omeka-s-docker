@@ -11,7 +11,6 @@
 ActivityLog
 CSVImport
 DataCleaning
-DspaceConnector
 FacetedBrowse
 FileSideload
 ItemCarouselBlock
@@ -20,3 +19,7 @@ NumericDataTypes
 
 # third party
 gh:fmadore/IframeEmbed
+gh:Daniel-KM/Omeka-S-module-Common
+gh:Daniel-KM/Omeka-S-module-Cron
+gh:Daniel-KM/Omeka-S-module-EasyAdmin
+gh:Daniel-KM/Omeka-S-module-Log

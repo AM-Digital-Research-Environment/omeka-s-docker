@@ -66,7 +66,7 @@ omeka_install() {
             omeka-s-cli core:install \
                         --base-path "${OMEKA_ROOT}" \
                         --locale "${OMEKA_LOCALE}" \
-                        --time-zone "${OMEKA_TZ}" \
+                        --time-zone "${OMEKA_TZ:-UTC}" \
                         --title "${OMEKA_TITLE}" \
                         --admin-email "${OMEKA_ADMIN_EMAIL}" \
                         --admin-name "${OMEKA_ADMIN_USERNAME}" \
@@ -76,7 +76,7 @@ omeka_install() {
             omeka-s-cli core:install \
                         --base-path "${OMEKA_ROOT}" \
                         --locale "${OMEKA_LOCALE}" \
-                        --time-zone "${OMEKA_TZ}" \
+                        --time-zone "${OMEKA_TZ:-UTC}" \
                         --title "${OMEKA_TITLE}"
         fi
     else
@@ -181,10 +181,8 @@ omeka_extra_config() {
     log_step "Setting global config for Omeka..."
 
     log_step "Setting thumbnailer to Imagick"
-    omeka-s-cli config:set \
-                --base-path "$OMEKA_ROOT" \
-                service_manager \
-                "{\"aliases\": {\"Omeka\\\File\\\Thumbnailer\": \"Omeka\\\File\\\Thumbnailer\\\Imagick\"}}"
+    sed -i "s/Thumbnailer\\\ImageMagick/Thumbnailer\\\Imagick/g" \
+        "${OMEKA_ROOT}/config/local.config.php"
 }
 
 fpm_pool_config
