@@ -1,36 +1,34 @@
 # Omeka S Docker Template
 
-A reusable Docker template for deploying Omeka S digital archive installations. This template provides a production-ready setup with automatic installation, optimized PHP configuration, and comprehensive module management scripts.
+A reusable Docker template for deploying Omeka S digital archive installations. This template provides a production-ready setup with automatic installation, optimized PHP configuration, and module management via [omeka-s-cli](https://github.com/GhentCDH/Omeka-S-Cli).
 
 ## Features
 
-- **Automatic Installation**: Omeka S is automatically installed on first run
-- **Pre-installed Modules**: Common modules included by default
+- **Automatic Installation**: Omeka S is downloaded during build and installed on first run
+- **Pre-installed Modules**: Common modules baked into the image
 - **Optimized PHP 8.4**: Pre-configured with OPcache, APCu, and Imagick
-- **Non-root Execution**: PHP-FPM workers run as www-data via pool configuration
+- **Non-root Execution**: PHP-FPM workers run as www-data
 - **Network Isolation**: Separate frontend/backend networks isolate PHP and MySQL
 - **Production-Ready Nginx**: Gzip compression, security headers, static file caching
-- **Module Management**: Scripts for installing and updating modules
 - **Health Checks**: All services include Docker health checks
-- **Optional Automatic HTTPS**: Built-in Caddy reverse proxy with Let's Encrypt
 
 ## Prerequisites
 
 - Docker and Docker Compose v2
-- For HTTPS: a domain name with a DNS A record pointing to your server
 
 ## Project Structure
 
 ```
 .
 ├── docker-compose.yml          # Main service orchestration
-├── Dockerfile                  # PHP-FPM container build
+├── Dockerfile                  # PHP-FPM container build (multi-stage)
+├── docker-entrypoint.sh        # PHP container initialization & auto-install
+├── _docker/
+│   └── default-modules.txt     # Modules downloaded during image build
 ├── nginx.conf                  # Nginx web server configuration
 ├── nginx-http-settings.conf    # Nginx HTTP-level settings (gzip, rate limiting)
 ├── nginx-security-headers.conf # Nginx security headers snippet
 ├── uploads.ini                 # PHP upload settings
-├── docker-entrypoint.sh        # PHP container initialization & auto-install
-├── ensure-composer.sh          # On-demand Composer installer
 ├── .env.example                # Environment variables template
 ├── COMMANDS.md                 # Docker commands quick reference
 ├── docs/
@@ -53,15 +51,7 @@ A reusable Docker template for deploying Omeka S digital archive installations. 
 
 ## Quick Start
 
-### One-Line Setup (Fresh Linux Server)
-
-For a fully automated setup on a clean Linux VM, see **[am-omeka-s-docker-bootstrap](https://github.com/AM-Digital-Research-Environment/am-omeka-s-docker-bootstrap)**. A single `curl` command installs Docker, clones this project, configures everything (including optional HTTPS with Caddy), and launches the services.
-
-### Manual Setup
-
-If you prefer to do things step by step, or already have Docker installed:
-
-#### 1. Clone and Configure
+### 1. Clone and Configure
 
 ```bash
 # Clone this template
@@ -71,21 +61,21 @@ cd my-omeka-site
 # Create environment file
 cp .env.example .env
 
-# Edit .env with your secure password
+# Edit .env with your settings (at minimum, set MYSQL_PASSWORD)
 nano .env
 ```
 
-#### 2. Start Services
+### 2. Start Services
 
 ```bash
-# Start all services (Omeka S will auto-install on first run)
-docker compose up -d
+# Build and start all services (Omeka S will auto-install on first run)
+docker compose up -d --build
 
 # Watch the installation progress
 docker compose logs -f php
 ```
 
-### 3. Complete Setup
+### 3. Access Omeka S
 
 1. Wait for all services to show as "healthy":
    ```bash
@@ -94,19 +84,25 @@ docker compose logs -f php
 
 2. Open your browser to `http://localhost` (or your server IP)
 
-3. Complete the Omeka S web installation wizard
+3. If you set `OMEKA_ADMIN_EMAIL`, `OMEKA_ADMIN_USERNAME`, and `OMEKA_ADMIN_PASSWORD` in `.env`, an admin account is created automatically. Otherwise, complete the web installation wizard.
 
 ### 4. Install Additional Modules (Optional)
 
-Common modules (CSVImport, FileSideload, Mapping, etc.) are pre-installed. To add more:
+Many modules are pre-installed (see below). To add more at runtime, set `EXTRA_MODULES` in your `.env`:
 
 ```bash
-# List available modules
-./scripts/install-module.sh list
+# In .env
+EXTRA_MODULES=DspaceConnector,ValueSuggest,CSSEditor
 
-# Install additional modules
-./scripts/install-module.sh AdvancedSearch
-./scripts/install-module.sh BulkEdit
+# Then restart
+docker compose down && docker compose up -d
+```
+
+You can also use the `omeka-s-cli` inside the container:
+
+```bash
+docker compose exec php omeka-s-cli module:download --base-path /var/www/html ModuleName
+docker compose exec php omeka-s-cli module:install --base-path /var/www/html ModuleName
 ```
 
 ## Environment Variables
@@ -117,9 +113,15 @@ Create a `.env` file from `.env.example`. All supported variables:
 |----------|----------|---------|-------------|
 | `MYSQL_PASSWORD` | Yes | - | MySQL password for the Omeka S database |
 | `OMEKA_VERSION` | No | `4.2.0` | Omeka S version to install |
+| `OMEKA_ADMIN_EMAIL` | No | - | Admin email (skips web wizard if all three admin vars are set) |
+| `OMEKA_ADMIN_USERNAME` | No | - | Admin username |
+| `OMEKA_ADMIN_PASSWORD` | No | - | Admin password |
+| `OMEKA_TZ` | No | `UTC` | Timezone (e.g. `Europe/Berlin`) |
+| `OMEKA_LOCALE` | No | - | Locale (e.g. `en_US`) |
+| `OMEKA_TITLE` | No | - | Site title |
 | `NGINX_PORT` | No | `80` | Host port for nginx (use `127.0.0.1:8080` with a reverse proxy) |
-| `EXTRA_MODULES` | No | - | Comma-separated modules to auto-install (e.g. `EasyAdmin,CSSEditor`) |
-| `EXTRA_THEMES` | No | - | Comma-separated themes to auto-install (e.g. `Cozy,Foundation`) |
+| `EXTRA_MODULES` | No | - | Comma-separated modules to install at runtime (e.g. `DspaceConnector,CSSEditor`) |
+| `EXTRA_THEMES` | No | - | Comma-separated themes to install at runtime (e.g. `Cozy,Foundation`) |
 | `ENABLE_IIIF` | No | `false` | Set to `true` to install IIIF modules (IiifServer, ImageServer, Mirador) |
 | `PHP_PM_MAX_CHILDREN` | No | `10` | PHP-FPM max worker processes |
 | `PHP_PM_START_SERVERS` | No | `3` | PHP-FPM workers started on boot |
@@ -203,100 +205,75 @@ docker compose exec db mysql -u omeka -p
 ./scripts/update-module.sh all
 ```
 
-## Module Installation
+## Module Management
 
 ### Pre-installed Modules
 
-The following modules are automatically installed with Omeka S:
+The following modules are downloaded during the Docker image build and automatically installed on first run. They are defined in `_docker/default-modules.txt`.
 
 | Module | Purpose |
 |--------|---------|
+| **ActivityLog** | Track resource activity |
 | **Common** | Shared library required by many Daniel-KM modules |
+| **Cron** | Schedule background tasks |
 | **CSVImport** | Import items from CSV files |
 | **DataCleaning** | Batch clean and normalize data |
-| **DspaceConnector** | Import items from DSpace repositories |
+| **EasyAdmin** | Administration dashboard and tools |
 | **FacetedBrowse** | Create faceted search pages |
 | **FileSideload** | Import files from server directory |
 | **IframeEmbed** | Embed iframes in page blocks |
 | **ItemCarouselBlock** | Display items in a carousel block |
-| **Log** | PSR-3 logger for Omeka S (replaces default logging) |
+| **Log** | PSR-3 logger for Omeka S |
 | **Mapping** | Add geographic locations to items |
 | **NumericDataTypes** | Support for numeric and date values |
-| **ValueSuggest** | Auto-suggest values from controlled vocabularies |
 
 These modules are ready to activate in the Omeka S admin panel after installation.
 
-### Additional Modules
+**Activation order**: When activating modules with dependencies, activate them in order:
+1. Common and Log first
+2. Cron
+3. EasyAdmin and other modules
 
-The scripts support many additional modules including:
+### Adding Modules at Runtime
 
-**Official Omeka S Modules:**
-- CSVImport, FileSideload, Mapping, CustomVocab
-- FacetedBrowse, NumericDataTypes, Collecting
-- DataCleaning, Hierarchy, InverseProperties
-
-**Daniel-KM Modules:**
-- AdvancedSearch, BulkEdit, BulkExport
-- IiifServer, ImageServer, UniversalViewer
-- Cron, EasyAdmin, Reference
-
-
-Run `./scripts/install-module.sh list` to see all available modules.
-
-### Module Dependencies
-
-Dependencies are **automatically installed** when you install a module that requires them. For example:
+Use the `EXTRA_MODULES` environment variable in `.env` to install additional modules when the container starts:
 
 ```bash
-# This will automatically install Cron first, then EasyAdmin
-./scripts/install-module.sh EasyAdmin
+EXTRA_MODULES=DspaceConnector,ValueSuggest,CSSEditor
 ```
 
-The script will:
-1. Check if required dependencies are installed
-2. Install missing dependencies in the correct order
-3. Install the requested module
-4. Display a reminder to activate modules in the correct order in Omeka S admin
-
-**Modules with automatic dependencies:**
-
-| Module | Dependencies |
-|--------|--------------|
-| EasyAdmin | Cron |
-| SearchSolr | AdvancedSearch |
-
-Common and Log are pre-installed and available as dependencies for all modules above.
-
-**Activation order in Omeka S admin:**
-When activating modules with dependencies, always activate them in order:
-1. Common and Log (pre-installed, activate first)
-2. Other dependencies (Cron, AdvancedSearch, etc.)
-3. The module you want to use (EasyAdmin, SearchSolr, etc.)
-
-## IIIF Support
-
-### IIIF Modules (Optional)
-
-Set `ENABLE_IIIF=true` in your `.env` file to automatically install the following modules on first run:
-
-| Module | Source | Purpose |
-|--------|--------|---------|
-| **IiifServer** | [GitHub](https://github.com/Daniel-KM/Omeka-S-module-IiifServer) | Serves IIIF Presentation and Image API responses |
-| **ImageServer** | [GitHub](https://github.com/Daniel-KM/Omeka-S-module-ImageServer) | Generates tiles and serves images via IIIF Image API |
-| **Mirador** | [GitLab](https://gitlab.com/Daniel-KM/Omeka-S-module-Mirador) | Embeds the Mirador IIIF viewer for item display |
-
-Dependencies (Common) are installed automatically. The image includes `libvips` (primary image processor), `imagemagick` (fallback), and the `imagick` and `exif` PHP extensions for image processing.
+The entrypoint accepts module names from the official `omeka-s-modules` GitHub org, or full `gh:` references for third-party modules:
 
 ```bash
-# Enable in .env
+EXTRA_MODULES=ValueSuggest,gh:Daniel-KM/Omeka-S-module-AdvancedSearch
+```
+
+### Adding Modules to the Image
+
+To permanently add a module to the image (so it's always available), add it to `_docker/default-modules.txt` and rebuild:
+
+```bash
+# Edit the file
+echo "ValueSuggest" >> _docker/default-modules.txt
+
+# Rebuild
+docker compose up -d --build
+```
+
+## IIIF Support (Optional)
+
+Set `ENABLE_IIIF=true` in your `.env` file to automatically install IiifServer, ImageServer, and Mirador on first run:
+
+```bash
+# In .env
 ENABLE_IIIF=true
 
 # Then start or recreate containers
 docker compose up -d
 ```
 
-After installation, activate the modules in the Omeka S admin panel in this order:
-1. Common and Log (pre-installed, activate first if not already active)
+These modules depend on Common, which is pre-installed. After startup, activate modules in this order in the Omeka S admin panel:
+1. Common (if not already active)
 2. IiifServer
 3. ImageServer
 4. Mirador
@@ -411,43 +388,9 @@ This template includes Docker security hardening by default in the main `docker-
 
 ## Production SSL/TLS
 
-### Built-in: Caddy (automatic HTTPS)
+### Caddy (automatic HTTPS)
 
-The [bootstrap script](https://github.com/AM-Digital-Research-Environment/am-omeka-s-docker-bootstrap) can install and configure [Caddy](https://caddyserver.com/) automatically. When enabled during setup:
-
-- Caddy runs on the host as a systemd service
-- Nginx binds to `127.0.0.1:8080` (not exposed externally)
-- Caddy handles ports 80/443 and obtains Let's Encrypt certificates automatically
-- Certificates are renewed automatically — zero maintenance
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                    Internet                              │
-└──────────────────────┬──────────────────────────────────┘
-                       │ HTTPS (443)
-┌──────────────────────▼──────────────────────────────────┐
-│                 Caddy (host)                             │
-│  • Auto TLS (Let's Encrypt)  • HTTP→HTTPS redirect      │
-│  • Certificate renewal       • Reverse proxy             │
-└──────────────────────┬──────────────────────────────────┘
-                       │ HTTP (127.0.0.1:8080) — localhost
-┌──────────────────────▼──────────────────────────────────┐
-│                 Omeka S Stack (Docker)                    │
-│  ┌─────────┐    ┌─────────┐    ┌─────────┐              │
-│  │  nginx  │───▶│   php   │───▶│  mysql  │              │
-│  └─────────┘    └─────────┘    └─────────┘              │
-│  (frontend)     (backend only)  (backend only)           │
-└─────────────────────────────────────────────────────────┘
-```
-
-The Caddyfile is written to `/etc/caddy/Caddyfile` and can be edited any time:
-
-```bash
-sudo nano /etc/caddy/Caddyfile
-sudo systemctl reload caddy
-```
-
-If you skipped HTTPS during initial setup, you can add it later by installing Caddy manually and creating a Caddyfile:
+Install [Caddy](https://caddyserver.com/) on your host and create a Caddyfile:
 
 ```
 omeka.example.edu {
@@ -455,9 +398,9 @@ omeka.example.edu {
 }
 ```
 
-Then update your `.env` to bind nginx to localhost: `NGINX_PORT=127.0.0.1:8080`, restart the stack with `docker compose up -d`, and start Caddy.
+Then update your `.env` to bind nginx to localhost: `NGINX_PORT=127.0.0.1:8080`, restart the stack with `docker compose up -d`, and start Caddy. Certificates are obtained and renewed automatically.
 
-### Alternative: Traefik (Docker-native)
+### Traefik (Docker-native)
 
 Add labels to the `web` service in a `docker-compose.override.yml`:
 
@@ -470,7 +413,7 @@ services:
       - "traefik.http.routers.omeka.tls.certresolver=letsencrypt"
 ```
 
-### Alternative: Standalone nginx reverse proxy
+### Standalone nginx reverse proxy
 
 Install nginx on the host and create a site config:
 

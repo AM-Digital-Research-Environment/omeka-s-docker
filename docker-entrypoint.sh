@@ -185,6 +185,34 @@ omeka_extra_config() {
         "${OMEKA_ROOT}/config/local.config.php"
 }
 
+omeka_iiif_install() {
+    # Install IIIF modules when ENABLE_IIIF=true
+    if [[ "${ENABLE_IIIF:-false}" != "true" ]]; then
+        return
+    fi
+
+    log_step "Installing IIIF modules..."
+
+    local iiif_modules=(
+        "gh:Daniel-KM/Omeka-S-module-IiifServer"
+        "gh:Daniel-KM/Omeka-S-module-ImageServer"
+        "gh:Daniel-KM/Omeka-S-module-Mirador"
+    )
+
+    for mod in "${iiif_modules[@]}"; do
+        local mod_name
+        mod_name=$(basename "$mod")
+        mod_name="${mod_name#Omeka-S-module-}"
+        if [[ -d "${OMEKA_ROOT}/modules/${mod_name}" ]]; then
+            log_info "Module ${mod_name} is already present, skipping"
+            continue
+        fi
+        log_step "Downloading ${mod_name}"
+        omeka-s-cli module:download --base-path "$OMEKA_ROOT" "$mod" \
+            || log_error "Failed to download IIIF module: ${mod_name}"
+    done
+}
+
 fpm_pool_config
 
 # The DB config must be written first, as it is used during
@@ -193,6 +221,7 @@ omeka_create_db_config
 omeka_install
 omeka_extra_config
 
+omeka_iiif_install
 omeka_extra_modules_download
 omeka_modules_install
 
