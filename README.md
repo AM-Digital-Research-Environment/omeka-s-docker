@@ -269,6 +269,9 @@ In addition to the built-in vocabularies (Dublin Core, Dublin Core Type, Bibliog
 |-----------|--------|-------------|
 | **FRAPO** | `frapo` | Funding, Research Administration and Projects Ontology |
 | **FaBiO** | `fabio` | FRBR-aligned Bibliographic Ontology |
+| **WGS84 Geo** | `geo` | Latitude, longitude, altitude positioning |
+| **MARC Relators** | `marcrel` | Library of Congress agent role terms |
+| **DRE** | `dre` | Digital Research Environment custom vocabulary |
 
 The ontology files and import script are in `_docker/vocabularies/`. To add more vocabularies, add their OWL files to that directory and register them in `_docker/vocabularies/import-vocabularies.php`.
 

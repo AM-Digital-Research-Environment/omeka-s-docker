@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+    xmlns:owl="http://www.w3.org/2002/07/owl#"
+    xmlns:dcterms="http://purl.org/dc/terms/">
+
+    <owl:Ontology rdf:about="http://am-digital.org/ontology/dre/">
+        <rdfs:label>DRE - Digital Research Environment</rdfs:label>
+        <rdfs:comment>Custom vocabulary for the Africa Multiple Digital Research Environment.</rdfs:comment>
+    </owl:Ontology>
+
+    <owl:DatatypeProperty rdf:about="http://am-digital.org/ontology/dre/id">
+        <rdfs:label>DRE ID</rdfs:label>
+        <rdfs:comment>Internal identifier assigned by the Digital Research Environment (e.g. act-03-0000).</rdfs:comment>
+        <rdfs:isDefinedBy rdf:resource="http://am-digital.org/ontology/dre/"/>
+    </owl:DatatypeProperty>
+
+    <owl:DatatypeProperty rdf:about="http://am-digital.org/ontology/dre/security">
+        <rdfs:label>Security level</rdfs:label>
+        <rdfs:comment>Data security classification level (e.g. DSL1, DSL2, DSL3).</rdfs:comment>
+        <rdfs:isDefinedBy rdf:resource="http://am-digital.org/ontology/dre/"/>
+    </owl:DatatypeProperty>
+
+    <owl:DatatypeProperty rdf:about="http://am-digital.org/ontology/dre/bitstream">
+        <rdfs:label>Bitstream</rdfs:label>
+        <rdfs:comment>Filename of the attached digital file.</rdfs:comment>
+        <rdfs:isDefinedBy rdf:resource="http://am-digital.org/ontology/dre/"/>
+    </owl:DatatypeProperty>
+
+</rdf:RDF>

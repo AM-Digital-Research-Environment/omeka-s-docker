@@ -48,11 +48,35 @@ $vocabularies = [
         'o:comment'       => 'FRBR-aligned Bibliographic Ontology',
         'file'            => $vocabDir . '/fabio.owl',
     ],
+    [
+        'o:prefix'        => 'geo',
+        'o:namespace_uri' => 'http://www.w3.org/2003/01/geo/wgs84_pos#',
+        'o:label'         => 'WGS84 Geo',
+        'o:comment'       => 'WGS84 Geo Positioning: latitude, longitude, altitude',
+        'file'            => $vocabDir . '/geo.rdf',
+    ],
+    [
+        'o:prefix'        => 'marcrel',
+        'o:namespace_uri' => 'http://id.loc.gov/vocabulary/relators/',
+        'o:label'         => 'MARC Relators',
+        'o:comment'       => 'Library of Congress MARC Relator terms for agent roles',
+        'file'            => $vocabDir . '/marcrel.rdf',
+    ],
+    [
+        'o:prefix'        => 'dre',
+        'o:namespace_uri' => 'http://am-digital.org/ontology/dre/',
+        'o:label'         => 'DRE',
+        'o:comment'       => 'Digital Research Environment - Africa Multiple custom vocabulary',
+        'file'            => $vocabDir . '/dre.owl',
+    ],
 ];
 
 foreach ($vocabularies as $vocab) {
     $file = $vocab['file'];
     unset($vocab['file']);
+
+    $labelProperty = $vocab['label_property'] ?? null;
+    unset($vocab['label_property']);
 
     // Check if already imported.
     $existing = $entityManager
@@ -69,10 +93,14 @@ foreach ($vocabularies as $vocab) {
     }
 
     try {
-        $rdfImporter->import('file', $vocab, [
+        $options = [
             'file'   => $file,
             'format' => 'rdfxml',
-        ]);
+        ];
+        if ($labelProperty) {
+            $options['label_property'] = $labelProperty;
+        }
+        $rdfImporter->import('file', $vocab, $options);
         fwrite(STDOUT, "[OK]   Imported {$vocab['o:label']}\n");
     } catch (\Exception $e) {
         fwrite(STDERR, "[ERROR] {$vocab['o:label']}: " . $e->getMessage() . "\n");

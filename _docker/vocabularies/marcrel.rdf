@@ -1,0 +1,2768 @@
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#" xmlns:bf="http://id.loc.gov/ontologies/bibframe/" xmlns:bflc="http://id.loc.gov/ontologies/bflc/" xmlns:owl="http://www.w3.org/2002/07/owl#" xmlns:skos="http://www.w3.org/2004/02/skos/core#" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:cc="http://creativecommons.org/ns#" xmlns:foaf="http://xmlns.com/foaf/0.1/">
+  <madsrdf:MADSScheme rdf:about="http://id.loc.gov/vocabulary/relators" xmlns:madsrdf="http://www.loc.gov/mads/rdf/v1#">
+    <rdfs:label xml:lang="en">Relators</rdfs:label>
+    <rdfs:comment xml:lang="en"/>
+    <madsrdf:definitionNote xml:lang="en">Relator terms and their associated codes designate the relationship between an agent and a bibliographic resource.</madsrdf:definitionNote>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/abr">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<madsrdf:authoritativeLabel>abridger</madsrdf:authoritativeLabel>
+	<rdfs:label>abridger</rdfs:label>
+	<madsrdf:code>abr</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/act">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>actor</madsrdf:authoritativeLabel>
+	<rdfs:label>actor</rdfs:label>
+	<madsrdf:code>act</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/adp">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>adapter</madsrdf:authoritativeLabel>
+	<rdfs:label>adapter</rdfs:label>
+	<madsrdf:code>adp</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/rcp">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>addressee</madsrdf:authoritativeLabel>
+	<rdfs:label>addressee</rdfs:label>
+	<madsrdf:code>rcp</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/anl">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>analyst</madsrdf:authoritativeLabel>
+	<rdfs:label>analyst</rdfs:label>
+	<madsrdf:code>anl</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/anm">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>animator</madsrdf:authoritativeLabel>
+	<rdfs:label>animator</rdfs:label>
+	<madsrdf:code>anm</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/anc">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>announcer</madsrdf:authoritativeLabel>
+	<rdfs:label>announcer</rdfs:label>
+	<madsrdf:code>anc</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/ann">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>annotator</madsrdf:authoritativeLabel>
+	<rdfs:label>annotator</rdfs:label>
+	<madsrdf:code>ann</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/apl">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>appellant</madsrdf:authoritativeLabel>
+	<rdfs:label>appellant</rdfs:label>
+	<madsrdf:code>apl</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/ape">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>appellee</madsrdf:authoritativeLabel>
+	<rdfs:label>appellee</rdfs:label>
+	<madsrdf:code>ape</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/app">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>applicant</madsrdf:authoritativeLabel>
+	<rdfs:label>applicant</rdfs:label>
+	<madsrdf:code>app</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/arc">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>architect</madsrdf:authoritativeLabel>
+	<rdfs:label>architect</rdfs:label>
+	<madsrdf:code>arc</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/arr">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>arranger</madsrdf:authoritativeLabel>
+	<rdfs:label>arranger</rdfs:label>
+	<madsrdf:code>arr</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/acp">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>art copyist</madsrdf:authoritativeLabel>
+	<rdfs:label>art copyist</rdfs:label>
+	<madsrdf:code>acp</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/adi">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>art director</madsrdf:authoritativeLabel>
+	<rdfs:label>art director</rdfs:label>
+	<madsrdf:code>adi</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/art">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>artist</madsrdf:authoritativeLabel>
+	<rdfs:label>artist</rdfs:label>
+	<madsrdf:code>art</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/ard">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>artistic director</madsrdf:authoritativeLabel>
+	<rdfs:label>artistic director</rdfs:label>
+	<madsrdf:code>ard</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/asg">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>assignee</madsrdf:authoritativeLabel>
+	<rdfs:label>assignee</rdfs:label>
+	<madsrdf:code>asg</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/asn">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>associated name</madsrdf:authoritativeLabel>
+	<rdfs:label>associated name</rdfs:label>
+	<madsrdf:code>asn</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/att">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>attributed name</madsrdf:authoritativeLabel>
+	<rdfs:label>attributed name</rdfs:label>
+	<madsrdf:code>att</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/auc">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>auctioneer</madsrdf:authoritativeLabel>
+	<rdfs:label>auctioneer</rdfs:label>
+	<madsrdf:code>auc</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/aue">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>audio engineer</madsrdf:authoritativeLabel>
+	<rdfs:label>audio engineer</rdfs:label>
+	<madsrdf:code>aue</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/aup">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>audio producer</madsrdf:authoritativeLabel>
+	<rdfs:label>audio producer</rdfs:label>
+	<madsrdf:code>aup</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/aut">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>author</madsrdf:authoritativeLabel>
+	<rdfs:label>author</rdfs:label>
+	<madsrdf:code>aut</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/aqt">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>author in quotations or text abstracts</madsrdf:authoritativeLabel>
+	<rdfs:label>author in quotations or text abstracts</rdfs:label>
+	<madsrdf:code>aqt</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/aft">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>author of afterword, colophon, etc.</madsrdf:authoritativeLabel>
+	<rdfs:label>author of afterword, colophon, etc.</rdfs:label>
+	<madsrdf:code>aft</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/aud">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>author of dialog</madsrdf:authoritativeLabel>
+	<rdfs:label>author of dialog</rdfs:label>
+	<madsrdf:code>aud</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/aui">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>author of introduction, etc.</madsrdf:authoritativeLabel>
+	<rdfs:label>author of introduction, etc.</rdfs:label>
+	<madsrdf:code>aui</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/ato">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>autographer</madsrdf:authoritativeLabel>
+	<rdfs:label>autographer</rdfs:label>
+	<madsrdf:code>ato</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/ant">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>bibliographic antecedent</madsrdf:authoritativeLabel>
+	<rdfs:label>bibliographic antecedent</rdfs:label>
+	<madsrdf:code>ant</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/bnd">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>binder</madsrdf:authoritativeLabel>
+	<rdfs:label>binder</rdfs:label>
+	<madsrdf:code>bnd</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/bdd">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>binding designer</madsrdf:authoritativeLabel>
+	<rdfs:label>binding designer</rdfs:label>
+	<madsrdf:code>bdd</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/blw">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>blurb writer</madsrdf:authoritativeLabel>
+	<rdfs:label>blurb writer</rdfs:label>
+	<madsrdf:code>blw</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/bka">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>book artist</madsrdf:authoritativeLabel>
+	<rdfs:label>book artist</rdfs:label>
+	<madsrdf:code>bka</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/bkd">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>book designer</madsrdf:authoritativeLabel>
+	<rdfs:label>book designer</rdfs:label>
+	<madsrdf:code>bkd</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/bkp">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>book producer</madsrdf:authoritativeLabel>
+	<rdfs:label>book producer</rdfs:label>
+	<madsrdf:code>bkp</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/bjd">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>bookjacket designer</madsrdf:authoritativeLabel>
+	<rdfs:label>bookjacket designer</rdfs:label>
+	<madsrdf:code>bjd</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/bpd">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>bookplate designer</madsrdf:authoritativeLabel>
+	<rdfs:label>bookplate designer</rdfs:label>
+	<madsrdf:code>bpd</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/bsl">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>bookseller</madsrdf:authoritativeLabel>
+	<rdfs:label>bookseller</rdfs:label>
+	<madsrdf:code>bsl</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/brl">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>braille embosser</madsrdf:authoritativeLabel>
+	<rdfs:label>braille embosser</rdfs:label>
+	<madsrdf:code>brl</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/brd">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>broadcaster</madsrdf:authoritativeLabel>
+	<rdfs:label>broadcaster</rdfs:label>
+	<madsrdf:code>brd</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/cll">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>calligrapher</madsrdf:authoritativeLabel>
+	<rdfs:label>calligrapher</rdfs:label>
+	<madsrdf:code>cll</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/cop">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>camera operator</madsrdf:authoritativeLabel>
+	<rdfs:label>camera operator</rdfs:label>
+	<madsrdf:code>cop</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/ctg">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>cartographer</madsrdf:authoritativeLabel>
+	<rdfs:label>cartographer</rdfs:label>
+	<madsrdf:code>ctg</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/cas">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>caster</madsrdf:authoritativeLabel>
+	<rdfs:label>caster</rdfs:label>
+	<madsrdf:code>cas</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/cad">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>casting director</madsrdf:authoritativeLabel>
+	<rdfs:label>casting director</rdfs:label>
+	<madsrdf:code>cad</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/cns">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>censor</madsrdf:authoritativeLabel>
+	<rdfs:label>censor</rdfs:label>
+	<madsrdf:code>cns</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/chr">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>choreographer</madsrdf:authoritativeLabel>
+	<rdfs:label>choreographer</rdfs:label>
+	<madsrdf:code>chr</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/cng">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>cinematographer</madsrdf:authoritativeLabel>
+	<rdfs:label>cinematographer</rdfs:label>
+	<madsrdf:code>cng</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/cli">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>client</madsrdf:authoritativeLabel>
+	<rdfs:label>client</rdfs:label>
+	<madsrdf:code>cli</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/cor">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>collection registrar</madsrdf:authoritativeLabel>
+	<rdfs:label>collection registrar</rdfs:label>
+	<madsrdf:code>cor</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/col">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>collector</madsrdf:authoritativeLabel>
+	<rdfs:label>collector</rdfs:label>
+	<madsrdf:code>col</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/clt">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>collotyper</madsrdf:authoritativeLabel>
+	<rdfs:label>collotyper</rdfs:label>
+	<madsrdf:code>clt</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/clr">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>colorist</madsrdf:authoritativeLabel>
+	<rdfs:label>colorist</rdfs:label>
+	<madsrdf:code>clr</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/cmm">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>commentator</madsrdf:authoritativeLabel>
+	<rdfs:label>commentator</rdfs:label>
+	<madsrdf:code>cmm</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/cwt">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>commentator for written text</madsrdf:authoritativeLabel>
+	<rdfs:label>commentator for written text</rdfs:label>
+	<madsrdf:code>cwt</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/com">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>compiler</madsrdf:authoritativeLabel>
+	<rdfs:label>compiler</rdfs:label>
+	<madsrdf:code>com</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/cpl">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>complainant</madsrdf:authoritativeLabel>
+	<rdfs:label>complainant</rdfs:label>
+	<madsrdf:code>cpl</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/cpt">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>complainant-appellant</madsrdf:authoritativeLabel>
+	<rdfs:label>complainant-appellant</rdfs:label>
+	<madsrdf:code>cpt</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/cpe">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>complainant-appellee</madsrdf:authoritativeLabel>
+	<rdfs:label>complainant-appellee</rdfs:label>
+	<madsrdf:code>cpe</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/cmp">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>composer</madsrdf:authoritativeLabel>
+	<rdfs:label>composer</rdfs:label>
+	<madsrdf:code>cmp</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/cmt">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>compositor</madsrdf:authoritativeLabel>
+	<rdfs:label>compositor</rdfs:label>
+	<madsrdf:code>cmt</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/ccp">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>conceptor</madsrdf:authoritativeLabel>
+	<rdfs:label>conceptor</rdfs:label>
+	<madsrdf:code>ccp</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/cnd">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>conductor</madsrdf:authoritativeLabel>
+	<rdfs:label>conductor</rdfs:label>
+	<madsrdf:code>cnd</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/con">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>conservator</madsrdf:authoritativeLabel>
+	<rdfs:label>conservator</rdfs:label>
+	<madsrdf:code>con</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/csl">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>consultant</madsrdf:authoritativeLabel>
+	<rdfs:label>consultant</rdfs:label>
+	<madsrdf:code>csl</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/csp">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>consultant to a project</madsrdf:authoritativeLabel>
+	<rdfs:label>consultant to a project</rdfs:label>
+	<madsrdf:code>csp</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/cos">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>contestant</madsrdf:authoritativeLabel>
+	<rdfs:label>contestant</rdfs:label>
+	<madsrdf:code>cos</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/cot">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>contestant-appellant</madsrdf:authoritativeLabel>
+	<rdfs:label>contestant-appellant</rdfs:label>
+	<madsrdf:code>cot</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/coe">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>contestant-appellee</madsrdf:authoritativeLabel>
+	<rdfs:label>contestant-appellee</rdfs:label>
+	<madsrdf:code>coe</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/cts">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>contestee</madsrdf:authoritativeLabel>
+	<rdfs:label>contestee</rdfs:label>
+	<madsrdf:code>cts</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/ctt">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>contestee-appellant</madsrdf:authoritativeLabel>
+	<rdfs:label>contestee-appellant</rdfs:label>
+	<madsrdf:code>ctt</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/cte">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>contestee-appellee</madsrdf:authoritativeLabel>
+	<rdfs:label>contestee-appellee</rdfs:label>
+	<madsrdf:code>cte</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/ctr">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>contractor</madsrdf:authoritativeLabel>
+	<rdfs:label>contractor</rdfs:label>
+	<madsrdf:code>ctr</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/ctb">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>contributor</madsrdf:authoritativeLabel>
+	<rdfs:label>contributor</rdfs:label>
+	<madsrdf:code>ctb</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/cpc">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>copyright claimant</madsrdf:authoritativeLabel>
+	<rdfs:label>copyright claimant</rdfs:label>
+	<madsrdf:code>cpc</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/cph">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>copyright holder</madsrdf:authoritativeLabel>
+	<rdfs:label>copyright holder</rdfs:label>
+	<madsrdf:code>cph</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/crr">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>corrector</madsrdf:authoritativeLabel>
+	<rdfs:label>corrector</rdfs:label>
+	<madsrdf:code>crr</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/crp">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>correspondent</madsrdf:authoritativeLabel>
+	<rdfs:label>correspondent</rdfs:label>
+	<madsrdf:code>crp</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/cst">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>costume designer</madsrdf:authoritativeLabel>
+	<rdfs:label>costume designer</rdfs:label>
+	<madsrdf:code>cst</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/cou">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>court governed</madsrdf:authoritativeLabel>
+	<rdfs:label>court governed</rdfs:label>
+	<madsrdf:code>cou</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/crt">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>court reporter</madsrdf:authoritativeLabel>
+	<rdfs:label>court reporter</rdfs:label>
+	<madsrdf:code>crt</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/cov">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>cover designer</madsrdf:authoritativeLabel>
+	<rdfs:label>cover designer</rdfs:label>
+	<madsrdf:code>cov</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/cre">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>creator</madsrdf:authoritativeLabel>
+	<rdfs:label>creator</rdfs:label>
+	<madsrdf:code>cre</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/cur">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>curator</madsrdf:authoritativeLabel>
+	<rdfs:label>curator</rdfs:label>
+	<madsrdf:code>cur</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/dnc">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>dancer</madsrdf:authoritativeLabel>
+	<rdfs:label>dancer</rdfs:label>
+	<madsrdf:code>dnc</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/dtc">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>data contributor</madsrdf:authoritativeLabel>
+	<rdfs:label>data contributor</rdfs:label>
+	<madsrdf:code>dtc</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/dtm">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>data manager</madsrdf:authoritativeLabel>
+	<rdfs:label>data manager</rdfs:label>
+	<madsrdf:code>dtm</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/dte">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>dedicatee</madsrdf:authoritativeLabel>
+	<rdfs:label>dedicatee</rdfs:label>
+	<madsrdf:code>dte</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/dto">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>dedicator</madsrdf:authoritativeLabel>
+	<rdfs:label>dedicator</rdfs:label>
+	<madsrdf:code>dto</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/dfd">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>defendant</madsrdf:authoritativeLabel>
+	<rdfs:label>defendant</rdfs:label>
+	<madsrdf:code>dfd</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/dft">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>defendant-appellant</madsrdf:authoritativeLabel>
+	<rdfs:label>defendant-appellant</rdfs:label>
+	<madsrdf:code>dft</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/dfe">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>defendant-appellee</madsrdf:authoritativeLabel>
+	<rdfs:label>defendant-appellee</rdfs:label>
+	<madsrdf:code>dfe</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/dgc">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>degree committee member</madsrdf:authoritativeLabel>
+	<rdfs:label>degree committee member</rdfs:label>
+	<madsrdf:code>dgc</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/dgg">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>degree granting institution</madsrdf:authoritativeLabel>
+	<rdfs:label>degree granting institution</rdfs:label>
+	<madsrdf:code>dgg</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/dgs">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>degree supervisor</madsrdf:authoritativeLabel>
+	<rdfs:label>degree supervisor</rdfs:label>
+	<madsrdf:code>dgs</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/dln">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>delineator</madsrdf:authoritativeLabel>
+	<rdfs:label>delineator</rdfs:label>
+	<madsrdf:code>dln</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/dpc">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>depicted</madsrdf:authoritativeLabel>
+	<rdfs:label>depicted</rdfs:label>
+	<madsrdf:code>dpc</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/dpt">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>depositor</madsrdf:authoritativeLabel>
+	<rdfs:label>depositor</rdfs:label>
+	<madsrdf:code>dpt</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/dsr">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>designer</madsrdf:authoritativeLabel>
+	<rdfs:label>designer</rdfs:label>
+	<madsrdf:code>dsr</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/drt">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>director</madsrdf:authoritativeLabel>
+	<rdfs:label>director</rdfs:label>
+	<madsrdf:code>drt</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/dis">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>dissertant</madsrdf:authoritativeLabel>
+	<rdfs:label>dissertant</rdfs:label>
+	<madsrdf:code>dis</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/dbp">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>distribution place</madsrdf:authoritativeLabel>
+	<rdfs:label>distribution place</rdfs:label>
+	<madsrdf:code>dbp</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/dst">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>distributor</madsrdf:authoritativeLabel>
+	<rdfs:label>distributor</rdfs:label>
+	<madsrdf:code>dst</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/djo">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>dj</madsrdf:authoritativeLabel>
+	<rdfs:label>dj</rdfs:label>
+	<madsrdf:code>djo</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/dnr">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>donor</madsrdf:authoritativeLabel>
+	<rdfs:label>donor</rdfs:label>
+	<madsrdf:code>dnr</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/drm">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>draftsman</madsrdf:authoritativeLabel>
+	<rdfs:label>draftsman</rdfs:label>
+	<madsrdf:code>drm</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/dbd">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>dubbing director</madsrdf:authoritativeLabel>
+	<rdfs:label>dubbing director</rdfs:label>
+	<madsrdf:code>dbd</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/dub">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>dubious author</madsrdf:authoritativeLabel>
+	<rdfs:label>dubious author</rdfs:label>
+	<madsrdf:code>dub</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/edt">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>editor</madsrdf:authoritativeLabel>
+	<rdfs:label>editor</rdfs:label>
+	<madsrdf:code>edt</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/edc">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>editor of compilation</madsrdf:authoritativeLabel>
+	<rdfs:label>editor of compilation</rdfs:label>
+	<madsrdf:code>edc</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/edm">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>editor of moving image work</madsrdf:authoritativeLabel>
+	<rdfs:label>editor of moving image work</rdfs:label>
+	<madsrdf:code>edm</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/edd">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>editorial director</madsrdf:authoritativeLabel>
+	<rdfs:label>editorial director</rdfs:label>
+	<madsrdf:code>edd</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/elg">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>electrician</madsrdf:authoritativeLabel>
+	<rdfs:label>electrician</rdfs:label>
+	<madsrdf:code>elg</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/elt">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>electrotyper</madsrdf:authoritativeLabel>
+	<rdfs:label>electrotyper</rdfs:label>
+	<madsrdf:code>elt</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/enj">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>enacting jurisdiction</madsrdf:authoritativeLabel>
+	<rdfs:label>enacting jurisdiction</rdfs:label>
+	<madsrdf:code>enj</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/eng">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>engineer</madsrdf:authoritativeLabel>
+	<rdfs:label>engineer</rdfs:label>
+	<madsrdf:code>eng</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/egr">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>engraver</madsrdf:authoritativeLabel>
+	<rdfs:label>engraver</rdfs:label>
+	<madsrdf:code>egr</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/etr">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>etcher</madsrdf:authoritativeLabel>
+	<rdfs:label>etcher</rdfs:label>
+	<madsrdf:code>etr</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/evp">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>event place</madsrdf:authoritativeLabel>
+	<rdfs:label>event place</rdfs:label>
+	<madsrdf:code>evp</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/exp">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>expert</madsrdf:authoritativeLabel>
+	<rdfs:label>expert</rdfs:label>
+	<madsrdf:code>exp</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/fac">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>facsimilist</madsrdf:authoritativeLabel>
+	<rdfs:label>facsimilist</rdfs:label>
+	<madsrdf:code>fac</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/fld">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>field director</madsrdf:authoritativeLabel>
+	<rdfs:label>field director</rdfs:label>
+	<madsrdf:code>fld</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/fmd">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>film director</madsrdf:authoritativeLabel>
+	<rdfs:label>film director</rdfs:label>
+	<madsrdf:code>fmd</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/fds">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>film distributor</madsrdf:authoritativeLabel>
+	<rdfs:label>film distributor</rdfs:label>
+	<madsrdf:code>fds</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/flm">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>film editor</madsrdf:authoritativeLabel>
+	<rdfs:label>film editor</rdfs:label>
+	<madsrdf:code>flm</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/fmp">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>film producer</madsrdf:authoritativeLabel>
+	<rdfs:label>film producer</rdfs:label>
+	<madsrdf:code>fmp</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/fmk">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>filmmaker</madsrdf:authoritativeLabel>
+	<rdfs:label>filmmaker</rdfs:label>
+	<madsrdf:code>fmk</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/fpy">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>first party</madsrdf:authoritativeLabel>
+	<rdfs:label>first party</rdfs:label>
+	<madsrdf:code>fpy</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/frg">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>forger</madsrdf:authoritativeLabel>
+	<rdfs:label>forger</rdfs:label>
+	<madsrdf:code>frg</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/fmo">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>former owner</madsrdf:authoritativeLabel>
+	<rdfs:label>former owner</rdfs:label>
+	<madsrdf:code>fmo</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/fon">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>founder</madsrdf:authoritativeLabel>
+	<rdfs:label>founder</rdfs:label>
+	<madsrdf:code>fon</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/fnd">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>funder</madsrdf:authoritativeLabel>
+	<rdfs:label>funder</rdfs:label>
+	<madsrdf:code>fnd</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/gdv">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>game developer</madsrdf:authoritativeLabel>
+	<rdfs:label>game developer</rdfs:label>
+	<madsrdf:code>gdv</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/gis">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>geographic information specialist</madsrdf:authoritativeLabel>
+	<rdfs:label>geographic information specialist</rdfs:label>
+	<madsrdf:code>gis</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/hnr">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>honoree</madsrdf:authoritativeLabel>
+	<rdfs:label>honoree</rdfs:label>
+	<madsrdf:code>hnr</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/hst">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>host</madsrdf:authoritativeLabel>
+	<rdfs:label>host</rdfs:label>
+	<madsrdf:code>hst</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/his">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>host institution</madsrdf:authoritativeLabel>
+	<rdfs:label>host institution</rdfs:label>
+	<madsrdf:code>his</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/ilu">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>illuminator</madsrdf:authoritativeLabel>
+	<rdfs:label>illuminator</rdfs:label>
+	<madsrdf:code>ilu</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/ill">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>illustrator</madsrdf:authoritativeLabel>
+	<rdfs:label>illustrator</rdfs:label>
+	<madsrdf:code>ill</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/ink">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>inker</madsrdf:authoritativeLabel>
+	<rdfs:label>inker</rdfs:label>
+	<madsrdf:code>ink</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/ins">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>inscriber</madsrdf:authoritativeLabel>
+	<rdfs:label>inscriber</rdfs:label>
+	<madsrdf:code>ins</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/itr">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>instrumentalist</madsrdf:authoritativeLabel>
+	<rdfs:label>instrumentalist</rdfs:label>
+	<madsrdf:code>itr</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/ive">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>interviewee</madsrdf:authoritativeLabel>
+	<rdfs:label>interviewee</rdfs:label>
+	<madsrdf:code>ive</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/ivr">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>interviewer</madsrdf:authoritativeLabel>
+	<rdfs:label>interviewer</rdfs:label>
+	<madsrdf:code>ivr</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/inv">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>inventor</madsrdf:authoritativeLabel>
+	<rdfs:label>inventor</rdfs:label>
+	<madsrdf:code>inv</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/isb">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>issuing body</madsrdf:authoritativeLabel>
+	<rdfs:label>issuing body</rdfs:label>
+	<madsrdf:code>isb</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/jud">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>judge</madsrdf:authoritativeLabel>
+	<rdfs:label>judge</rdfs:label>
+	<madsrdf:code>jud</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/jug">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>jurisdiction governed</madsrdf:authoritativeLabel>
+	<rdfs:label>jurisdiction governed</rdfs:label>
+	<madsrdf:code>jug</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/lbr">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>laboratory</madsrdf:authoritativeLabel>
+	<rdfs:label>laboratory</rdfs:label>
+	<madsrdf:code>lbr</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/ldr">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>laboratory director</madsrdf:authoritativeLabel>
+	<rdfs:label>laboratory director</rdfs:label>
+	<madsrdf:code>ldr</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/lsa">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>landscape architect</madsrdf:authoritativeLabel>
+	<rdfs:label>landscape architect</rdfs:label>
+	<madsrdf:code>lsa</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/led">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>lead</madsrdf:authoritativeLabel>
+	<rdfs:label>lead</rdfs:label>
+	<madsrdf:code>led</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/len">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>lender</madsrdf:authoritativeLabel>
+	<rdfs:label>lender</rdfs:label>
+	<madsrdf:code>len</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/ltr">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>letterer</madsrdf:authoritativeLabel>
+	<rdfs:label>letterer</rdfs:label>
+	<madsrdf:code>ltr</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/lil">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>libelant</madsrdf:authoritativeLabel>
+	<rdfs:label>libelant</rdfs:label>
+	<madsrdf:code>lil</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/lit">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>libelant-appellant</madsrdf:authoritativeLabel>
+	<rdfs:label>libelant-appellant</rdfs:label>
+	<madsrdf:code>lit</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/lie">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>libelant-appellee</madsrdf:authoritativeLabel>
+	<rdfs:label>libelant-appellee</rdfs:label>
+	<madsrdf:code>lie</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/lel">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>libelee</madsrdf:authoritativeLabel>
+	<rdfs:label>libelee</rdfs:label>
+	<madsrdf:code>lel</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/let">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>libelee-appellant</madsrdf:authoritativeLabel>
+	<rdfs:label>libelee-appellant</rdfs:label>
+	<madsrdf:code>let</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/lee">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>libelee-appellee</madsrdf:authoritativeLabel>
+	<rdfs:label>libelee-appellee</rdfs:label>
+	<madsrdf:code>lee</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/lbt">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>librettist</madsrdf:authoritativeLabel>
+	<rdfs:label>librettist</rdfs:label>
+	<madsrdf:code>lbt</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/lse">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>licensee</madsrdf:authoritativeLabel>
+	<rdfs:label>licensee</rdfs:label>
+	<madsrdf:code>lse</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/lso">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>licensor</madsrdf:authoritativeLabel>
+	<rdfs:label>licensor</rdfs:label>
+	<madsrdf:code>lso</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/lgd">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>lighting designer</madsrdf:authoritativeLabel>
+	<rdfs:label>lighting designer</rdfs:label>
+	<madsrdf:code>lgd</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/ltg">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>lithographer</madsrdf:authoritativeLabel>
+	<rdfs:label>lithographer</rdfs:label>
+	<madsrdf:code>ltg</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/lyr">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>lyricist</madsrdf:authoritativeLabel>
+	<rdfs:label>lyricist</rdfs:label>
+	<madsrdf:code>lyr</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/mka">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>makeup artist</madsrdf:authoritativeLabel>
+	<rdfs:label>makeup artist</rdfs:label>
+	<madsrdf:code>mka</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/mfp">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>manufacture place</madsrdf:authoritativeLabel>
+	<rdfs:label>manufacture place</rdfs:label>
+	<madsrdf:code>mfp</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/mfr">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>manufacturer</madsrdf:authoritativeLabel>
+	<rdfs:label>manufacturer</rdfs:label>
+	<madsrdf:code>mfr</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/mrb">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>marbler</madsrdf:authoritativeLabel>
+	<rdfs:label>marbler</rdfs:label>
+	<madsrdf:code>mrb</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/mrk">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>markup editor</madsrdf:authoritativeLabel>
+	<rdfs:label>markup editor</rdfs:label>
+	<madsrdf:code>mrk</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/med">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>medium</madsrdf:authoritativeLabel>
+	<rdfs:label>medium</rdfs:label>
+	<madsrdf:code>med</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/mdc">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>metadata contact</madsrdf:authoritativeLabel>
+	<rdfs:label>metadata contact</rdfs:label>
+	<madsrdf:code>mdc</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/mte">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>metal engraver</madsrdf:authoritativeLabel>
+	<rdfs:label>metal engraver</rdfs:label>
+	<madsrdf:code>mte</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/mtk">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>minute taker</madsrdf:authoritativeLabel>
+	<rdfs:label>minute taker</rdfs:label>
+	<madsrdf:code>mtk</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/mxe">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>mixing engineer</madsrdf:authoritativeLabel>
+	<rdfs:label>mixing engineer</rdfs:label>
+	<madsrdf:code>mxe</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/mod">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>moderator</madsrdf:authoritativeLabel>
+	<rdfs:label>moderator</rdfs:label>
+	<madsrdf:code>mod</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/mon">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>monitor</madsrdf:authoritativeLabel>
+	<rdfs:label>monitor</rdfs:label>
+	<madsrdf:code>mon</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/mcp">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>music copyist</madsrdf:authoritativeLabel>
+	<rdfs:label>music copyist</rdfs:label>
+	<madsrdf:code>mcp</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/mup">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>music programmer</madsrdf:authoritativeLabel>
+	<rdfs:label>music programmer</rdfs:label>
+	<madsrdf:code>mup</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/msd">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>musical director</madsrdf:authoritativeLabel>
+	<rdfs:label>musical director</rdfs:label>
+	<madsrdf:code>msd</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/mus">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>musician</madsrdf:authoritativeLabel>
+	<rdfs:label>musician</rdfs:label>
+	<madsrdf:code>mus</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/nrt">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>narrator</madsrdf:authoritativeLabel>
+	<rdfs:label>narrator</rdfs:label>
+	<madsrdf:code>nrt</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/nan">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>news anchor</madsrdf:authoritativeLabel>
+	<rdfs:label>news anchor</rdfs:label>
+	<madsrdf:code>nan</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/onp">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>onscreen participant</madsrdf:authoritativeLabel>
+	<rdfs:label>onscreen participant</rdfs:label>
+	<madsrdf:code>onp</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/osp">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>onscreen presenter</madsrdf:authoritativeLabel>
+	<rdfs:label>onscreen presenter</rdfs:label>
+	<madsrdf:code>osp</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/opn">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>opponent</madsrdf:authoritativeLabel>
+	<rdfs:label>opponent</rdfs:label>
+	<madsrdf:code>opn</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/orm">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>organizer</madsrdf:authoritativeLabel>
+	<rdfs:label>organizer</rdfs:label>
+	<madsrdf:code>orm</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/org">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>originator</madsrdf:authoritativeLabel>
+	<rdfs:label>originator</rdfs:label>
+	<madsrdf:code>org</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/oth">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>other</madsrdf:authoritativeLabel>
+	<rdfs:label>other</rdfs:label>
+	<madsrdf:code>oth</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/own">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>owner</madsrdf:authoritativeLabel>
+	<rdfs:label>owner</rdfs:label>
+	<madsrdf:code>own</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/pan">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>panelist</madsrdf:authoritativeLabel>
+	<rdfs:label>panelist</rdfs:label>
+	<madsrdf:code>pan</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/ppm">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>papermaker</madsrdf:authoritativeLabel>
+	<rdfs:label>papermaker</rdfs:label>
+	<madsrdf:code>ppm</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/pta">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>patent applicant</madsrdf:authoritativeLabel>
+	<rdfs:label>patent applicant</rdfs:label>
+	<madsrdf:code>pta</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/pth">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>patent holder</madsrdf:authoritativeLabel>
+	<rdfs:label>patent holder</rdfs:label>
+	<madsrdf:code>pth</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/pat">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>patron</madsrdf:authoritativeLabel>
+	<rdfs:label>patron</rdfs:label>
+	<madsrdf:code>pat</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/pnc">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>penciller</madsrdf:authoritativeLabel>
+	<rdfs:label>penciller</rdfs:label>
+	<madsrdf:code>pnc</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/prf">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>performer</madsrdf:authoritativeLabel>
+	<rdfs:label>performer</rdfs:label>
+	<madsrdf:code>prf</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/pma">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>permitting agency</madsrdf:authoritativeLabel>
+	<rdfs:label>permitting agency</rdfs:label>
+	<madsrdf:code>pma</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/pht">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>photographer</madsrdf:authoritativeLabel>
+	<rdfs:label>photographer</rdfs:label>
+	<madsrdf:code>pht</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/pad">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>place of address</madsrdf:authoritativeLabel>
+	<rdfs:label>place of address</rdfs:label>
+	<madsrdf:code>pad</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/ptf">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>plaintiff</madsrdf:authoritativeLabel>
+	<rdfs:label>plaintiff</rdfs:label>
+	<madsrdf:code>ptf</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/ptt">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>plaintiff-appellant</madsrdf:authoritativeLabel>
+	<rdfs:label>plaintiff-appellant</rdfs:label>
+	<madsrdf:code>ptt</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/pte">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>plaintiff-appellee</madsrdf:authoritativeLabel>
+	<rdfs:label>plaintiff-appellee</rdfs:label>
+	<madsrdf:code>pte</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/plt">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>platemaker</madsrdf:authoritativeLabel>
+	<rdfs:label>platemaker</rdfs:label>
+	<madsrdf:code>plt</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/pra">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>praeses</madsrdf:authoritativeLabel>
+	<rdfs:label>praeses</rdfs:label>
+	<madsrdf:code>pra</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/pre">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>presenter</madsrdf:authoritativeLabel>
+	<rdfs:label>presenter</rdfs:label>
+	<madsrdf:code>pre</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/prt">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>printer</madsrdf:authoritativeLabel>
+	<rdfs:label>printer</rdfs:label>
+	<madsrdf:code>prt</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/pop">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>printer of plates</madsrdf:authoritativeLabel>
+	<rdfs:label>printer of plates</rdfs:label>
+	<madsrdf:code>pop</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/prm">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>printmaker</madsrdf:authoritativeLabel>
+	<rdfs:label>printmaker</rdfs:label>
+	<madsrdf:code>prm</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/prc">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>process contact</madsrdf:authoritativeLabel>
+	<rdfs:label>process contact</rdfs:label>
+	<madsrdf:code>prc</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/pro">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>producer</madsrdf:authoritativeLabel>
+	<rdfs:label>producer</rdfs:label>
+	<madsrdf:code>pro</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/prn">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>production company</madsrdf:authoritativeLabel>
+	<rdfs:label>production company</rdfs:label>
+	<madsrdf:code>prn</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/prs">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>production designer</madsrdf:authoritativeLabel>
+	<rdfs:label>production designer</rdfs:label>
+	<madsrdf:code>prs</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/pmn">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>production manager</madsrdf:authoritativeLabel>
+	<rdfs:label>production manager</rdfs:label>
+	<madsrdf:code>pmn</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/prd">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>production personnel</madsrdf:authoritativeLabel>
+	<rdfs:label>production personnel</rdfs:label>
+	<madsrdf:code>prd</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/prp">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>production place</madsrdf:authoritativeLabel>
+	<rdfs:label>production place</rdfs:label>
+	<madsrdf:code>prp</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/prg">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>programmer</madsrdf:authoritativeLabel>
+	<rdfs:label>programmer</rdfs:label>
+	<madsrdf:code>prg</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/pdr">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>project director</madsrdf:authoritativeLabel>
+	<rdfs:label>project director</rdfs:label>
+	<madsrdf:code>pdr</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/pfr">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>proofreader</madsrdf:authoritativeLabel>
+	<rdfs:label>proofreader</rdfs:label>
+	<madsrdf:code>pfr</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/prv">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>provider</madsrdf:authoritativeLabel>
+	<rdfs:label>provider</rdfs:label>
+	<madsrdf:code>prv</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/pup">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>publication place</madsrdf:authoritativeLabel>
+	<rdfs:label>publication place</rdfs:label>
+	<madsrdf:code>pup</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/pbl">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>publisher</madsrdf:authoritativeLabel>
+	<rdfs:label>publisher</rdfs:label>
+	<madsrdf:code>pbl</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/pbd">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>publisher director</madsrdf:authoritativeLabel>
+	<rdfs:label>publisher director</rdfs:label>
+	<madsrdf:code>pbd</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/ppt">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>puppeteer</madsrdf:authoritativeLabel>
+	<rdfs:label>puppeteer</rdfs:label>
+	<madsrdf:code>ppt</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/rdd">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>radio director</madsrdf:authoritativeLabel>
+	<rdfs:label>radio director</rdfs:label>
+	<madsrdf:code>rdd</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/rpc">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>radio producer</madsrdf:authoritativeLabel>
+	<rdfs:label>radio producer</rdfs:label>
+	<madsrdf:code>rpc</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/rap">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>rapporteur</madsrdf:authoritativeLabel>
+	<rdfs:label>rapporteur</rdfs:label>
+	<madsrdf:code>rap</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/rce">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>recording engineer</madsrdf:authoritativeLabel>
+	<rdfs:label>recording engineer</rdfs:label>
+	<madsrdf:code>rce</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/rcd">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>recordist</madsrdf:authoritativeLabel>
+	<rdfs:label>recordist</rdfs:label>
+	<madsrdf:code>rcd</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/red">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>redaktor</madsrdf:authoritativeLabel>
+	<rdfs:label>redaktor</rdfs:label>
+	<madsrdf:code>red</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/rxa">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>remix artist</madsrdf:authoritativeLabel>
+	<rdfs:label>remix artist</rdfs:label>
+	<madsrdf:code>rxa</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/ren">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>renderer</madsrdf:authoritativeLabel>
+	<rdfs:label>renderer</rdfs:label>
+	<madsrdf:code>ren</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/rpt">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>reporter</madsrdf:authoritativeLabel>
+	<rdfs:label>reporter</rdfs:label>
+	<madsrdf:code>rpt</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/rps">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>repository</madsrdf:authoritativeLabel>
+	<rdfs:label>repository</rdfs:label>
+	<madsrdf:code>rps</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/rth">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>research team head</madsrdf:authoritativeLabel>
+	<rdfs:label>research team head</rdfs:label>
+	<madsrdf:code>rth</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/rtm">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>research team member</madsrdf:authoritativeLabel>
+	<rdfs:label>research team member</rdfs:label>
+	<madsrdf:code>rtm</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/res">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>researcher</madsrdf:authoritativeLabel>
+	<rdfs:label>researcher</rdfs:label>
+	<madsrdf:code>res</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/rsp">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>respondent</madsrdf:authoritativeLabel>
+	<rdfs:label>respondent</rdfs:label>
+	<madsrdf:code>rsp</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/rst">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>respondent-appellant</madsrdf:authoritativeLabel>
+	<rdfs:label>respondent-appellant</rdfs:label>
+	<madsrdf:code>rst</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/rse">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>respondent-appellee</madsrdf:authoritativeLabel>
+	<rdfs:label>respondent-appellee</rdfs:label>
+	<madsrdf:code>rse</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/rpy">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>responsible party</madsrdf:authoritativeLabel>
+	<rdfs:label>responsible party</rdfs:label>
+	<madsrdf:code>rpy</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/rsg">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>restager</madsrdf:authoritativeLabel>
+	<rdfs:label>restager</rdfs:label>
+	<madsrdf:code>rsg</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/rsr">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>restorationist</madsrdf:authoritativeLabel>
+	<rdfs:label>restorationist</rdfs:label>
+	<madsrdf:code>rsr</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/rev">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>reviewer</madsrdf:authoritativeLabel>
+	<rdfs:label>reviewer</rdfs:label>
+	<madsrdf:code>rev</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/rbr">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>rubricator</madsrdf:authoritativeLabel>
+	<rdfs:label>rubricator</rdfs:label>
+	<madsrdf:code>rbr</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/sce">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>scenarist</madsrdf:authoritativeLabel>
+	<rdfs:label>scenarist</rdfs:label>
+	<madsrdf:code>sce</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/sad">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>scientific advisor</madsrdf:authoritativeLabel>
+	<rdfs:label>scientific advisor</rdfs:label>
+	<madsrdf:code>sad</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/aus">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>screenwriter</madsrdf:authoritativeLabel>
+	<rdfs:label>screenwriter</rdfs:label>
+	<madsrdf:code>aus</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/scr">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>scribe</madsrdf:authoritativeLabel>
+	<rdfs:label>scribe</rdfs:label>
+	<madsrdf:code>scr</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/scl">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>sculptor</madsrdf:authoritativeLabel>
+	<rdfs:label>sculptor</rdfs:label>
+	<madsrdf:code>scl</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/spy">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>second party</madsrdf:authoritativeLabel>
+	<rdfs:label>second party</rdfs:label>
+	<madsrdf:code>spy</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/sec">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>secretary</madsrdf:authoritativeLabel>
+	<rdfs:label>secretary</rdfs:label>
+	<madsrdf:code>sec</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/sll">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>seller</madsrdf:authoritativeLabel>
+	<rdfs:label>seller</rdfs:label>
+	<madsrdf:code>sll</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/std">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>set designer</madsrdf:authoritativeLabel>
+	<rdfs:label>set designer</rdfs:label>
+	<madsrdf:code>std</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/stg">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>setting</madsrdf:authoritativeLabel>
+	<rdfs:label>setting</rdfs:label>
+	<madsrdf:code>stg</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/sgn">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>signer</madsrdf:authoritativeLabel>
+	<rdfs:label>signer</rdfs:label>
+	<madsrdf:code>sgn</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/sng">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>singer</madsrdf:authoritativeLabel>
+	<rdfs:label>singer</rdfs:label>
+	<madsrdf:code>sng</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/swd">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>software developer</madsrdf:authoritativeLabel>
+	<rdfs:label>software developer</rdfs:label>
+	<madsrdf:code>swd</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/sds">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>sound designer</madsrdf:authoritativeLabel>
+	<rdfs:label>sound designer</rdfs:label>
+	<madsrdf:code>sds</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/sde">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>sound engineer</madsrdf:authoritativeLabel>
+	<rdfs:label>sound engineer</rdfs:label>
+	<madsrdf:code>sde</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/spk">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>speaker</madsrdf:authoritativeLabel>
+	<rdfs:label>speaker</rdfs:label>
+	<madsrdf:code>spk</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/sfx">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>special effects provider</madsrdf:authoritativeLabel>
+	<rdfs:label>special effects provider</rdfs:label>
+	<madsrdf:code>sfx</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/spn">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>sponsor</madsrdf:authoritativeLabel>
+	<rdfs:label>sponsor</rdfs:label>
+	<madsrdf:code>spn</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/sgd">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>stage director</madsrdf:authoritativeLabel>
+	<rdfs:label>stage director</rdfs:label>
+	<madsrdf:code>sgd</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/stm">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>stage manager</madsrdf:authoritativeLabel>
+	<rdfs:label>stage manager</rdfs:label>
+	<madsrdf:code>stm</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/stn">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>standards body</madsrdf:authoritativeLabel>
+	<rdfs:label>standards body</rdfs:label>
+	<madsrdf:code>stn</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/str">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>stereotyper</madsrdf:authoritativeLabel>
+	<rdfs:label>stereotyper</rdfs:label>
+	<madsrdf:code>str</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/stl">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>storyteller</madsrdf:authoritativeLabel>
+	<rdfs:label>storyteller</rdfs:label>
+	<madsrdf:code>stl</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/sht">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>supporting host</madsrdf:authoritativeLabel>
+	<rdfs:label>supporting host</rdfs:label>
+	<madsrdf:code>sht</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/srv">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>surveyor</madsrdf:authoritativeLabel>
+	<rdfs:label>surveyor</rdfs:label>
+	<madsrdf:code>srv</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/tad">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>technical advisor</madsrdf:authoritativeLabel>
+	<rdfs:label>technical advisor</rdfs:label>
+	<madsrdf:code>tad</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/tch">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>teacher</madsrdf:authoritativeLabel>
+	<rdfs:label>teacher</rdfs:label>
+	<madsrdf:code>tch</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/tcd">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>technical director</madsrdf:authoritativeLabel>
+	<rdfs:label>technical director</rdfs:label>
+	<madsrdf:code>tcd</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/tld">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>television director</madsrdf:authoritativeLabel>
+	<rdfs:label>television director</rdfs:label>
+	<madsrdf:code>tld</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/tlg">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>television guest</madsrdf:authoritativeLabel>
+	<rdfs:label>television guest</rdfs:label>
+	<madsrdf:code>tlg</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/tlh">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>television host</madsrdf:authoritativeLabel>
+	<rdfs:label>television host</rdfs:label>
+	<madsrdf:code>tlh</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/tlp">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>television producer</madsrdf:authoritativeLabel>
+	<rdfs:label>television producer</rdfs:label>
+	<madsrdf:code>tlp</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/tau">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>television writer</madsrdf:authoritativeLabel>
+	<rdfs:label>television writer</rdfs:label>
+	<madsrdf:code>tau</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/ths">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>thesis advisor</madsrdf:authoritativeLabel>
+	<rdfs:label>thesis advisor</rdfs:label>
+	<madsrdf:code>ths</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/trc">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>transcriber</madsrdf:authoritativeLabel>
+	<rdfs:label>transcriber</rdfs:label>
+	<madsrdf:code>trc</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/trl">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>translator</madsrdf:authoritativeLabel>
+	<rdfs:label>translator</rdfs:label>
+	<madsrdf:code>trl</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/tyd">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>type designer</madsrdf:authoritativeLabel>
+	<rdfs:label>type designer</rdfs:label>
+	<madsrdf:code>tyd</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/tyg">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>typographer</madsrdf:authoritativeLabel>
+	<rdfs:label>typographer</rdfs:label>
+	<madsrdf:code>tyg</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/uvp">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>university place</madsrdf:authoritativeLabel>
+	<rdfs:label>university place</rdfs:label>
+	<madsrdf:code>uvp</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/vdg">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>videographer</madsrdf:authoritativeLabel>
+	<rdfs:label>videographer</rdfs:label>
+	<madsrdf:code>vdg</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/vfx">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>visual effects provider</madsrdf:authoritativeLabel>
+	<rdfs:label>visual effects provider</rdfs:label>
+	<madsrdf:code>vfx</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/vac">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>voice actor</madsrdf:authoritativeLabel>
+	<rdfs:label>voice actor</rdfs:label>
+	<madsrdf:code>vac</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/voc">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>vocalist</madsrdf:authoritativeLabel>
+	<rdfs:label>vocalist</rdfs:label>
+	<madsrdf:code>voc</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/wit">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>witness</madsrdf:authoritativeLabel>
+	<rdfs:label>witness</rdfs:label>
+	<madsrdf:code>wit</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/wde">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>wood engraver</madsrdf:authoritativeLabel>
+	<rdfs:label>wood engraver</rdfs:label>
+	<madsrdf:code>wde</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/wdc">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>woodcutter</madsrdf:authoritativeLabel>
+	<rdfs:label>woodcutter</rdfs:label>
+	<madsrdf:code>wdc</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/wam">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>writer of accompanying material</madsrdf:authoritativeLabel>
+	<rdfs:label>writer of accompanying material</rdfs:label>
+	<madsrdf:code>wam</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/wac">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>writer of added commentary</madsrdf:authoritativeLabel>
+	<rdfs:label>writer of added commentary</rdfs:label>
+	<madsrdf:code>wac</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/wal">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>writer of added lyrics</madsrdf:authoritativeLabel>
+	<rdfs:label>writer of added lyrics</rdfs:label>
+	<madsrdf:code>wal</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/wat">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>writer of added text</madsrdf:authoritativeLabel>
+	<rdfs:label>writer of added text</rdfs:label>
+	<madsrdf:code>wat</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/waw">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>writer of afterword</madsrdf:authoritativeLabel>
+	<rdfs:label>writer of afterword</rdfs:label>
+	<madsrdf:code>waw</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/wfs">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>writer of film story</madsrdf:authoritativeLabel>
+	<rdfs:label>writer of film story</rdfs:label>
+	<madsrdf:code>wfs</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/wfw">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>writer of foreword</madsrdf:authoritativeLabel>
+	<rdfs:label>writer of foreword</rdfs:label>
+	<madsrdf:code>wfw</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/wft">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>writer of intertitles</madsrdf:authoritativeLabel>
+	<rdfs:label>writer of intertitles</rdfs:label>
+	<madsrdf:code>wft</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/win">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>writer of introduction</madsrdf:authoritativeLabel>
+	<rdfs:label>writer of introduction</rdfs:label>
+	<madsrdf:code>win</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/wpr">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>writer of preface</madsrdf:authoritativeLabel>
+	<rdfs:label>writer of preface</rdfs:label>
+	<madsrdf:code>wpr</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/wst">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>writer of supplementary textual content</madsrdf:authoritativeLabel>
+	<rdfs:label>writer of supplementary textual content</rdfs:label>
+	<madsrdf:code>wst</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:hasMADSSchemeMember>
+      <madsrdf:Authority rdf:about="http://id.loc.gov/vocabulary/relators/wts">
+	<rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+	<rdf:type rdf:resource="http://id.loc.gov/ontologies/bibframe/Role"/>
+	<madsrdf:authoritativeLabel>writer of television story</madsrdf:authoritativeLabel>
+	<rdfs:label>writer of television story</rdfs:label>
+	<madsrdf:code>wts</madsrdf:code>
+      </madsrdf:Authority>
+    </madsrdf:hasMADSSchemeMember>
+    <madsrdf:adminMetadata>
+      <ri:RecordInfo xmlns:ri="http://id.loc.gov/ontologies/RecordInfo#">
+	<ri:recordStatus rdf:datatype="http://www.w3.org/2001/XMLSchema#string">new</ri:recordStatus>
+	<ri:recordChangeDate rdf:datatype="http://www.w3.org/2001/XMLSchema#dateTime">2021-08-02T00:00:00</ri:recordChangeDate>
+	<ri:recordContentSource rdf:resource="https://id.loc.gov/vocabulary/organizations/dlc"/>
+      </ri:RecordInfo>
+    </madsrdf:adminMetadata>
+    <rdf:type rdf:resource="http://www.w3.org/2004/02/skos/core#ConceptScheme"/>
+    <skos:definition xml:lang="en">Relator terms and their associated codes designate the relationship between an agent and a bibliographic resource.</skos:definition>
+    <skos:changeNote>
+      <cs:ChangeSet xmlns:cs="http://purl.org/vocab/changeset/schema#">
+	<cs:subjectOfChange rdf:resource="http://id.loc.gov/vocabulary/relators"/>
+	<cs:creatorName rdf:resource="https://id.loc.gov/vocabulary/organizations/dlc"/>
+	<cs:createdDate rdf:datatype="http://www.w3.org/2001/XMLSchema#dateTime">2021-08-02T00:00:00</cs:createdDate>
+	<cs:changeReason rdf:datatype="http://www.w3.org/2001/XMLSchema#string">new</cs:changeReason>
+      </cs:ChangeSet>
+    </skos:changeNote>
+  </madsrdf:MADSScheme>
+</rdf:RDF>
