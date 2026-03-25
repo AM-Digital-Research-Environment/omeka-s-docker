@@ -24,7 +24,8 @@ A reusable Docker template for deploying Omeka S digital archive installations. 
 ├── Dockerfile                  # PHP-FPM container build (multi-stage)
 ├── docker-entrypoint.sh        # PHP container initialization & auto-install
 ├── _docker/
-│   └── default-modules.txt     # Modules downloaded during image build
+│   ├── default-modules.txt     # Modules downloaded during image build
+│   └── vocabularies/           # Custom RDF vocabularies (auto-imported on first run)
 ├── nginx.conf                  # Nginx web server configuration
 ├── nginx-http-settings.conf    # Nginx HTTP-level settings (gzip, rate limiting)
 ├── nginx-security-headers.conf # Nginx security headers snippet
@@ -259,6 +260,17 @@ echo "ValueSuggest" >> _docker/default-modules.txt
 # Rebuild
 docker compose up -d --build
 ```
+
+## Custom Vocabularies
+
+In addition to the built-in vocabularies (Dublin Core, Dublin Core Type, Bibliographic Ontology, Friend of a Friend), the following RDF vocabularies are automatically imported on first run:
+
+| Vocabulary | Prefix | Description |
+|-----------|--------|-------------|
+| **FRAPO** | `frapo` | Funding, Research Administration and Projects Ontology |
+| **FaBiO** | `fabio` | FRBR-aligned Bibliographic Ontology |
+
+The ontology files and import script are in `_docker/vocabularies/`. To add more vocabularies, add their OWL files to that directory and register them in `_docker/vocabularies/import-vocabularies.php`.
 
 ## IIIF Support (Optional)
 

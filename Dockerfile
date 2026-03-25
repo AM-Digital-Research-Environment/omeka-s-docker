@@ -132,6 +132,8 @@ RUN while IFS= read -r mod || [ -n "$mod" ]; do \
 RUN omeka-s-cli theme:download --base-path "$OMEKA_ROOT" gh:omeka-s-themes/freedom \
     && omeka-s-cli theme:download --base-path "$OMEKA_ROOT" gh:omeka-s-themes/lively
 
+COPY --chown=www-data:www-data _docker/vocabularies/ /usr/local/share/omeka-vocabs/
+
 COPY --chmod=+x docker-entrypoint.sh /usr/local/bin/
 
 ENTRYPOINT ["docker-entrypoint.sh"]

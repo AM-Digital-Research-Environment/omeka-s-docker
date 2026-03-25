@@ -185,6 +185,17 @@ omeka_extra_config() {
         "${OMEKA_ROOT}/config/local.config.php"
 }
 
+omeka_import_vocabularies() {
+    local vocab_dir="/usr/local/share/omeka-vocabs"
+    local script="${vocab_dir}/import-vocabularies.php"
+    if [[ ! -f "$script" ]]; then
+        log_info "No vocabulary import script found, skipping."
+        return
+    fi
+    log_step "Importing custom vocabularies..."
+    php "$script" "$vocab_dir" "$OMEKA_ROOT" || log_error "Vocabulary import failed"
+}
+
 omeka_iiif_install() {
     # Install IIIF modules when ENABLE_IIIF=true
     if [[ "${ENABLE_IIIF:-false}" != "true" ]]; then
@@ -224,6 +235,7 @@ omeka_extra_config
 omeka_iiif_install
 omeka_extra_modules_download
 omeka_modules_install
+omeka_import_vocabularies
 
 omeka_extra_themes_download
 
