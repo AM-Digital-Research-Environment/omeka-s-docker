@@ -284,7 +284,7 @@ Use the `sideload/` directory for bulk file imports:
 
 1. Place files in the `sideload/` directory
 2. Activate the FileSideload module in the Omeka S admin panel (it is pre-installed)
-3. Configure FileSideload in Omeka S admin to point to `/var/www/html/sideload`
+3. In Omeka S admin, go to **Modules > FileSideload > Configure** and set the **Sideload directory** to `/var/www/html/sideload`
 4. Import files through the Omeka S admin interface
 
 ## Troubleshooting
