@@ -28,4 +28,10 @@
         <rdfs:isDefinedBy rdf:resource="http://am-digital.org/ontology/dre/"/>
     </owl:DatatypeProperty>
 
+    <owl:DatatypeProperty rdf:about="http://am-digital.org/ontology/dre/mongoId">
+        <rdfs:label>MongoDB ID</rdfs:label>
+        <rdfs:comment>Original MongoDB ObjectId, used for sync between MongoDB and Omeka S.</rdfs:comment>
+        <rdfs:isDefinedBy rdf:resource="http://am-digital.org/ontology/dre/"/>
+    </owl:DatatypeProperty>
+
 </rdf:RDF>

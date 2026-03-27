@@ -14,6 +14,7 @@ PREINSTALLED_MODULES=(
     "DspaceConnector"
     "FacetedBrowse"
     "FileSideload"
+    "Hierarchy"
     "IframeEmbed"
     "ItemCarouselBlock"
     "Log"
