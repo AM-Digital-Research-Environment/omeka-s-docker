@@ -21,6 +21,7 @@ NumericDataTypes
 
 # third party
 gh:fmadore/IframeEmbed
+gh:fmadore/ResourceVisualizations
 gh:Daniel-KM/Omeka-S-module-Common
 gh:Daniel-KM/Omeka-S-module-Cron
 gh:Daniel-KM/Omeka-S-module-EasyAdmin
