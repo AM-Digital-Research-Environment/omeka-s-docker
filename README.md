@@ -33,8 +33,11 @@ A reusable Docker template for deploying Omeka S digital archive installations. 
 ├── .env.example                # Environment variables template
 ├── COMMANDS.md                 # Docker commands quick reference
 ├── docs/
+│   ├── BACKUP_RESTORE.md       # Backup, restore, and migration guide
 │   └── DB_TUNING.md            # MySQL tuning parameter reference
 ├── scripts/
+│   ├── backup.sh               # Backup database, files, and config
+│   ├── restore.sh              # Restore from backup (migration)
 │   ├── install-module.sh       # Install new modules
 │   ├── install-theme.sh        # Install themes from GitHub
 │   ├── update-module.sh        # Update existing modules
@@ -218,15 +221,18 @@ The following modules are downloaded during the Docker image build and automatic
 | **Common** | Shared library required by many Daniel-KM modules |
 | **Cron** | Schedule background tasks |
 | **CSVImport** | Import items from CSV files |
+| **CustomVocab** | Create custom controlled vocabularies |
 | **DataCleaning** | Batch clean and normalize data |
 | **EasyAdmin** | Administration dashboard and tools |
 | **FacetedBrowse** | Create faceted search pages |
 | **FileSideload** | Import files from server directory |
+| **Hierarchy** | Organize items and item sets hierarchically |
 | **IframeEmbed** | Embed iframes in page blocks |
 | **ItemCarouselBlock** | Display items in a carousel block |
 | **Log** | PSR-3 logger for Omeka S |
 | **Mapping** | Add geographic locations to items |
 | **NumericDataTypes** | Support for numeric and date values |
+| **ResourceVisualizations** | Visualize resource relationships |
 
 These modules are ready to activate in the Omeka S admin panel after installation.
 
@@ -465,17 +471,19 @@ Data is persisted in Docker volumes:
 | `mysql_data` | MySQL database files |
 | `omeka_files` | Omeka S installation and uploads |
 
-## Backup
+## Backup & Migration
 
-To backup your installation:
+Backup and restore scripts are included for creating full snapshots and migrating to another server:
 
 ```bash
-# Database backup
-docker compose exec db mysqldump -u omeka -p omeka > backup.sql
+# Create a full backup (database + files + config)
+bash scripts/backup.sh
 
-# Files backup (from host)
-docker run --rm -v omeka-s-docker_omeka_files:/data -v $(pwd):/backup alpine tar czf /backup/omeka-files.tar.gz -C /data .
+# Restore from a backup
+bash scripts/restore.sh backups/20260330-120000
 ```
+
+The backup script stops containers during the process to guarantee data consistency, then restarts them automatically. See [docs/BACKUP_RESTORE.md](docs/BACKUP_RESTORE.md) for the full migration guide.
 
 ## License
 
