@@ -60,11 +60,14 @@ docker compose up -d
 # PHP container shell
 docker compose exec php bash
 
-# MySQL shell
-docker compose exec db mysql -u omeka -p omeka
+# MySQL shell (prompts for password from .env)
+docker compose exec db mysql -u omeka -p
 
 # Run a one-off command
 docker compose exec php php -v
+
+# Run omeka-s-cli inside the container
+docker compose exec php omeka-s-cli --help
 ```
 
 ## ⚠️ Complete Reset (Fresh Install)
@@ -109,14 +112,15 @@ docker compose pull && docker compose up -d
 ## Backup & Restore
 
 ```bash
-# Backup MySQL database
-docker compose exec db mysqldump -u omeka -p omeka > backup.sql
+# Full backup (database + files + sideload + .env)
+# Stops containers during backup for consistency, then restarts
+bash scripts/backup.sh
 
-# Restore MySQL database
-docker compose exec -T db mysql -u omeka -p omeka < backup.sql
+# Backup to a custom directory
+bash scripts/backup.sh /tmp/omeka-backup
 
-# Backup Omeka files volume
-docker run --rm -v omeka-s-docker_omeka_files:/data -v $(pwd):/backup alpine tar czf /backup/omeka-files.tar.gz -C /data .
+# Restore from a backup
+bash scripts/restore.sh backups/20260330-120000
 ```
 
 ## Useful Combos
@@ -140,6 +144,12 @@ docker compose config
 
 # Override .env temporarily
 NGINX_PORT=9000 docker compose up -d
+
+# Install extra modules/themes at runtime (set in .env)
+# EXTRA_MODULES=DspaceConnector,ValueSuggest,CSSEditor
+# EXTRA_THEMES=Cozy,Foundation
+# ENABLE_IIIF=true
+docker compose down && docker compose up -d
 ```
 
 ## Module Management
@@ -151,21 +161,54 @@ NGINX_PORT=9000 docker compose up -d
 # Install a module
 ./scripts/install-module.sh AdvancedSearch
 
+# Install a module at a specific version
+./scripts/install-module.sh AdvancedSearch 3.5.46
+
 # Update a module
 ./scripts/update-module.sh CSVImport
 
 # Update all modules
 ./scripts/update-module.sh all
 
-# Update Omeka S core
+# Update Omeka S core (dry run first)
+./scripts/update-omeka.sh --dry-run
+
+# Update Omeka S core to latest
 ./scripts/update-omeka.sh
+
+# Update Omeka S core to a specific version
+./scripts/update-omeka.sh 4.2.0
+
+# Install modules via omeka-s-cli inside the container
+docker compose exec php omeka-s-cli module:download --base-path /var/www/html ModuleName
+docker compose exec php omeka-s-cli module:install --base-path /var/www/html ModuleName
+```
+
+## Theme Management
+
+```bash
+# Install a theme
+./scripts/install-theme.sh CenterRow
+
+# Install a theme at a specific version
+./scripts/install-theme.sh Foundation 1.4.0
+```
+
+## Sideload (Bulk Imports)
+
+```bash
+# Place files in the sideload directory for bulk import
+cp /path/to/files/* sideload/
+
+# Then use FileSideload module in Omeka S admin panel
+# Configure sideload directory: /var/www/html/sideload
 ```
 
 ## Troubleshooting
 
 ```bash
 # Check container health status
-docker inspect --format='{{json .State.Health}}' omeka-s-docker-php-1
+docker inspect --format='{{json .State.Health}}' "$(docker compose ps -q php)"
 
 # Fix file permissions
 docker compose exec php chown -R www-data:www-data /var/www/html/files
