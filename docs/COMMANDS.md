@@ -70,6 +70,10 @@ docker compose exec php php -v
 docker compose exec php omeka-s-cli --help
 ```
 
+> For a walk-through of common `omeka-s-cli` workflows (module updates, user
+> management, vocabulary imports, resource templates, settings) see
+> [OMEKA_CLI.md](OMEKA_CLI.md).
+
 ## ⚠️ Complete Reset (Fresh Install)
 
 ```bash

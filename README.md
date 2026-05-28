@@ -31,8 +31,9 @@ A reusable Docker template for deploying Omeka S digital archive installations. 
 ├── nginx-security-headers.conf # Nginx security headers snippet
 ├── uploads.ini                 # PHP upload settings
 ├── .env.example                # Environment variables template
-├── COMMANDS.md                 # Docker commands quick reference
 ├── docs/
+│   ├── COMMANDS.md             # Docker commands quick reference
+│   ├── OMEKA_CLI.md            # omeka-s-cli usage and common workflows
 │   ├── BACKUP_RESTORE.md       # Backup, restore, and migration guide
 │   └── DB_TUNING.md            # MySQL tuning parameter reference
 ├── scripts/
@@ -105,9 +106,11 @@ docker compose down && docker compose up -d
 You can also use the `omeka-s-cli` inside the container:
 
 ```bash
-docker compose exec php omeka-s-cli module:download --base-path /var/www/html ModuleName
-docker compose exec php omeka-s-cli module:install --base-path /var/www/html ModuleName
+docker compose exec php omeka-s-cli module:download ModuleName
+docker compose exec php omeka-s-cli module:install ModuleName
 ```
+
+See [docs/OMEKA_CLI.md](docs/OMEKA_CLI.md) for a fuller walk-through of common CLI workflows (modules, users, vocabularies, resource templates, settings).
 
 ## Environment Variables
 
