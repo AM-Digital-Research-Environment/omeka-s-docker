@@ -7,10 +7,17 @@ services:
     ports:
       - "127.0.0.1:${NGINX_PORT:-80}:80"
     volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./nginx-http-settings.conf:/etc/nginx/conf.d/00-http-settings.conf:ro
+      - ./nginx.conf:/etc/nginx/templates/default.conf.template:ro
+      - ./nginx-http-settings.conf:/etc/nginx/templates/00-http-settings.conf.template:ro
       - ./nginx-security-headers.conf:/etc/nginx/snippets/security-headers.conf:ro
       - omeka_files:/var/www/html:ro
+    environment:
+      # Substituted into nginx.conf at container start (see /etc/nginx/templates/).
+      # SERVER_NAME comes from .env (gitignored). NGINX_ENVSUBST_FILTER restricts
+      # envsubst to only this variable so nginx's own $uri, $http_*, etc. are
+      # preserved verbatim in the templates.
+      - SERVER_NAME=${SERVER_NAME:-_}
+      - NGINX_ENVSUBST_FILTER=^SERVER_NAME$$
     depends_on:
       php:
         condition: service_healthy
@@ -35,6 +42,8 @@ services:
       - /var/cache/nginx:mode=1777,size=64M
       - /var/run:mode=1777,size=1M
       - /tmp:mode=1777,size=64M
+      # Holds nginx configs rendered from /etc/nginx/templates/ at startup.
+      - /etc/nginx/conf.d:mode=1777,size=1M
     deploy:
       resources:
         limits:

@@ -124,6 +124,7 @@ Create a `.env` file from `.env.example`. All supported variables:
 | `OMEKA_LOCALE` | No | - | Locale (e.g. `en_US`) |
 | `OMEKA_TITLE` | No | - | Site title |
 | `NGINX_PORT` | No | `80` | Host port for nginx (use `127.0.0.1:8080` with a reverse proxy) |
+| `SERVER_NAME` | No | `_` | Public hostname for nginx `server_name` (e.g. `omeka.example.edu`). Default `_` is a catch-all, safe when behind a trusted reverse proxy. |
 | `EXTRA_MODULES` | No | - | Comma-separated modules to install at runtime (e.g. `DspaceConnector,CSSEditor`) |
 | `EXTRA_THEMES` | No | - | Comma-separated themes to install at runtime (e.g. `Cozy,Foundation`) |
 | `ENABLE_IIIF` | No | `false` | Set to `true` to install IIIF modules (IiifServer, ImageServer, Mirador) |
@@ -408,6 +409,8 @@ This template includes Docker security hardening by default in the main `docker-
    - Set up alerting for unusual activity
 
 ## Production SSL/TLS
+
+The container's nginx honors the `X-Forwarded-Proto` header, so any reverse proxy that forwards it (Caddy, Traefik, and standard nginx setups all do) will get correct `https://` URLs from Omeka in links, redirects, IIIF manifests, and emails — no extra Omeka configuration needed. Set `SERVER_NAME` in `.env` to the public hostname.
 
 ### Caddy (automatic HTTPS)
 
