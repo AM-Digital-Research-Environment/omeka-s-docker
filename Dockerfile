@@ -135,6 +135,7 @@ RUN omeka-s-cli theme:download --base-path "$OMEKA_ROOT" gh:omeka-s-themes/freed
 COPY --chown=www-data:www-data _docker/vocabularies/ /usr/local/share/omeka-vocabs/
 
 COPY --chmod=+x docker-entrypoint.sh /usr/local/bin/
+COPY --chmod=+x ensure-composer.sh /usr/local/bin/
 
 ENTRYPOINT ["docker-entrypoint.sh"]
 

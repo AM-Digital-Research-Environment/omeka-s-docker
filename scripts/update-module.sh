@@ -202,10 +202,14 @@ update_module() {
     docker compose exec -T php rm -rf "/var/www/html/modules/$MODULE_NAME"
 
     log_info "Copying new module to container..."
-    docker cp "$TEMP_DIR/$MODULE_NAME" "$CONTAINER_ID:/var/www/html/modules/"
+    # Pipe a tar stream so files are extracted by the in-container user
+    # (www-data) and land already owned by www-data. `docker cp` would import
+    # files with the host UID, which www-data cannot chown afterwards because
+    # the container drops CAP_CHOWN (see docker-compose.yml: cap_drop: ALL).
+    tar -C "$TEMP_DIR" -cf - "$MODULE_NAME" \
+        | docker compose exec -T php tar -xf - -C /var/www/html/modules/
 
-    log_info "Setting ownership and permissions..."
-    docker compose exec -T php chown -R www-data:www-data "/var/www/html/modules/$MODULE_NAME"
+    log_info "Setting permissions..."
     docker compose exec -T php chmod -R 775 "/var/www/html/modules/$MODULE_NAME"
 
     rm -rf "$TEMP_DIR"
