@@ -17,6 +17,9 @@ declare -A THEME_REPOS=(
     ["Foundation"]="omeka-s-themes/Foundation"
     ["thanksroy"]="omeka-s-themes/thanksroy"
     ["thedaily"]="omeka-s-themes/thedaily"
+
+    # Africa Multiple — Digital Research Environment theme
+    ["DRE-theme"]="AM-Digital-Research-Environment/DRE-theme"
 )
 
 # Colors for output
@@ -73,6 +76,16 @@ install_theme() {
     # Check if theme already exists
     if docker compose exec -T php test -d "/var/www/html/themes/$THEME_NAME"; then
         log_warn "Theme $THEME_NAME already exists. Removing and reinstalling..."
+        # The php container drops ALL capabilities (docker-compose.yml:
+        # cap_drop: ALL), so neither root nor www-data can override file
+        # permissions. A theme laid down by an older `docker cp` install is
+        # owned by the host UID rather than www-data, and its parent themes/
+        # directory is owned by www-data -- so no single UID can delete the
+        # whole tree. Remove the contents as their actual owner, then drop the
+        # (now empty) top directory as www-data, which owns themes/.
+        local OWNER_UID
+        OWNER_UID=$(docker compose exec -T php stat -c '%u' "/var/www/html/themes/$THEME_NAME" | tr -d '\r')
+        docker compose exec -T -u "$OWNER_UID" php rm -rf "/var/www/html/themes/$THEME_NAME" 2>/dev/null || true
         docker compose exec -T php rm -rf "/var/www/html/themes/$THEME_NAME"
     fi
 
@@ -104,13 +117,16 @@ install_theme() {
     # Rename to proper theme name
     mv "$EXTRACTED_DIR" "$TEMP_DIR/$THEME_NAME"
 
-    # Copy theme to container
+    # Copy theme into the container via a tar stream so files are extracted by
+    # the in-container user (www-data) and land already owned by www-data.
+    # `docker cp` would import files with the host UID, which www-data cannot
+    # chown afterwards because the container drops CAP_CHOWN (see
+    # docker-compose.yml: cap_drop: ALL). This mirrors update-module.sh.
     log_info "Copying theme to container..."
-    docker cp "$TEMP_DIR/$THEME_NAME" "$CONTAINER_ID:/var/www/html/themes/"
+    tar -C "$TEMP_DIR" -cf - "$THEME_NAME" \
+        | docker compose exec -T php tar -xf - -C /var/www/html/themes/
 
-    # Set proper ownership and permissions
-    log_info "Setting ownership and permissions..."
-    docker compose exec -T php chown -R www-data:www-data "/var/www/html/themes/$THEME_NAME"
+    log_info "Setting permissions..."
     docker compose exec -T php chmod -R 775 "/var/www/html/themes/$THEME_NAME"
 
     rm -rf "$TEMP_DIR"
