@@ -48,6 +48,7 @@ declare -A MODULE_REPOS=(
     ["ZoteroImport"]="omeka-s-modules/ZoteroImport:master"
 
     # Other modules
+    ["ResourceVisualizations"]="fmadore/ResourceVisualizations:main"
     ["RightsStatements"]="zerocrates/RightsStatements:master"
     ["Sitemaps"]="ManOnDaMoon/omeka-s-module-Sitemaps:master"
     ["Wikidata"]="nishad/omeka-s-wikidata:master"
