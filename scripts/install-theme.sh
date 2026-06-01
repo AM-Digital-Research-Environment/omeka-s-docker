@@ -1,7 +1,7 @@
 #!/bin/bash
 # Script to install Omeka S themes from GitHub
 # Usage: bash scripts/install-theme.sh <theme-name> [branch/tag]
-# Example: bash scripts/install-theme.sh CenterRow
+# Example: bash scripts/install-theme.sh DRE-theme
 # Example: bash scripts/install-theme.sh Foundation 1.4.0
 
 set -e
@@ -132,6 +132,13 @@ install_theme() {
     rm -rf "$TEMP_DIR"
 
     log_info "Theme $THEME_NAME installed successfully!"
+
+    # Restart the PHP container to clear the opcache. Omeka S caches compiled
+    # theme PHP (templates, helpers) in opcache, so a freshly installed or
+    # reinstalled theme can otherwise serve stale code until the cache expires.
+    log_info "Restarting PHP container to clear cache..."
+    docker compose restart php
+    log_info "PHP container restarted."
 }
 
 # Main script
