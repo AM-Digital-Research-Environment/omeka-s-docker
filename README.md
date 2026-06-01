@@ -34,6 +34,7 @@ A reusable Docker template for deploying Omeka S digital archive installations. 
 ├── docs/
 │   ├── COMMANDS.md             # Docker commands quick reference
 │   ├── OMEKA_CLI.md            # omeka-s-cli usage and common workflows
+│   ├── PRODUCTION.md           # Production deploy: reverse proxy, TLS, firewall, hardening
 │   ├── BACKUP_RESTORE.md       # Backup, restore, and migration guide
 │   └── DB_TUNING.md            # MySQL tuning parameter reference
 ├── scripts/
@@ -425,7 +426,7 @@ omeka.example.edu {
 }
 ```
 
-Then update your `.env` to bind nginx to localhost: `NGINX_PORT=127.0.0.1:8080`, restart the stack with `docker compose up -d`, and start Caddy. Certificates are obtained and renewed automatically.
+Then update your `.env` so the container nginx no longer holds port 80 on the host: `NGINX_PORT=8080`, restart the stack with `docker compose up -d --force-recreate web`, and start Caddy. Certificates are obtained and renewed automatically.
 
 ### Traefik (Docker-native)
 
@@ -442,31 +443,63 @@ services:
 
 ### Standalone nginx reverse proxy
 
+First free port 80 on the host so the host nginx can bind it — set `NGINX_PORT=8080` in `.env` and run `docker compose up -d --force-recreate web`. The container nginx will then listen only on `127.0.0.1:8080`.
+
 Install nginx on the host and create a site config:
 
 ```nginx
+# HTTP → HTTPS redirect (also serves ACME HTTP-01 challenges)
+server {
+    listen 80;
+    listen [::]:80;
+    server_name omeka.example.edu;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# HTTPS — terminates TLS and proxies to the Omeka container on :8080
 server {
     listen 443 ssl http2;
+    listen [::]:443 ssl http2;
     server_name omeka.example.edu;
 
     ssl_certificate     /etc/letsencrypt/live/omeka.example.edu/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/omeka.example.edu/privkey.pem;
 
+    # Modern TLS (Mozilla intermediate)
+    ssl_protocols           TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache       shared:SSL:50m;
+    ssl_session_timeout     1d;
+    ssl_session_tickets     off;
+
+    # Enable HSTS only after the cert pipeline is confirmed working
+    # add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+
+    # Match the container's upload limit (Omeka allows 100 MB)
+    client_max_body_size 100M;
+
     location / {
-        proxy_pass http://127.0.0.1:80;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host  $host;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
     }
 }
-
-server {
-    listen 80;
-    server_name omeka.example.edu;
-    return 301 https://$host$request_uri;
-}
 ```
+
+For a full production walk-through (firewall rules, cert provisioning paths, host-OS hardening, verification), see [docs/PRODUCTION.md](docs/PRODUCTION.md).
 
 ## Volumes
 
