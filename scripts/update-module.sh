@@ -95,6 +95,32 @@ log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
+# Reset PHP-FPM's OPcache after swapping module files. The php image runs
+# opcache.validate_timestamps=0, so FPM keeps serving the OLD compiled bytecode
+# of the module's PHP (including config/module.config.php) until the cache is
+# cleared. Skipping this surfaces as "Unable to resolve service ..."
+# ServiceNotFoundException errors on pages an updated module added.
+#
+# Reset via cgi-fcgi rather than `docker compose restart php` so the container
+# keeps its IP (nginx caches the php upstream and would otherwise 502 until web
+# is also restarted) and active sessions are preserved.
+reset_opcache() {
+    if [[ -z "$(docker compose ps -q php)" ]]; then
+        log_warn "PHP container not running; skipping OPcache reset."
+        return 0
+    fi
+    log_info "Resetting PHP-FPM OPcache so the updated code goes live..."
+    if docker compose exec -T php sh -c 'printf "<?php opcache_reset();" > /tmp/opcache-reset.php; \
+        SCRIPT_NAME=/opcache-reset.php SCRIPT_FILENAME=/tmp/opcache-reset.php REQUEST_METHOD=GET \
+        cgi-fcgi -bind -connect 127.0.0.1:9000 >/dev/null 2>&1; status=$?; \
+        rm -f /tmp/opcache-reset.php; exit $status'; then
+        log_info "OPcache reset."
+    else
+        log_warn "OPcache reset failed. Run manually:"
+        echo "  docker compose exec php sh -c 'printf \"<?php opcache_reset();\" > /tmp/r.php; SCRIPT_NAME=/r.php SCRIPT_FILENAME=/tmp/r.php REQUEST_METHOD=GET cgi-fcgi -bind -connect 127.0.0.1:9000'"
+    fi
+}
+
 usage() {
     echo "Usage: $0 <module-name> [branch/tag]"
     echo ""
@@ -282,7 +308,10 @@ else
     update_module "$MODULE_NAME" "$BRANCH_OVERRIDE"
 fi
 
+# Clear FPM's OPcache so the new module code (config + classes) is actually
+# served — otherwise opcache.validate_timestamps=0 keeps the old bytecode live.
+reset_opcache
+
 echo ""
 log_info "Don't forget to:"
-echo "  1. Clear Omeka S cache if needed"
-echo "  2. Check the module in Omeka S admin panel"
+echo "  1. Check the module in Omeka S admin panel"
