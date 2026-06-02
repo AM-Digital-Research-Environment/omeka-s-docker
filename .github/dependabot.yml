@@ -14,6 +14,23 @@ updates:
     labels:
       - "dependencies"
       - "docker"
+    assignees:
+      - "fmadore"
+    open-pull-requests-limit: 5
+
+  # Monitor image tags pinned in docker-compose.yml (nginx, mysql)
+  - package-ecosystem: "docker-compose"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "docker"
+    labels:
+      - "dependencies"
+      - "docker"
+    assignees:
+      - "fmadore"
     open-pull-requests-limit: 5
 
   # Monitor GitHub Actions for updates (if you add any workflows)
@@ -27,4 +44,6 @@ updates:
     labels:
       - "dependencies"
       - "github-actions"
+    assignees:
+      - "fmadore"
     open-pull-requests-limit: 5
