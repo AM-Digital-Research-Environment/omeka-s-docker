@@ -6,6 +6,7 @@
 # Expects the backup directory to contain:
 #   - omeka_db.sql       MySQL database dump (required)
 #   - omeka_files.tar.gz Omeka files volume (required)
+#   - typesense_data.tar.gz Typesense search index (optional)
 #   - sideload.tar.gz    Sideload directory (optional)
 #   - .env               Environment file (optional, used if no .env exists)
 
@@ -85,7 +86,21 @@ docker run --rm \
     alpine sh -c "rm -rf /data/* /data/..?* /data/.[!.]* 2>/dev/null; cd /data && tar xzf /backup/omeka_files.tar.gz"
 echo "    Files volume restored."
 
-# --- 3. Restore sideload ---
+# --- 3. Restore Typesense data volume (optional search backend) ---
+TYPESENSE_RESTORED=false
+if [ -f "$BACKUP_DIR/typesense_data.tar.gz" ]; then
+    echo "==> Restoring Typesense data volume..."
+    TYPESENSE_VOLUME="${COMPOSE_PROJECT}_typesense_data"
+    docker volume create "$TYPESENSE_VOLUME" > /dev/null 2>&1 || true
+    docker run --rm \
+        -v "$TYPESENSE_VOLUME":/data \
+        -v "$BACKUP_DIR":/backup:ro \
+        alpine sh -c "rm -rf /data/* /data/..?* /data/.[!.]* 2>/dev/null; cd /data && tar xzf /backup/typesense_data.tar.gz"
+    TYPESENSE_RESTORED=true
+    echo "    Typesense volume restored."
+fi
+
+# --- 4. Restore sideload ---
 if [ -f "$BACKUP_DIR/sideload.tar.gz" ]; then
     echo "==> Restoring sideload directory..."
     mkdir -p "$PROJECT_DIR/sideload"
@@ -93,7 +108,7 @@ if [ -f "$BACKUP_DIR/sideload.tar.gz" ]; then
     echo "    Sideload restored."
 fi
 
-# --- 4. Start database and wait for it ---
+# --- 5. Start database and wait for it ---
 echo "==> Starting database..."
 (cd "$PROJECT_DIR" && docker compose up -d db)
 echo "    Waiting for database to be healthy..."
@@ -109,16 +124,21 @@ until (cd "$PROJECT_DIR" && docker compose exec -T db mysqladmin ping -u"$MYSQL_
 done
 echo "    Database is ready."
 
-# --- 5. Import database dump ---
+# --- 6. Import database dump ---
 echo "==> Importing database dump..."
 # Drop and recreate to ensure clean state
 (cd "$PROJECT_DIR" && docker compose exec -T db mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -e "DROP DATABASE IF EXISTS \`$MYSQL_DATABASE\`; CREATE DATABASE \`$MYSQL_DATABASE\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;")
 (cd "$PROJECT_DIR" && docker compose exec -T db mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE") < "$BACKUP_DIR/omeka_db.sql"
 echo "    Database imported."
 
-# --- 6. Start all services ---
+# --- 7. Start all services ---
 echo "==> Starting all services..."
-(cd "$PROJECT_DIR" && docker compose up -d)
+if [ "$TYPESENSE_RESTORED" = true ]; then
+    # Restored a Typesense index — bring it back with the "search" profile.
+    (cd "$PROJECT_DIR" && docker compose --profile search up -d)
+else
+    (cd "$PROJECT_DIR" && docker compose up -d)
+fi
 
 echo ""
 echo "==> Restore complete!"
