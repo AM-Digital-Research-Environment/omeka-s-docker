@@ -3,7 +3,12 @@
 
 services:
   web:
-    image: nginx:1.30-alpine
+    # Track the stable branch only (even minor = stable, odd = mainline). Pinned
+    # by digest so Dependabot bumps the SHA and we ride the latest stable
+    # automatically, never getting offered a mainline (1.31.x) release.
+    # Refresh: docker pull nginx:stable-alpine && docker inspect \
+    #   --format '{{index .RepoDigests 0}}' nginx:stable-alpine
+    image: nginx:stable-alpine@sha256:5f979dcfed4ce6461873f087e8c980d6e29b084b9e8776d9704a7e989b5f4898  # 1.30.2
     ports:
       - "127.0.0.1:${NGINX_PORT:-80}:80"
     volumes:
