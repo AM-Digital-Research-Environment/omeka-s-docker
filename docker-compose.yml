@@ -72,6 +72,9 @@ services:
       - omeka_files:/var/www/html:rw
       - ./uploads.ini:/usr/local/etc/php/conf.d/uploads.ini:ro
       - ./sideload:/var/www/html/sideload:rw
+      # Persistent PHP session store (off tmpfs) so php restarts don't log
+      # everyone out / invalidate CSRF tokens. See Dockerfile (92-sessions.ini).
+      - php_sessions:/var/lib/php-sessions:rw
     environment:
       - MYSQL_HOST=db
       - MYSQL_DATABASE=omeka
@@ -95,6 +98,13 @@ services:
       - EXTRA_THEMES=${EXTRA_THEMES:-}
       # Set to "true" to install IIIF modules (IiifServer, ImageServer, Mirador)
       - ENABLE_IIIF=${ENABLE_IIIF:-false}
+      # Typesense connection for the DRESearch module (optional). The module
+      # reads these when its admin settings are blank; leave TYPESENSE_API_KEY
+      # unset to run without search (the module then no-ops gracefully).
+      - TYPESENSE_HOST=${TYPESENSE_HOST:-typesense}
+      - TYPESENSE_PORT=${TYPESENSE_PORT:-8108}
+      - TYPESENSE_PROTOCOL=${TYPESENSE_PROTOCOL:-http}
+      - TYPESENSE_API_KEY=${TYPESENSE_API_KEY:-}
     depends_on:
       db:
         condition: service_healthy
@@ -188,10 +198,66 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # Optional Typesense search backend for the DRESearch module.
+  # Only starts when the "search" profile is active:
+  #   docker compose --profile search up -d
+  # Stays on the internal backend network — never published to the host; the
+  # php service talks to it server-side at http://typesense:8108.
+  typesense:
+    image: typesense/typesense:27.1  # bump to a newer stable tag (29.x/30.x) as needed
+    profiles:
+      - search
+    # NOTE: TYPESENSE_API_KEY defaults to empty so plain `docker compose up -d`
+    # (without the search profile) never requires it. If you start the search
+    # profile without setting it, Typesense exits immediately with a clear
+    # "API key is not specified" error — set it in .env first.
+    command:
+      - "--data-dir=/data"
+      - "--api-key=${TYPESENSE_API_KEY:-}"
+      - "--listen-port=8108"
+      - "--enable-cors=false"
+    volumes:
+      - typesense_data:/data:rw
+    networks:
+      - backend
+    restart: unless-stopped
+    # Security hardening
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777,size=64M
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    healthcheck:
+      # Image ships bash but no curl/wget — probe /health over bash's /dev/tcp.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8108; printf 'GET /health HTTP/1.0\n\n' >&3; grep -q true <&3"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 volumes:
   mysql_data:
     driver: local
   omeka_files:
+    driver: local
+  typesense_data:
+    driver: local
+  php_sessions:
     driver: local
 
 networks:

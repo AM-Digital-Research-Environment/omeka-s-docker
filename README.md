@@ -54,6 +54,9 @@ A reusable Docker template for deploying Omeka S digital archive installations. 
 | **web** | nginx:1.28-alpine | 80 | Reverse proxy, static files |
 | **php** | PHP 8.4-FPM | 9000 (internal) | Omeka S application |
 | **db** | MySQL 8.4 | 3306 (internal) | Database |
+| **typesense** _(optional)_ | typesense/typesense:27.1 | 8108 (internal) | Search backend for the DRESearch module — only runs under the `search` profile |
+
+> The **typesense** service is entirely optional. The stack runs normally without it; it is excluded from `docker compose up` unless you opt in with `--profile search` (see [Search Backend](#search-backend-optional)).
 
 ## Quick Start
 
@@ -303,6 +306,37 @@ These modules depend on Common, which is pre-installed. After startup, activate 
 2. IiifServer
 3. ImageServer
 4. Mirador
+
+## Search Backend (Optional)
+
+The [DRESearch](https://github.com/AM-Digital-Research-Environment/DRESearch) module adds a faceted, [Typesense](https://typesense.org/)-backed search. **It is completely optional** — this template runs fine without it, and the `typesense` service stays out of the way unless you explicitly enable it. Keeping it off costs nothing and keeps the stack reusable for instances that don't need search.
+
+### Enabling it
+
+1. Set a strong, random API key in `.env` (this single key is shared by the Typesense server and the module):
+   ```bash
+   # In .env — generate one with:  openssl rand -hex 24
+   TYPESENSE_API_KEY=your-long-random-string
+   ```
+2. Start (or recreate) the stack with the `search` profile, which adds the `typesense` service and injects the `TYPESENSE_*` settings into the `php` container:
+   ```bash
+   docker compose --profile search up -d
+   ```
+3. Install and activate the module, then point it at Typesense (it auto-reads the env vars, so its admin settings can be left blank):
+   ```bash
+   bash scripts/install-module.sh DRESearch
+   ```
+
+To run **without** search again, just start normally — `docker compose up -d` omits the profile and the `typesense` service never starts. Leaving `TYPESENSE_API_KEY` unset (or the module unconfigured) makes the module no-op gracefully.
+
+### Security
+
+The Typesense setup is designed not to widen the server's attack surface:
+
+- **Never exposed to the host or internet.** The service publishes **no ports** — it is reachable only on the internal `backend` Docker network, server-side from `php`. Its admin API key therefore stays inside the same trust boundary as MySQL.
+- **API key required.** Starting the `search` profile without `TYPESENSE_API_KEY` set makes Typesense exit immediately (`API key is not specified`) rather than run open. The key lives only in `.env` (gitignored).
+- **Hardened like the rest of the stack:** `cap_drop: ALL`, `no-new-privileges`, a read-only root filesystem, browser CORS disabled, and CPU/memory limits (0.5 CPU / 512M) so it can't starve the host.
+- **Nothing secret to back up.** The index in the `typesense_data` volume is rebuildable from MySQL, so it is excluded from backups.
 
 ## Bulk Imports
 

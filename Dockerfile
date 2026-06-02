@@ -132,6 +132,20 @@ RUN while IFS= read -r mod || [ -n "$mod" ]; do \
 RUN omeka-s-cli theme:download --base-path "$OMEKA_ROOT" gh:omeka-s-themes/freedom \
     && omeka-s-cli theme:download --base-path "$OMEKA_ROOT" gh:omeka-s-themes/lively
 
+# Persist PHP sessions on a dedicated volume (mounted in docker-compose.yml)
+# instead of the default tmpfs /tmp, so container restarts/recreates no longer
+# wipe everyone's login session and CSRF tokens. The directory is created here
+# owned by www-data so the fresh named volume inherits that ownership on first
+# mount — the running container drops CAP_CHOWN and cannot fix it afterwards.
+USER root
+RUN mkdir -p /var/lib/php-sessions \
+    && chown www-data:www-data /var/lib/php-sessions \
+    && chmod 700 /var/lib/php-sessions
+COPY <<EOF /usr/local/etc/php/conf.d/92-sessions.ini
+session.save_path = "/var/lib/php-sessions"
+EOF
+USER www-data
+
 COPY --chown=www-data:www-data _docker/vocabularies/ /usr/local/share/omeka-vocabs/
 
 COPY --chmod=+x docker-entrypoint.sh /usr/local/bin/

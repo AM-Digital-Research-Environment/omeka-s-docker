@@ -65,6 +65,7 @@ declare -A MODULE_REPOS=(
     ["ZoteroImport"]="omeka-s-modules/ZoteroImport:master"
 
     # Other modules
+    ["DRESearch"]="AM-Digital-Research-Environment/DRESearch:main"
     ["IframeEmbed"]="fmadore/IframeEmbed:main"
     ["RightsStatements"]="zerocrates/RightsStatements:master"
     ["Sitemaps"]="ManOnDaMoon/omeka-s-module-Sitemaps:master"
@@ -304,11 +305,15 @@ install_module() {
 
     # Copy module to container
     log_info "Copying module to container..."
-    docker cp "$TEMP_DIR/$MODULE_NAME" "$CONTAINER_ID:/var/www/html/modules/"
+    # Pipe a tar stream so files are extracted by the in-container user
+    # (www-data) and land already owned by www-data. `docker cp` would import
+    # files with the host UID, which www-data cannot chown afterwards because
+    # the container drops CAP_CHOWN (see docker-compose.yml: cap_drop: ALL).
+    tar -C "$TEMP_DIR" -cf - "$MODULE_NAME" \
+        | docker compose exec -T php tar -xf - -C /var/www/html/modules/
 
-    # Set proper ownership and permissions
-    log_info "Setting ownership and permissions..."
-    docker compose exec -T php chown -R www-data:www-data "/var/www/html/modules/$MODULE_NAME"
+    # Set permissions (ownership is already www-data from the tar extraction above)
+    log_info "Setting permissions..."
     docker compose exec -T php chmod -R 775 "/var/www/html/modules/$MODULE_NAME"
 
     # Cleanup
@@ -356,8 +361,8 @@ if [[ "$MODULE_NAME" == "list" ]]; then
     echo ""
     echo "Available modules (GitHub):"
     for module in "${!MODULE_REPOS[@]}"; do
-        local entry="${MODULE_REPOS[$module]}"
-        local branch="${entry##*:}"
+        entry="${MODULE_REPOS[$module]}"
+        branch="${entry##*:}"
         if is_preinstalled "$module"; then
             echo "  - $module [branch: $branch] (pre-installed)"
         else
@@ -367,8 +372,8 @@ if [[ "$MODULE_NAME" == "list" ]]; then
     echo ""
     echo "Available modules (GitLab):"
     for module in "${!GITLAB_REPOS[@]}"; do
-        local entry="${GITLAB_REPOS[$module]}"
-        local branch="${entry##*:}"
+        entry="${GITLAB_REPOS[$module]}"
+        branch="${entry##*:}"
         echo "  - $module [branch: $branch]"
     done | sort
     exit 0
