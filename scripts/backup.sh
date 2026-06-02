@@ -10,6 +10,7 @@
 # Creates a timestamped directory with:
 #   - omeka_db.sql       MySQL database dump
 #   - omeka_files.tar.gz Omeka files volume (uploads, modules, themes)
+#   - typesense_data.tar.gz Typesense search index (only if the search profile is in use)
 #   - sideload.tar.gz    Sideload directory (if non-empty)
 #   - .env               Environment file copy
 
@@ -36,6 +37,17 @@ echo "    Backup to: $BACKUP_DIR"
 echo ""
 
 mkdir -p "$BACKUP_DIR"
+
+# Detect the optional Typesense search backend. It lives behind the "search"
+# compose profile, so its volume/container may not exist at all. Record whether
+# it is currently running so we can restart it (with the profile) at the end.
+TYPESENSE_VOLUME="${COMPOSE_PROJECT}_typesense_data"
+TYPESENSE_WAS_RUNNING=false
+if docker ps --filter "label=com.docker.compose.project=${COMPOSE_PROJECT}" \
+             --filter "label=com.docker.compose.service=typesense" \
+             --format '{{.Names}}' 2>/dev/null | grep -q .; then
+    TYPESENSE_WAS_RUNNING=true
+fi
 
 # --- 1. Stop web and php, keep db running for the dump ---
 echo "==> Stopping web and php services..."
@@ -67,9 +79,13 @@ echo "==> Dumping MySQL database..."
 ) > "$BACKUP_DIR/omeka_db.sql"
 echo "    Database: $(du -h "$BACKUP_DIR/omeka_db.sql" | cut -f1)"
 
-# --- 3. Stop database before volume backup ---
+# --- 3. Stop database (and Typesense, if running) before volume backup ---
 echo "==> Stopping database..."
 (cd "$PROJECT_DIR" && docker compose stop db)
+if [ "$TYPESENSE_WAS_RUNNING" = true ]; then
+    echo "==> Stopping Typesense for a consistent snapshot..."
+    (cd "$PROJECT_DIR" && docker compose stop typesense 2>/dev/null || true)
+fi
 
 # --- 4. Omeka files volume ---
 echo "==> Backing up omeka_files volume..."
@@ -84,7 +100,19 @@ else
     echo "    WARNING: Volume $VOLUME_NAME not found, skipping."
 fi
 
-# --- 5. Sideload directory ---
+# --- 5. Typesense data volume (optional search backend) ---
+if docker volume inspect "$TYPESENSE_VOLUME" > /dev/null 2>&1; then
+    echo "==> Backing up Typesense data volume..."
+    docker run --rm \
+        -v "$TYPESENSE_VOLUME":/data:ro \
+        -v "$BACKUP_DIR":/backup \
+        alpine tar czf /backup/typesense_data.tar.gz -C /data .
+    echo "    Typesense: $(du -h "$BACKUP_DIR/typesense_data.tar.gz" | cut -f1)"
+else
+    echo "==> Typesense not in use (no $TYPESENSE_VOLUME volume), skipping."
+fi
+
+# --- 6. Sideload directory ---
 if [ -d "$PROJECT_DIR/sideload" ] && [ "$(ls -A "$PROJECT_DIR/sideload" 2>/dev/null)" ]; then
     echo "==> Backing up sideload directory..."
     tar czf "$BACKUP_DIR/sideload.tar.gz" -C "$PROJECT_DIR/sideload" .
@@ -93,15 +121,21 @@ else
     echo "==> Sideload directory is empty, skipping."
 fi
 
-# --- 6. Copy .env ---
+# --- 7. Copy .env ---
 if [ -f "$PROJECT_DIR/.env" ]; then
     cp "$PROJECT_DIR/.env" "$BACKUP_DIR/.env"
     echo "==> Copied .env"
 fi
 
-# --- 7. Restart all services ---
+# --- 8. Restart all services ---
 echo "==> Restarting all services..."
-(cd "$PROJECT_DIR" && docker compose up -d)
+if [ "$TYPESENSE_WAS_RUNNING" = true ]; then
+    # Typesense only starts when the "search" profile is active, so re-enable it
+    # explicitly — a plain `up -d` would leave it down.
+    (cd "$PROJECT_DIR" && docker compose --profile search up -d)
+else
+    (cd "$PROJECT_DIR" && docker compose up -d)
+fi
 
 echo ""
 echo "==> Backup complete: $BACKUP_DIR"
