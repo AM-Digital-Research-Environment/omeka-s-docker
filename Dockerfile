@@ -151,6 +151,15 @@ COPY --chown=www-data:www-data _docker/vocabularies/ /usr/local/share/omeka-voca
 COPY --chmod=+x docker-entrypoint.sh /usr/local/bin/
 COPY --chmod=+x ensure-composer.sh /usr/local/bin/
 
+# Composer's default cache dir is $HOME/.composer (= /var/www/.composer), which
+# is root-owned and unwritable by www-data — so composer would run cacheless,
+# re-download all package metadata on every run, and intermittent truncated
+# fetches surface as bogus dependency conflicts. Redirect it to the
+# www-data-owned /var/www/.cache created during the chown step above. Placed
+# here (after the omeka-s-cli download layers) so toggling it never busts the
+# expensive core/module/theme download cache.
+ENV COMPOSER_CACHE_DIR=/var/www/.cache/composer
+
 ENTRYPOINT ["docker-entrypoint.sh"]
 
 CMD ["php-fpm"]

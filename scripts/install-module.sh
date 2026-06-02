@@ -325,11 +325,33 @@ install_module() {
     if docker compose exec -T php test -f "/var/www/html/modules/$MODULE_NAME/composer.json"; then
         log_info "Installing composer dependencies..."
         docker compose exec -T php bash -c "source /usr/local/bin/ensure-composer.sh && ensure_composer"
-        if docker compose exec -T php bash -c "cd /var/www/html/modules/$MODULE_NAME && composer install --no-dev --quiet"; then
+        # Pin composer's metadata cache to the www-data-writable /var/www/.cache.
+        # Its default ($HOME/.composer = /var/www/.composer) is root-owned, so
+        # composer otherwise runs cacheless and re-downloads every package's
+        # metadata on each run; in this environment those live fetches
+        # intermittently truncate and composer misreports them as bogus version
+        # conflicts (e.g. "only one of these can be installed:
+        # php-http/guzzle7-adapter"). A warm cache makes resolution consistent;
+        # we still retry once to absorb a flaky first fetch. (The Dockerfile
+        # bakes COMPOSER_CACHE_DIR in too; this inline copy keeps already-built
+        # containers working without a rebuild.)
+        local composer_run="cd /var/www/html/modules/$MODULE_NAME && COMPOSER_CACHE_DIR=/var/www/.cache/composer composer install --no-dev"
+        local composer_ok=false
+        for attempt in 1 2; do
+            if docker compose exec -T php bash -c "$composer_run"; then
+                composer_ok=true
+                break
+            fi
+            if [[ $attempt -lt 2 ]]; then
+                log_warn "Composer install failed (attempt $attempt); retrying with a warm cache..."
+            fi
+        done
+        if [[ "$composer_ok" == true ]]; then
             log_info "Composer dependencies installed successfully!"
         else
-            log_warn "Failed to install composer dependencies. You may need to run manually:"
-            echo "  docker compose exec php bash -c 'cd /var/www/html/modules/$MODULE_NAME && composer install --no-dev'"
+            log_error "Composer dependencies FAILED for $MODULE_NAME after 2 attempts."
+            log_error "The module will NOT load until they install (its Module.php may 'require vendor/autoload.php'). Run manually:"
+            echo "  docker compose exec php bash -c 'cd /var/www/html/modules/$MODULE_NAME && COMPOSER_CACHE_DIR=/var/www/.cache/composer composer install --no-dev'"
         fi
     fi
 }
