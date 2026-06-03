@@ -49,6 +49,25 @@ if docker ps --filter "label=com.docker.compose.project=${COMPOSE_PROJECT}" \
     TYPESENSE_WAS_RUNNING=true
 fi
 
+# Always bring services back up on exit, even if a later step fails. Without
+# this, a failed dump or volume backup would leave web/php (and the live site)
+# stopped. Idempotent: the explicit restart at the end sets SERVICES_UP so this
+# trap is a no-op on the success path.
+SERVICES_UP=false
+restart_services() {
+    [ "$SERVICES_UP" = true ] && return 0
+    echo "==> Restarting all services..."
+    if [ "$TYPESENSE_WAS_RUNNING" = true ]; then
+        # Typesense only starts when the "search" profile is active, so re-enable
+        # it explicitly — a plain `up -d` would leave it down.
+        (cd "$PROJECT_DIR" && docker compose --profile search up -d)
+    else
+        (cd "$PROJECT_DIR" && docker compose up -d)
+    fi
+    SERVICES_UP=true
+}
+trap restart_services EXIT
+
 # --- 1. Stop web and php, keep db running for the dump ---
 echo "==> Stopping web and php services..."
 (cd "$PROJECT_DIR" && docker compose stop web php 2>/dev/null || true)
@@ -71,10 +90,14 @@ fi
 
 # --- 2. Database dump ---
 echo "==> Dumping MySQL database..."
+# --set-gtid-purged=OFF skips the consistent-GTID snapshot, which on MySQL 8.4+
+# requires the global RELOAD/FLUSH_TABLES privilege (a FLUSH TABLES WITH READ
+# LOCK). The unprivileged "omeka" user doesn't have it, and GTID purge info is
+# irrelevant for a single-server backup/restore, so turning it off is safe.
 (cd "$PROJECT_DIR" && docker compose exec -T db mysqldump \
     -u"$MYSQL_USER" \
     -p"$MYSQL_PASSWORD" \
-    --single-transaction --routines --triggers --no-tablespaces \
+    --single-transaction --set-gtid-purged=OFF --routines --triggers --no-tablespaces \
     "$MYSQL_DATABASE" \
 ) > "$BACKUP_DIR/omeka_db.sql"
 echo "    Database: $(du -h "$BACKUP_DIR/omeka_db.sql" | cut -f1)"
@@ -128,14 +151,7 @@ if [ -f "$PROJECT_DIR/.env" ]; then
 fi
 
 # --- 8. Restart all services ---
-echo "==> Restarting all services..."
-if [ "$TYPESENSE_WAS_RUNNING" = true ]; then
-    # Typesense only starts when the "search" profile is active, so re-enable it
-    # explicitly — a plain `up -d` would leave it down.
-    (cd "$PROJECT_DIR" && docker compose --profile search up -d)
-else
-    (cd "$PROJECT_DIR" && docker compose up -d)
-fi
+restart_services
 
 echo ""
 echo "==> Backup complete: $BACKUP_DIR"
