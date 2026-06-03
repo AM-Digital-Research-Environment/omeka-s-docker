@@ -9,16 +9,13 @@ set -e
 # Pre-installed modules (installed automatically by docker-entrypoint.sh)
 PREINSTALLED_MODULES=(
     "Common"
-    "CSVImport"
     "DataCleaning"
     "DspaceConnector"
-    "FacetedBrowse"
     "FileSideload"
     "Hierarchy"
     "IframeEmbed"
     "ItemCarouselBlock"
     "Log"
-    "Mapping"
     "NumericDataTypes"
     "ValueSuggest"
 )

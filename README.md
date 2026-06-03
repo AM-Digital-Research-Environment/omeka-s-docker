@@ -228,17 +228,14 @@ The following modules are downloaded during the Docker image build and automatic
 | **ActivityLog** | Track resource activity |
 | **Common** | Shared library required by many Daniel-KM modules |
 | **Cron** | Schedule background tasks |
-| **CSVImport** | Import items from CSV files |
 | **CustomVocab** | Create custom controlled vocabularies |
 | **DataCleaning** | Batch clean and normalize data |
 | **EasyAdmin** | Administration dashboard and tools |
-| **FacetedBrowse** | Create faceted search pages |
 | **FileSideload** | Import files from server directory |
 | **Hierarchy** | Organize items and item sets hierarchically |
 | **IframeEmbed** | Embed iframes in page blocks |
 | **ItemCarouselBlock** | Display items in a carousel block |
 | **Log** | PSR-3 logger for Omeka S |
-| **Mapping** | Add geographic locations to items |
 | **NumericDataTypes** | Support for numeric and date values |
 | **ResourceVisualizations** | Visualize resource relationships |
 
