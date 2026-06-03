@@ -9,14 +9,11 @@
 
 # omeka-s-modules
 ActivityLog
-CSVImport
 CustomVocab
 DataCleaning
-FacetedBrowse
 FileSideload
 Hierarchy
 ItemCarouselBlock
-Mapping
 NumericDataTypes
 
 # third party
