@@ -63,6 +63,8 @@ declare -A MODULE_REPOS=(
 
     # Other modules
     ["DRESearch"]="AM-Digital-Research-Environment/DRESearch:main"
+    # Repo is DRE-SEO but the module namespace/dir is DRESeo, so that must be the key.
+    ["DRESeo"]="AM-Digital-Research-Environment/DRE-SEO:main"
     ["IframeEmbed"]="fmadore/IframeEmbed:main"
     ["RightsStatements"]="zerocrates/RightsStatements:master"
     ["Sitemaps"]="ManOnDaMoon/omeka-s-module-Sitemaps:master"
