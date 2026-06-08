@@ -209,7 +209,7 @@ services:
   # Stays on the internal backend network — never published to the host; the
   # php service talks to it server-side at http://typesense:8108.
   typesense:
-    image: typesense/typesense:27.1  # bump to a newer stable tag (29.x/30.x) as needed
+    image: typesense/typesense:30.2  # bump to a newer stable tag (29.x/30.x) as needed
     profiles:
       - search
     # NOTE: TYPESENSE_API_KEY defaults to empty so plain `docker compose up -d`
