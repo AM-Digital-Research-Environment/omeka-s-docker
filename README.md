@@ -237,7 +237,7 @@ The following modules are downloaded during the Docker image build and automatic
 | **ItemCarouselBlock** | Display items in a carousel block |
 | **Log** | PSR-3 logger for Omeka S |
 | **NumericDataTypes** | Support for numeric and date values |
-| **ResourceVisualizations** | Visualize resource relationships |
+| **DreVisualizations** | Interactive knowledge graphs, dashboards, and maps as resource page blocks |
 
 These modules are ready to activate in the Omeka S admin panel after installation.
 

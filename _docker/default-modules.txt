@@ -10,16 +10,20 @@
 # omeka-s-modules
 ActivityLog
 CustomVocab
-DataCleaning
 FileSideload
 Hierarchy
 ItemCarouselBlock
 NumericDataTypes
 
 # third party
-gh:fmadore/IframeEmbed
-gh:fmadore/ResourceVisualizations
 gh:Daniel-KM/Omeka-S-module-Common
 gh:Daniel-KM/Omeka-S-module-Cron
 gh:Daniel-KM/Omeka-S-module-EasyAdmin
 gh:Daniel-KM/Omeka-S-module-Log
+
+# AM-Digital-Research-Environment
+# These repos have no releases (and ResourceVisualizations' latest release lags
+# behind main), so pin to #main to match install-/update-module.sh.
+gh:AM-Digital-Research-Environment/DRESearch#main
+gh:AM-Digital-Research-Environment/DRE-SEO#main
+gh:AM-Digital-Research-Environment/ResourceVisualizations#main
