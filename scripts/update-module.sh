@@ -49,9 +49,9 @@ declare -A MODULE_REPOS=(
 
     # Other modules
     ["DRESearch"]="AM-Digital-Research-Environment/DRESearch:main"
-    # Repo is DRE-SEO but the module namespace/dir is DRESeo, so that must be the key.
     ["DRESeo"]="AM-Digital-Research-Environment/DRE-SEO:main"
-    ["ResourceVisualizations"]="fmadore/ResourceVisualizations:main"
+    # Repo is ResourceVisualizations but the module namespace/dir is DreVisualizations, so that must be the key.
+    ["DreVisualizations"]="AM-Digital-Research-Environment/ResourceVisualizations:main"
     ["RightsStatements"]="zerocrates/RightsStatements:master"
     ["Sitemaps"]="ManOnDaMoon/omeka-s-module-Sitemaps:master"
     ["Wikidata"]="nishad/omeka-s-wikidata:master"
