@@ -183,6 +183,18 @@ omeka_extra_config() {
     log_step "Setting thumbnailer to Imagick"
     sed -i "s/Thumbnailer\\\ImageMagick/Thumbnailer\\\Imagick/g" \
         "${OMEKA_ROOT}/config/local.config.php"
+
+    # Self-host jQuery instead of code.jquery.com. Omeka core ships
+    # 'assets' => ['use_externals' => true] which rewrites the local jQuery
+    # asset URL to a CDN, adding a render-blocking DNS+TCP+TLS round-trip on
+    # the critical path (the CDN is not preconnected). Disabling externals
+    # serves Omeka's bundled application/asset/vendor/jquery/jquery.min.js
+    # same-origin (HTTP/2 reuse) and immutable-cached by nginx. Idempotent.
+    log_step "Self-hosting jQuery (disabling external asset CDNs)"
+    if ! grep -q "use_externals" "${OMEKA_ROOT}/config/local.config.php"; then
+        sed -i "/^return \[/a\\    'assets' => ['use_externals' => false]," \
+            "${OMEKA_ROOT}/config/local.config.php"
+    fi
 }
 
 omeka_import_vocabularies() {
