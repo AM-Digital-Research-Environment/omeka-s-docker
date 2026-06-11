@@ -9,7 +9,6 @@ set -e
 # Pre-installed modules (installed automatically by docker-entrypoint.sh)
 PREINSTALLED_MODULES=(
     "Common"
-    "DataCleaning"
     "DspaceConnector"
     "FileSideload"
     "Hierarchy"
@@ -34,10 +33,10 @@ declare -A MODULE_REPOS=(
     ["IiifServer"]="Daniel-KM/Omeka-S-module-IiifServer:master"
     ["ImageServer"]="Daniel-KM/Omeka-S-module-ImageServer:master"
     ["Log"]="Daniel-KM/Omeka-S-module-Log:master"
+    ["Mirador"]="Daniel-KM/Omeka-S-module-Mirador:master"
     ["OaiPmhRepository"]="Daniel-KM/Omeka-S-module-OaiPmhRepository:master"
     ["Reference"]="Daniel-KM/Omeka-S-module-Reference:master"
     ["SearchSolr"]="Daniel-KM/Omeka-S-module-SearchSolr:master"
-    ["UniversalViewer"]="Daniel-KM/Omeka-S-module-UniversalViewer:master"
 
     # Official Omeka-S modules
     ["ActivityLog"]="omeka-s-modules/ActivityLog:master"
@@ -45,7 +44,6 @@ declare -A MODULE_REPOS=(
     ["CSSEditor"]="omeka-s-modules/CSSEditor:master"
     ["CSVImport"]="omeka-s-modules/CSVImport:develop"
     ["CustomVocab"]="omeka-s-modules/CustomVocab:master"
-    ["DataCleaning"]="omeka-s-modules/DataCleaning:master"
     ["Datavis"]="omeka-s-modules/Datavis:main"
     ["DspaceConnector"]="omeka-s-modules/DspaceConnector:develop"
     ["Exports"]="omeka-s-modules/Exports:main"
@@ -94,7 +92,6 @@ declare -A MODULE_DEPENDENCIES=(
     ["OaiPmhRepository"]="Common"
     ["Reference"]="Common"
     ["SearchSolr"]="Common AdvancedSearch"
-    ["UniversalViewer"]="Common"
     ["IiifSearch"]="Common"
     ["Internationalisation"]="Common"
 )
