@@ -1,7 +1,7 @@
 #!/bin/bash
 # Restore Omeka S Docker instance from a backup
 # Usage: bash scripts/restore.sh <backup-directory>
-# Example: bash scripts/restore.sh /tmp/omeka-backup/20260330-120000
+# Example: bash scripts/restore.sh backups/20260617-082740
 #
 # Expects the backup directory to contain:
 #   - omeka_db.sql       MySQL database dump (required)
