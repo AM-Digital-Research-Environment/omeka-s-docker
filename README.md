@@ -36,14 +36,16 @@ A reusable Docker template for deploying Omeka S digital archive installations. 
 │   ├── OMEKA_CLI.md            # omeka-s-cli usage and common workflows
 │   ├── PRODUCTION.md           # Production deploy: reverse proxy, TLS, firewall, hardening
 │   ├── BACKUP_RESTORE.md       # Backup, restore, and migration guide
-│   └── DB_TUNING.md            # MySQL tuning parameter reference
+│   ├── DB_TUNING.md            # MySQL tuning parameter reference
+│   └── MCP_HOST_NGINX.md       # Optional host-nginx tweaks for the /mcp endpoint
 ├── scripts/
 │   ├── backup.sh               # Backup database, files, and config
 │   ├── restore.sh              # Restore from backup (migration)
 │   ├── install-module.sh       # Install new modules
 │   ├── install-theme.sh        # Install themes from GitHub
 │   ├── update-module.sh        # Update existing modules
-│   └── update-omeka.sh         # Update Omeka S core
+│   ├── update-omeka.sh         # Update Omeka S core
+│   └── update-amira-mcp.sh     # Rebuild the AMIRA MCP server from upstream main
 └── sideload/                   # Bulk import directory
 ```
 
@@ -54,9 +56,12 @@ A reusable Docker template for deploying Omeka S digital archive installations. 
 | **web** | nginx:1.28-alpine | 80 | Reverse proxy, static files |
 | **php** | PHP 8.4-FPM | 9000 (internal) | Omeka S application |
 | **db** | MySQL 8.4 | 3306 (internal) | Database |
+| **amira-mcp** | built from [amira-mcp-server](https://github.com/AM-Digital-Research-Environment/amira-mcp-server) `main` | 8787 (internal) | MCP server exposing the public AMIRA dataset at `/mcp` |
 | **typesense** _(optional)_ | typesense/typesense:27.1 | 8108 (internal) | Search backend for the DRESearch module — only runs under the `search` profile |
 
 > The **typesense** service is entirely optional. The stack runs normally without it; it is excluded from `docker compose up` unless you opt in with `--profile search` (see [Search Backend](#search-backend-optional)).
+>
+> The **amira-mcp** service publishes no host port; it is reached only through the `web` nginx at `/mcp` (see [MCP Server](#mcp-server-amira)).
 
 ## Quick Start
 
@@ -334,6 +339,41 @@ The Typesense setup is designed not to widen the server's attack surface:
 - **API key required.** Starting the `search` profile without `TYPESENSE_API_KEY` set makes Typesense exit immediately (`API key is not specified`) rather than run open. The key lives only in `.env` (gitignored).
 - **Hardened like the rest of the stack:** `cap_drop: ALL`, `no-new-privileges`, a read-only root filesystem, browser CORS disabled, and CPU/memory limits (0.5 CPU / 512M) so it can't starve the host.
 - **Nothing secret to back up.** The index in the `typesense_data` volume is rebuildable from MySQL, so it is excluded from backups.
+
+## MCP Server (AMIRA)
+
+The stack runs the [amira-mcp-server](https://github.com/AM-Digital-Research-Environment/amira-mcp-server), exposing this instance's public, read-only dataset to AI assistants over the [Model Context Protocol](https://modelcontextprotocol.io/) (Streamable-HTTP/SSE) at:
+
+```
+https://<your-domain>/mcp
+```
+
+Point any MCP client (Claude, etc.) at that URL as a Streamable-HTTP server to get search/list/get tools over the collection. The server bundles a snapshot of the public Omeka S API and refreshes it periodically (`AMIRA_LIVE_REFRESH=true`), so it adds no load to the live database.
+
+### How requests are routed
+
+`/mcp` must bypass Omeka's front controller, or Omeka would appropriate the URL (404/redirect). The `web` nginx handles this with a dedicated, higher-precedence location (`location ^~ /mcp` in `nginx.conf`) that proxies to the `amira-mcp` container with SSE buffering disabled. A host-level TLS reverse proxy in front of the stack forwards `/mcp` through unchanged; for true un-buffered streaming and per-client rate-limiting at that layer, see the optional tweaks in [docs/MCP_HOST_NGINX.md](docs/MCP_HOST_NGINX.md).
+
+### Keeping it up to date
+
+The service builds from the upstream repo's `main` branch, so updating is a plain rebuild — no version pinning to bump:
+
+```bash
+bash scripts/update-amira-mcp.sh
+# equivalent to:
+#   docker compose build --pull --no-cache amira-mcp && docker compose up -d amira-mcp
+```
+
+`--no-cache` forces a fresh git clone and re-runs the build-time data snapshot fetch. Only the `amira-mcp` container is recreated; the rest of the stack keeps running.
+
+### Security
+
+Like Typesense, the MCP server is built not to widen the attack surface:
+
+- **Never exposed to the host or internet directly.** It publishes **no ports** — reachable only on the internal `backend` Docker network, and from the outside solely through the hardened `web` nginx at `/mcp`.
+- **Read-only and public by design.** The underlying data is the same public collection already served by the site, so the endpoint needs no credentials. Abuse is bounded by an optional per-client rate limit at the host nginx (real client IPs are visible there, unlike behind Docker's bridge).
+- **Hardened like the rest of the stack:** `cap_drop: ALL`, `no-new-privileges`, a read-only root filesystem (cache on tmpfs), and tight CPU/memory limits (0.25 CPU / 256M) so it can't starve the host.
+- **Nothing secret to back up.** The bundled snapshot is rebuildable from the public API, so the service holds no persistent state.
 
 ## Bulk Imports
 

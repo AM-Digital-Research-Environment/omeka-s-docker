@@ -28,6 +28,10 @@ services:
         condition: service_healthy
       db:
         condition: service_healthy
+      # nginx.conf hardcodes `proxy_pass http://amira-mcp:8787`, resolved at
+      # startup — the container must exist or nginx fails to boot.
+      amira-mcp:
+        condition: service_started
     networks:
       - frontend
       - backend
@@ -137,6 +141,51 @@ services:
       timeout: 10s
       retries: 5
       start_period: 120s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # AMIRA MCP server — exposes the public, read-only AMIRA dataset over
+  # Streamable-HTTP/SSE at POST /mcp (health: GET /healthz) on port 8787.
+  # Reached only through the web nginx (location ^~ /mcp); never published to
+  # the host. Built from the upstream repo's main branch. Pull the latest with:
+  #   docker compose build --pull --no-cache amira-mcp && docker compose up -d amira-mcp
+  # (or run ./scripts/update-amira-mcp.sh). --no-cache forces a fresh git clone
+  # and re-runs the build-time data snapshot fetch.
+  amira-mcp:
+    build:
+      context: https://github.com/AM-Digital-Research-Environment/amira-mcp-server.git#main
+    environment:
+      - PORT=8787
+      - HOST=0.0.0.0
+      # Periodically refreshes the bundled snapshot from AMIRA_SITE_BASE.
+      - AMIRA_LIVE_REFRESH=true
+      - AMIRA_CACHE_DIR=/tmp/amira-cache
+      # Citation URLs and live-refresh target our own public domain.
+      - AMIRA_SITE_BASE=https://${SERVER_NAME}
+      - AMIRA_SITE_SLUG=amira
+    networks:
+      - backend
+    restart: unless-stopped
+    # Security hardening
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      # Holds AMIRA_CACHE_DIR (read-only rootfs otherwise).
+      - /tmp:mode=1777,size=128M
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
     logging:
       driver: "json-file"
       options:
