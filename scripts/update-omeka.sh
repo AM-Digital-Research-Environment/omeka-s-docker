@@ -225,7 +225,13 @@ else
     rm -rf "${EXTRACTED_DIR}/modules"/* 2>/dev/null || true
     rm -rf "${EXTRACTED_DIR}/themes"/* 2>/dev/null || true
     rm -rf "${EXTRACTED_DIR}/files"/* 2>/dev/null || true
-    docker cp "${EXTRACTED_DIR}/." "${CONTAINER_ID}:${OMEKA_ROOT}/"
+    # Stream the new files in via tar rather than `docker cp`. `docker cp`
+    # preserves the host UID/GID (e.g. 1000), and the php service runs as
+    # www-data with `cap_drop: ALL` — so it can neither own those files nor
+    # chown them afterward (no CAP_CHOWN). Extracting through `exec` as
+    # www-data lands every file owned by www-data, so no chown is ever needed.
+    tar -C "${EXTRACTED_DIR}" -cf - . \
+        | docker compose exec -T php tar -xf - -C "${OMEKA_ROOT}"
     log_info "New Omeka S files copied"
 fi
 
@@ -254,11 +260,13 @@ else
     log_info "Themes restored"
 fi
 
-log_step "Step 12: Setting proper ownership and permissions..."
+log_step "Step 12: Setting proper permissions..."
 if [[ "$DRY_RUN" == true ]]; then
-    echo "  Would set: chown -R www-data:www-data ${OMEKA_ROOT}"
+    echo "  Would set: chmod -R 775 on files/, modules/, themes/"
 else
-    docker compose exec -T php chown -R www-data:www-data "${OMEKA_ROOT}"
+    # No chown here: the php container runs as www-data with `cap_drop: ALL`,
+    # so it cannot change ownership (no CAP_CHOWN). New files are already
+    # www-data-owned because Step 8 extracts them through `exec` as www-data.
     docker compose exec -T php chmod -R 775 "${OMEKA_ROOT}/files"
     docker compose exec -T php chmod -R 775 "${OMEKA_ROOT}/modules"
     docker compose exec -T php chmod -R 775 "${OMEKA_ROOT}/themes"
