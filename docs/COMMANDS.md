@@ -181,7 +181,7 @@ docker compose down && docker compose up -d
 ./scripts/update-omeka.sh
 
 # Update Omeka S core to a specific version
-./scripts/update-omeka.sh 4.2.0
+./scripts/update-omeka.sh 4.2.1
 
 # Install modules via omeka-s-cli inside the container
 docker compose exec php omeka-s-cli module:download --base-path /var/www/html ModuleName
