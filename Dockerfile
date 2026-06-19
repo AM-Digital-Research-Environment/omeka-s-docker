@@ -9,10 +9,10 @@ RUN apk add --no-cache curl \
     && curl -sL https://github.com/GhentCDH/Omeka-S-Cli/releases/download/v${VERSION}/omeka-s-cli.phar -o /omeka-s-cli.phar \
     && echo "${SHA} /omeka-s-cli.phar" | sha256sum -c -
 
-FROM php:8.4-fpm AS runtime
+FROM php:8.5-fpm AS runtime
 
 ARG OMEKA_ROOT=/var/www/html
-ARG OMEKA_VERSION=4.2.0
+ARG OMEKA_VERSION=4.2.1
 
 # We're never going to be able to give feedback to apt during build
 ENV DEBIAN_FRONTEND=noninteractive

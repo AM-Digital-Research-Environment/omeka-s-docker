@@ -1,9 +1,9 @@
 #!/bin/bash
 # Script to update Omeka S core from GitHub releases
 # Usage: bash scripts/update-omeka.sh [version] [--dry-run]
-# Example: bash scripts/update-omeka.sh 4.2.0
+# Example: bash scripts/update-omeka.sh 4.2.1
 # Example: bash scripts/update-omeka.sh latest
-# Example: bash scripts/update-omeka.sh 4.2.0 --dry-run
+# Example: bash scripts/update-omeka.sh 4.2.1 --dry-run
 
 set -e
 
@@ -30,12 +30,12 @@ usage() {
     echo "Update Omeka S core to a specific version or latest release."
     echo ""
     echo "Arguments:"
-    echo "  version      Target version (e.g., 4.2.0) or 'latest' (default: latest)"
+    echo "  version      Target version (e.g., 4.2.1) or 'latest' (default: latest)"
     echo "  --dry-run    Show what would be done without making changes"
     echo ""
     echo "Examples:"
     echo "  $0                    # Update to latest version"
-    echo "  $0 4.2.0              # Update to version 4.2.0"
+    echo "  $0 4.2.1              # Update to version 4.2.1"
     echo "  $0 latest --dry-run   # Preview update to latest version"
     echo ""
     echo "Important Notes:"

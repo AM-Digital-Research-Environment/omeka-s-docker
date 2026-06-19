@@ -6,7 +6,7 @@ A reusable Docker template for deploying Omeka S digital archive installations. 
 
 - **Automatic Installation**: Omeka S is downloaded during build and installed on first run
 - **Pre-installed Modules**: Common modules baked into the image
-- **Optimized PHP 8.4**: Pre-configured with OPcache, APCu, and Imagick
+- **Optimized PHP 8.5**: Pre-configured with OPcache, APCu, and Imagick
 - **Non-root Execution**: PHP-FPM workers run as www-data
 - **Network Isolation**: Separate frontend/backend networks isolate PHP and MySQL
 - **Production-Ready Nginx**: Gzip compression, security headers, static file caching
@@ -54,7 +54,7 @@ A reusable Docker template for deploying Omeka S digital archive installations. 
 | Service | Image | Port | Purpose |
 |---------|-------|------|---------|
 | **web** | nginx:1.28-alpine | 80 | Reverse proxy, static files |
-| **php** | PHP 8.4-FPM | 9000 (internal) | Omeka S application |
+| **php** | PHP 8.5-FPM | 9000 (internal) | Omeka S application |
 | **db** | MySQL 8.4 | 3306 (internal) | Database |
 | **amira-mcp** | built from [amira-mcp-server](https://github.com/AM-Digital-Research-Environment/amira-mcp-server) `main` | 8787 (internal) | MCP server exposing the public AMIRA dataset at `/mcp` |
 | **typesense** _(optional)_ | typesense/typesense:27.1 | 8108 (internal) | Search backend for the DRESearch module — only runs under the `search` profile |
@@ -128,7 +128,7 @@ Create a `.env` file from `.env.example`. All supported variables:
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `MYSQL_PASSWORD` | Yes | - | MySQL password for the Omeka S database |
-| `OMEKA_VERSION` | No | `4.2.0` | Omeka S version to install |
+| `OMEKA_VERSION` | No | `4.2.1` | Omeka S version to install |
 | `OMEKA_ADMIN_EMAIL` | No | - | Admin email (skips web wizard if all three admin vars are set) |
 | `OMEKA_ADMIN_USERNAME` | No | - | Admin username |
 | `OMEKA_ADMIN_PASSWORD` | No | - | Admin password |
@@ -209,7 +209,7 @@ docker compose exec db mysql -u omeka -p
 ./scripts/update-omeka.sh
 
 # Update to specific version
-./scripts/update-omeka.sh 4.2.0
+./scripts/update-omeka.sh 4.2.1
 ```
 
 ### Update Modules
