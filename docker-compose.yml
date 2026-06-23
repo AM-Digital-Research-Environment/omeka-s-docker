@@ -28,10 +28,10 @@ services:
         condition: service_healthy
       db:
         condition: service_healthy
-      # nginx.conf hardcodes `proxy_pass http://amira-mcp:8787`, resolved at
-      # startup — the container must exist or nginx fails to boot.
-      amira-mcp:
-        condition: service_started
+      # No dependency on amira-mcp: nginx.conf resolves it at request time via
+      # Docker's embedded DNS (see the /mcp location), so web boots — and stays
+      # up — even when amira-mcp is missing, stopped, or still building. /mcp
+      # just returns 502 until amira-mcp is reachable again.
     networks:
       - frontend
       - backend
