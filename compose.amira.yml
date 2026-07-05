@@ -1,0 +1,89 @@
+# AMIRA deployment overlay — the DRE production stack at
+# data.africamultiple.uni-bayreuth.de. Layers the AMIRA-specific pieces on top
+# of the generic base stack in docker-compose.yml:
+#
+#   - amira-mcp service (MCP server for the public AMIRA dataset at /mcp)
+#   - /mcp nginx location (deploy/amira/nginx-mcp-location.conf)
+#   - DRE modules baked into the php image (deploy/amira/modules.txt)
+#   - dre custom vocabulary (deploy/amira/vocabularies/)
+#
+# Activate it in .env (see deploy/amira/README.md for the full walk-through):
+#
+#   COMPOSE_FILE=docker-compose.yml:compose.amira.yml
+#   COMPOSE_PROFILES=search
+#   FRAME_ANCESTORS="'self' https://www.frederickmadore.com https://slides.frederickmadore.com"
+#
+# Plain `docker compose up -d` then behaves exactly as before. Without these
+# lines the base stack runs standalone — this file also serves as the worked
+# example of extending the template with deployment-specific services.
+
+services:
+  web:
+    volumes:
+      # Rendered by the nginx image's envsubst step into
+      # /etc/nginx/conf.d/extra-locations/mcp.conf, which the base nginx.conf
+      # includes by glob (see the extension point in nginx.conf).
+      - ./deploy/amira/nginx-mcp-location.conf:/etc/nginx/templates/extra-locations/mcp.conf.template:ro
+
+  php:
+    build:
+      args:
+        # Bake the DRE modules into the image on top of
+        # _docker/default-modules.txt (see Dockerfile).
+        EXTRA_MODULES_FILE: deploy/amira/modules.txt
+    volumes:
+      # dre vocabulary + its import manifest, picked up on first run by the
+      # entrypoint's vocabulary import alongside the generic vocabularies
+      # baked into the image at build.
+      - ./deploy/amira/vocabularies/dre.owl:/usr/local/share/omeka-vocabs/dre.owl:ro
+      - ./deploy/amira/vocabularies/dre.json:/usr/local/share/omeka-vocabs/dre.json:ro
+
+  # AMIRA MCP server — exposes the public, read-only AMIRA dataset over
+  # Streamable-HTTP/SSE at POST /mcp (health: GET /healthz) on port 8787.
+  # Reached only through the web nginx (location ^~ /mcp); never published to
+  # the host. Built from the upstream repo's main branch. Pull the latest with:
+  #   docker compose build --pull --no-cache amira-mcp && docker compose up -d amira-mcp
+  # (or run ./deploy/amira/update-amira-mcp.sh). --no-cache forces a fresh git
+  # clone and re-runs the build-time data snapshot fetch.
+  #
+  # web declares no dependency on this service: the /mcp location resolves the
+  # upstream at request time via Docker's embedded DNS, so the site boots — and
+  # stays up — even when amira-mcp is missing, stopped, or still building. /mcp
+  # just returns 502 until amira-mcp is reachable again.
+  amira-mcp:
+    build:
+      context: https://github.com/AM-Digital-Research-Environment/amira-mcp-server.git#main
+    environment:
+      - PORT=8787
+      - HOST=0.0.0.0
+      # Periodically refreshes the bundled snapshot from AMIRA_SITE_BASE.
+      - AMIRA_LIVE_REFRESH=true
+      - AMIRA_CACHE_DIR=/tmp/amira-cache
+      # Citation URLs and live-refresh target our own public domain.
+      - AMIRA_SITE_BASE=https://${SERVER_NAME}
+      - AMIRA_SITE_SLUG=amira
+    networks:
+      - backend
+    restart: unless-stopped
+    # Security hardening
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      # Holds AMIRA_CACHE_DIR (read-only rootfs otherwise).
+      - /tmp:mode=1777,size=128M
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

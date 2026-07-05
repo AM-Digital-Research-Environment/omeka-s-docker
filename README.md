@@ -1,16 +1,20 @@
 # Omeka S Docker Template
 
+[![CI](https://github.com/AM-Digital-Research-Environment/omeka-s-docker/actions/workflows/ci.yml/badge.svg)](https://github.com/AM-Digital-Research-Environment/omeka-s-docker/actions/workflows/ci.yml)
+
 A reusable Docker template for deploying Omeka S digital archive installations. This template provides a production-ready setup with automatic installation, optimized PHP configuration, and module management via [omeka-s-cli](https://github.com/GhentCDH/Omeka-S-Cli).
 
 ## Features
 
 - **Automatic Installation**: Omeka S is downloaded during build and installed on first run
+- **One-Click Deploy**: [Bootstrap script](https://github.com/AM-Digital-Research-Environment/am-omeka-s-docker-bootstrap) for fresh Linux servers (Docker install, HTTPS via Caddy, launch)
 - **Pre-installed Modules**: Common modules baked into the image
 - **Optimized PHP 8.5**: Pre-configured with OPcache, APCu, and Imagick
 - **Non-root Execution**: PHP-FPM workers run as www-data
 - **Network Isolation**: Separate frontend/backend networks isolate PHP and MySQL
 - **Production-Ready Nginx**: Gzip compression, security headers, static file caching
 - **Health Checks**: All services include Docker health checks
+- **Deployment Overlays**: Site-specific services layer on top via `COMPOSE_FILE` — the base stack stays generic (see [Deployment Overlays](#deployment-overlays))
 
 ## Prerequisites
 
@@ -20,12 +24,16 @@ A reusable Docker template for deploying Omeka S digital archive installations. 
 
 ```
 .
-├── docker-compose.yml          # Main service orchestration
+├── docker-compose.yml          # Generic base stack (web, php, db, optional typesense)
+├── compose.amira.yml           # AMIRA production overlay (worked example — see deploy/amira/)
 ├── Dockerfile                  # PHP-FPM container build (multi-stage)
 ├── docker-entrypoint.sh        # PHP container initialization & auto-install
 ├── _docker/
 │   ├── default-modules.txt     # Modules downloaded during image build
-│   └── vocabularies/           # Custom RDF vocabularies (auto-imported on first run)
+│   ├── empty-modules.txt       # Placeholder for the EXTRA_MODULES_FILE build arg
+│   └── vocabularies/           # RDF vocabularies + JSON manifests (auto-imported on first run)
+├── deploy/
+│   └── amira/                  # Everything specific to the AMIRA deployment (see its README)
 ├── nginx.conf                  # Nginx web server configuration
 ├── nginx-http-settings.conf    # Nginx HTTP-level settings (gzip, rate limiting)
 ├── nginx-security-headers.conf # Nginx security headers snippet
@@ -36,16 +44,14 @@ A reusable Docker template for deploying Omeka S digital archive installations. 
 │   ├── OMEKA_CLI.md            # omeka-s-cli usage and common workflows
 │   ├── PRODUCTION.md           # Production deploy: reverse proxy, TLS, firewall, hardening
 │   ├── BACKUP_RESTORE.md       # Backup, restore, and migration guide
-│   ├── DB_TUNING.md            # MySQL tuning parameter reference
-│   └── MCP_HOST_NGINX.md       # Optional host-nginx tweaks for the /mcp endpoint
+│   └── DB_TUNING.md            # MySQL tuning parameter reference
 ├── scripts/
 │   ├── backup.sh               # Backup database, files, and config
 │   ├── restore.sh              # Restore from backup (migration)
 │   ├── install-module.sh       # Install new modules
 │   ├── install-theme.sh        # Install themes from GitHub
 │   ├── update-module.sh        # Update existing modules
-│   ├── update-omeka.sh         # Update Omeka S core
-│   └── update-amira-mcp.sh     # Rebuild the AMIRA MCP server from upstream main
+│   └── update-omeka.sh         # Update Omeka S core
 └── sideload/                   # Bulk import directory
 ```
 
@@ -53,19 +59,30 @@ A reusable Docker template for deploying Omeka S digital archive installations. 
 
 | Service | Image | Port | Purpose |
 |---------|-------|------|---------|
-| **web** | nginx:1.28-alpine | 80 | Reverse proxy, static files |
+| **web** | nginx:stable-alpine (1.30, digest-pinned) | 80 | Reverse proxy, static files |
 | **php** | PHP 8.5-FPM | 9000 (internal) | Omeka S application |
-| **db** | MySQL 8.4 | 3306 (internal) | Database |
-| **amira-mcp** | built from [amira-mcp-server](https://github.com/AM-Digital-Research-Environment/amira-mcp-server) `main` | 8787 (internal) | MCP server exposing the public AMIRA dataset at `/mcp` |
-| **typesense** _(optional)_ | typesense/typesense:27.1 | 8108 (internal) | Search backend for the DRESearch module — only runs under the `search` profile |
+| **db** | MySQL 9.7 | 3306 (internal) | Database |
+| **typesense** _(optional)_ | typesense/typesense:30.2 | 8108 (internal) | Search backend for search modules such as DRESearch — only runs under the `search` profile |
 
 > The **typesense** service is entirely optional. The stack runs normally without it; it is excluded from `docker compose up` unless you opt in with `--profile search` (see [Search Backend](#search-backend-optional)).
 >
-> The **amira-mcp** service publishes no host port; it is reached only through the `web` nginx at `/mcp` (see [MCP Server](#mcp-server-amira)).
+> Deployment-specific services (for example the AMIRA MCP server) are not part of the base stack — they live in overlay compose files (see [Deployment Overlays](#deployment-overlays)).
 
 ## Quick Start
 
-### 1. Clone and Configure
+### Option A: One-click install (fresh Linux server)
+
+On a clean Ubuntu/Debian/Fedora/Rocky/Alma server, one command installs Docker, clones this template at its latest release, optionally sets up HTTPS with Caddy, and launches the stack:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/AM-Digital-Research-Environment/am-omeka-s-docker-bootstrap/main/setup.sh | bash
+```
+
+See [am-omeka-s-docker-bootstrap](https://github.com/AM-Digital-Research-Environment/am-omeka-s-docker-bootstrap) for details and non-interactive usage. Continue below for manual setup.
+
+### Option B: Manual setup
+
+#### 1. Clone and Configure
 
 ```bash
 # Clone this template
@@ -79,7 +96,7 @@ cp .env.example .env
 nano .env
 ```
 
-### 2. Start Services
+#### 2. Start Services
 
 ```bash
 # Build and start all services (Omeka S will auto-install on first run)
@@ -89,7 +106,7 @@ docker compose up -d --build
 docker compose logs -f php
 ```
 
-### 3. Access Omeka S
+#### 3. Access Omeka S
 
 1. Wait for all services to show as "healthy":
    ```bash
@@ -100,7 +117,7 @@ docker compose logs -f php
 
 3. If you set `OMEKA_ADMIN_EMAIL`, `OMEKA_ADMIN_USERNAME`, and `OMEKA_ADMIN_PASSWORD` in `.env`, an admin account is created automatically. Otherwise, complete the web installation wizard.
 
-### 4. Install Additional Modules (Optional)
+#### 4. Install Additional Modules (Optional)
 
 Many modules are pre-installed (see below). To add more at runtime, set `EXTRA_MODULES` in your `.env`:
 
@@ -135,8 +152,13 @@ Create a `.env` file from `.env.example`. All supported variables:
 | `OMEKA_TZ` | No | `UTC` | Timezone (e.g. `Europe/Berlin`) |
 | `OMEKA_LOCALE` | No | - | Locale (e.g. `en_US`) |
 | `OMEKA_TITLE` | No | - | Site title |
-| `NGINX_PORT` | No | `80` | Host port for nginx (use `127.0.0.1:8080` with a reverse proxy) |
+| `NGINX_PORT` | No | `80` | Host port for nginx (e.g. `8080` behind a reverse proxy) |
+| `NGINX_BIND` | No | `127.0.0.1` | Interface the nginx port binds to. Default is localhost-only (for use behind a host reverse proxy); set `0.0.0.0` to serve HTTP directly |
 | `SERVER_NAME` | No | `_` | Public hostname for nginx `server_name` (e.g. `omeka.example.edu`). Default `_` is a catch-all, safe when behind a trusted reverse proxy. |
+| `FRAME_ANCESTORS` | No | `'self'` | CSP `frame-ancestors`: origins allowed to embed the site in an iframe, e.g. `"'self' https://www.example.org"` |
+| `TYPESENSE_API_KEY` | No | - | API key shared by the Typesense server and search module (only with the `search` profile) |
+| `COMPOSE_FILE` | No | - | Colon-separated compose files — activates a deployment overlay, e.g. `docker-compose.yml:compose.amira.yml` |
+| `COMPOSE_PROFILES` | No | - | Comma-separated profiles to auto-enable, e.g. `search` |
 | `EXTRA_MODULES` | No | - | Comma-separated modules to install at runtime (e.g. `DspaceConnector,CSSEditor`) |
 | `EXTRA_THEMES` | No | - | Comma-separated themes to install at runtime (e.g. `Cozy,Foundation`) |
 | `ENABLE_IIIF` | No | `false` | Set to `true` to install IIIF modules (IiifServer, ImageServer, Mirador) |
@@ -234,17 +256,14 @@ The following modules are downloaded during the Docker image build and automatic
 | **Common** | Shared library required by many Daniel-KM modules |
 | **Cron** | Schedule background tasks |
 | **CustomVocab** | Create custom controlled vocabularies |
-| **DataCleaning** | Batch clean and normalize data |
 | **EasyAdmin** | Administration dashboard and tools |
 | **FileSideload** | Import files from server directory |
 | **Hierarchy** | Organize items and item sets hierarchically |
-| **IframeEmbed** | Embed iframes in page blocks |
 | **ItemCarouselBlock** | Display items in a carousel block |
 | **Log** | PSR-3 logger for Omeka S |
 | **NumericDataTypes** | Support for numeric and date values |
-| **DreVisualizations** | Interactive knowledge graphs, dashboards, and maps as resource page blocks |
 
-These modules are ready to activate in the Omeka S admin panel after installation.
+These modules are ready to activate in the Omeka S admin panel after installation. Deployment overlays can bake additional modules into the image via the `EXTRA_MODULES_FILE` build arg (see [Deployment Overlays](#deployment-overlays)).
 
 **Activation order**: When activating modules with dependencies, activate them in order:
 1. Common and Log first
@@ -277,6 +296,8 @@ echo "ValueSuggest" >> _docker/default-modules.txt
 docker compose up -d --build
 ```
 
+To bake deployment-specific modules without touching the shared default list, point the `EXTRA_MODULES_FILE` build arg at your own file from an overlay compose file (see `compose.amira.yml` for a worked example).
+
 ## Custom Vocabularies
 
 In addition to the built-in vocabularies (Dublin Core, Dublin Core Type, Bibliographic Ontology, Friend of a Friend), the following RDF vocabularies are automatically imported on first run:
@@ -287,9 +308,11 @@ In addition to the built-in vocabularies (Dublin Core, Dublin Core Type, Bibliog
 | **FaBiO** | `fabio` | FRBR-aligned Bibliographic Ontology |
 | **WGS84 Geo** | `geo` | Latitude, longitude, altitude positioning |
 | **MARC Relators** | `marcrel` | Library of Congress agent role terms |
-| **DRE** | `dre` | Digital Research Environment custom vocabulary |
 
-The ontology files and import script are in `_docker/vocabularies/`. To add more vocabularies, add their OWL files to that directory and register them in `_docker/vocabularies/import-vocabularies.php`.
+The ontology files live in `_docker/vocabularies/`, declared by the `vocabularies.json` manifest next to them (prefix, namespace URI, label, file). The import script scans the vocab directory for `*.json` manifests, so there are two ways to add vocabularies:
+
+- **For every deployment**: drop the ontology file into `_docker/vocabularies/`, add an entry to `vocabularies.json`, and rebuild.
+- **For one deployment**: bind-mount your `<vocab>.owl` + `<vocab>.json` manifest pair into `/usr/local/share/omeka-vocabs/` from an overlay compose file — the AMIRA overlay's `dre` vocabulary (`deploy/amira/vocabularies/`) shows the pattern.
 
 ## IIIF Support (Optional)
 
@@ -311,7 +334,7 @@ These modules depend on Common, which is pre-installed. After startup, activate 
 
 ## Search Backend (Optional)
 
-The [DRESearch](https://github.com/AM-Digital-Research-Environment/DRESearch) module adds a faceted, [Typesense](https://typesense.org/)-backed search. **It is completely optional** — this template runs fine without it, and the `typesense` service stays out of the way unless you explicitly enable it. Keeping it off costs nothing and keeps the stack reusable for instances that don't need search.
+The base stack ships an optional [Typesense](https://typesense.org/) service as a search backend, paired with a search module such as [DRESearch](https://github.com/AM-Digital-Research-Environment/DRESearch) (developed for AMIRA, usable by any instance). **It is completely optional** — this template runs fine without it, and the `typesense` service stays out of the way unless you explicitly enable it. Keeping it off costs nothing and keeps the stack reusable for instances that don't need search.
 
 ### Enabling it
 
@@ -340,40 +363,28 @@ The Typesense setup is designed not to widen the server's attack surface:
 - **Hardened like the rest of the stack:** `cap_drop: ALL`, `no-new-privileges`, a read-only root filesystem, browser CORS disabled, and CPU/memory limits (0.5 CPU / 512M) so it can't starve the host.
 - **Nothing secret to back up.** The index in the `typesense_data` volume is rebuildable from MySQL, so it is excluded from backups.
 
-## MCP Server (AMIRA)
+## Deployment Overlays
 
-The stack runs the [amira-mcp-server](https://github.com/AM-Digital-Research-Environment/amira-mcp-server), exposing this instance's public, read-only dataset to AI assistants over the [Model Context Protocol](https://modelcontextprotocol.io/) (Streamable-HTTP/SSE) at:
-
-```
-https://<your-domain>/mcp
-```
-
-Point any MCP client (Claude, etc.) at that URL as a Streamable-HTTP server to get search/list/get tools over the collection. The server bundles a snapshot of the public Omeka S API and refreshes it periodically (`AMIRA_LIVE_REFRESH=true`), so it adds no load to the live database.
-
-### How requests are routed
-
-`/mcp` must bypass Omeka's front controller, or Omeka would appropriate the URL (404/redirect). The `web` nginx handles this with a dedicated, higher-precedence location (`location ^~ /mcp` in `nginx.conf`) that proxies to the `amira-mcp` container with SSE buffering disabled. A host-level TLS reverse proxy in front of the stack forwards `/mcp` through unchanged; for true un-buffered streaming and per-client rate-limiting at that layer, see the optional tweaks in [docs/MCP_HOST_NGINX.md](docs/MCP_HOST_NGINX.md).
-
-### Keeping it up to date
-
-The service builds from the upstream repo's `main` branch, so updating is a plain rebuild — no version pinning to bump:
+The base stack in `docker-compose.yml` is deliberately generic. Anything specific to one deployment — extra services, baked-in modules, custom vocabularies, extra nginx locations — lives in an **overlay compose file** activated from `.env`:
 
 ```bash
-bash scripts/update-amira-mcp.sh
-# equivalent to:
-#   docker compose build --pull --no-cache amira-mcp && docker compose up -d amira-mcp
+# In .env
+COMPOSE_FILE=docker-compose.yml:compose.amira.yml
+COMPOSE_PROFILES=search
 ```
 
-`--no-cache` forces a fresh git clone and re-runs the build-time data snapshot fetch. Only the `amira-mcp` container is recreated; the rest of the stack keeps running.
+Docker Compose reads both variables from `.env`, so once set, every `docker compose` command transparently includes the overlay. A checkout without those lines runs the plain template — same commands, same docs.
 
-### Security
+The template provides four extension points that overlays can use without editing any base file:
 
-Like Typesense, the MCP server is built not to widen the attack surface:
+| Extension point | Mechanism |
+|-----------------|-----------|
+| Extra services | Define them in the overlay compose file (compose merges service maps) |
+| Extra nginx locations | Mount `*.conf.template` files into `/etc/nginx/templates/extra-locations/`; the base `nginx.conf` glob-includes the rendered output |
+| Baked-in modules | Set the `EXTRA_MODULES_FILE` build arg to your own modules list |
+| Custom vocabularies | Bind-mount `<vocab>.owl` + `<vocab>.json` manifest into `/usr/local/share/omeka-vocabs/` |
 
-- **Never exposed to the host or internet directly.** It publishes **no ports** — reachable only on the internal `backend` Docker network, and from the outside solely through the hardened `web` nginx at `/mcp`.
-- **Read-only and public by design.** The underlying data is the same public collection already served by the site, so the endpoint needs no credentials. Abuse is bounded by an optional per-client rate limit at the host nginx (real client IPs are visible there, unlike behind Docker's bridge).
-- **Hardened like the rest of the stack:** `cap_drop: ALL`, `no-new-privileges`, a read-only root filesystem (cache on tmpfs), and tight CPU/memory limits (0.25 CPU / 256M) so it can't starve the host.
-- **Nothing secret to back up.** The bundled snapshot is rebuildable from the public API, so the service holds no persistent state.
+The worked example is the **AMIRA overlay** (`compose.amira.yml` + `deploy/amira/`), which runs the production instance at [data.africamultiple.uni-bayreuth.de](https://data.africamultiple.uni-bayreuth.de): it adds the [amira-mcp-server](https://github.com/AM-Digital-Research-Environment/amira-mcp-server) (exposing the collection to AI assistants over the [Model Context Protocol](https://modelcontextprotocol.io/) at `/mcp`), bakes in the DRE modules, and imports the `dre` vocabulary. See [deploy/amira/README.md](deploy/amira/README.md) for the full documentation and for how to roll your own overlay.
 
 ## Bulk Imports
 
@@ -580,6 +591,8 @@ Data is persisted in Docker volumes:
 |--------|---------|
 | `mysql_data` | MySQL database files |
 | `omeka_files` | Omeka S installation and uploads |
+| `php_sessions` | PHP session store (survives container restarts, so logins/CSRF tokens do too) |
+| `typesense_data` | Typesense search index (only with the `search` profile; rebuildable from MySQL) |
 
 ## Backup & Migration
 

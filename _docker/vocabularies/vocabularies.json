@@ -1,0 +1,30 @@
+[
+    {
+        "prefix": "frapo",
+        "namespace_uri": "http://purl.org/cerif/frapo/",
+        "label": "FRAPO",
+        "comment": "Funding, Research Administration and Projects Ontology",
+        "file": "frapo.owl"
+    },
+    {
+        "prefix": "fabio",
+        "namespace_uri": "http://purl.org/spar/fabio/",
+        "label": "FaBiO",
+        "comment": "FRBR-aligned Bibliographic Ontology",
+        "file": "fabio.owl"
+    },
+    {
+        "prefix": "geo",
+        "namespace_uri": "http://www.w3.org/2003/01/geo/wgs84_pos#",
+        "label": "WGS84 Geo",
+        "comment": "WGS84 Geo Positioning: latitude, longitude, altitude",
+        "file": "geo.rdf"
+    },
+    {
+        "prefix": "marcrel",
+        "namespace_uri": "http://id.loc.gov/vocabulary/relators/",
+        "label": "MARC Relators",
+        "comment": "Library of Congress MARC Relator terms for agent roles",
+        "file": "marcrel.rdf"
+    }
+]

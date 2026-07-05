@@ -121,13 +121,22 @@ RUN if [ "$OMEKA_VERSION" = "latest" ]; then \
 
 COPY --chown=www-data:www-data _docker/default-modules.txt /tmp/default-modules.txt
 
-RUN while IFS= read -r mod || [ -n "$mod" ]; do \
-        # strip comments, trim spaces at beginning/end of line
-        mod=$(echo "$mod" | sed 's/#.*//;s/^[[:space:]]*//;s/[[:space:]]*$//'); \
-        # skip empty lines
-        [ -z "$mod" ] && continue; \
-        omeka-s-cli module:download --base-path "$OMEKA_ROOT" "$mod"; \
-    done < /tmp/default-modules.txt
+# Deployment overlays can bake additional modules into the image by pointing
+# this build arg at another modules file (same omeka-s-cli syntax), e.g.
+# compose.amira.yml sets it to deploy/amira/modules.txt. The default is an
+# empty placeholder so plain builds add nothing.
+ARG EXTRA_MODULES_FILE=_docker/empty-modules.txt
+COPY --chown=www-data:www-data ${EXTRA_MODULES_FILE} /tmp/extra-modules.txt
+
+RUN for list in /tmp/default-modules.txt /tmp/extra-modules.txt; do \
+        while IFS= read -r mod || [ -n "$mod" ]; do \
+            # strip comments, trim spaces at beginning/end of line
+            mod=$(echo "$mod" | sed 's/#.*//;s/^[[:space:]]*//;s/[[:space:]]*$//'); \
+            # skip empty lines
+            [ -z "$mod" ] && continue; \
+            omeka-s-cli module:download --base-path "$OMEKA_ROOT" "$mod"; \
+        done < "$list"; \
+    done
 
 RUN omeka-s-cli theme:download --base-path "$OMEKA_ROOT" gh:omeka-s-themes/freedom \
     && omeka-s-cli theme:download --base-path "$OMEKA_ROOT" gh:omeka-s-themes/lively
