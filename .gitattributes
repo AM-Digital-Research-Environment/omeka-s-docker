@@ -1,1 +1,12 @@
+# Files that get bind-mounted into or executed inside Linux containers must
+# stay LF even on Windows checkouts (CRLF breaks nginx configs and shell
+# scripts at runtime).
 *.sh text eol=lf
+*.conf text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.php text eol=lf
+*.ini text eol=lf
+*.txt text eol=lf
+Dockerfile text eol=lf
