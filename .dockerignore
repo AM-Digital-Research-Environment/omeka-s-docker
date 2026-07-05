@@ -1,0 +1,8 @@
+# Keep the php image build context small. On a server, backups/ and sideload/
+# can hold gigabytes that would otherwise be sent to the daemon on every build.
+.git
+.github
+backups
+sideload
+docs
+README.md
