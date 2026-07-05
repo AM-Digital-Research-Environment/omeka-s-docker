@@ -1,15 +1,18 @@
 #!/bin/bash
 # Update the AMIRA MCP server to the latest upstream main.
-# Usage: bash scripts/update-amira-mcp.sh
+# Usage: bash deploy/amira/update-amira-mcp.sh
+#
+# Requires the AMIRA overlay to be active (COMPOSE_FILE listing
+# compose.amira.yml in .env — see deploy/amira/README.md).
 #
 # The amira-mcp service builds from the upstream repo's main branch (see the
-# build context in docker-compose.yml), so updating is just a fresh rebuild.
+# build context in compose.amira.yml), so updating is just a fresh rebuild.
 # --pull refreshes the node base image; --no-cache forces a new git clone and
 # re-runs the build-time data snapshot fetch. The running site is untouched —
 # only the amira-mcp container is recreated.
 
 set -e
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 
 echo "==> Rebuilding amira-mcp from upstream main (fresh clone + data snapshot)..."
 docker compose build --pull --no-cache amira-mcp
@@ -18,8 +21,9 @@ echo "==> Recreating the amira-mcp container..."
 docker compose up -d amira-mcp
 
 echo "==> Waiting for health..."
+container_id=$(docker compose ps -q amira-mcp)
 for i in $(seq 1 20); do
-    status=$(docker inspect -f '{{.State.Health.Status}}' omeka-s-docker-amira-mcp-1 2>/dev/null || echo unknown)
+    status=$(docker inspect -f '{{.State.Health.Status}}' "$container_id" 2>/dev/null || echo unknown)
     [ "$status" = "healthy" ] && break
     sleep 2
 done

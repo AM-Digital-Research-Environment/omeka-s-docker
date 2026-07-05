@@ -1,0 +1,9 @@
+# DRE modules baked into the php image by the AMIRA overlay: compose.amira.yml
+# sets the EXTRA_MODULES_FILE build arg to this file, which the Dockerfile
+# reads in addition to _docker/default-modules.txt (same omeka-s-cli syntax).
+
+# These repos have no releases (and ResourceVisualizations' latest release lags
+# behind main), so pin to #main to match install-/update-module.sh.
+gh:AM-Digital-Research-Environment/DRESearch#main
+gh:AM-Digital-Research-Environment/DRE-SEO#main
+gh:AM-Digital-Research-Environment/ResourceVisualizations#main

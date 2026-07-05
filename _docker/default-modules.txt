@@ -21,9 +21,6 @@ gh:Daniel-KM/Omeka-S-module-Cron
 gh:Daniel-KM/Omeka-S-module-EasyAdmin
 gh:Daniel-KM/Omeka-S-module-Log
 
-# AM-Digital-Research-Environment
-# These repos have no releases (and ResourceVisualizations' latest release lags
-# behind main), so pin to #main to match install-/update-module.sh.
-gh:AM-Digital-Research-Environment/DRESearch#main
-gh:AM-Digital-Research-Environment/DRE-SEO#main
-gh:AM-Digital-Research-Environment/ResourceVisualizations#main
+# Deployment-specific modules do not belong here — bake them via the
+# EXTRA_MODULES_FILE build arg instead (see Dockerfile and, for an example,
+# compose.amira.yml + deploy/amira/modules.txt).

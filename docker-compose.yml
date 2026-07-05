@@ -1,5 +1,10 @@
 # Omeka S Docker Template
-# A reusable Docker Compose configuration for Omeka S installations
+# A reusable Docker Compose configuration for Omeka S installations.
+#
+# This file is the generic base stack (web, php, db, optional typesense).
+# Deployment-specific services and settings live in overlay files layered on
+# top via COMPOSE_FILE in .env — see compose.amira.yml (the AMIRA production
+# overlay) for a worked example.
 
 services:
   web:
@@ -10,28 +15,32 @@ services:
     #   --format '{{index .RepoDigests 0}}' nginx:stable-alpine
     image: nginx:stable-alpine@sha256:5f979dcfed4ce6461873f087e8c980d6e29b084b9e8776d9704a7e989b5f4898  # 1.30.2
     ports:
-      - "127.0.0.1:${NGINX_PORT:-80}:80"
+      # NGINX_BIND controls the interface: the 127.0.0.1 default keeps nginx
+      # reachable only through a reverse proxy on the host; set
+      # NGINX_BIND=0.0.0.0 to serve HTTP directly (e.g. plain installs).
+      - "${NGINX_BIND:-127.0.0.1}:${NGINX_PORT:-80}:80"
     volumes:
       - ./nginx.conf:/etc/nginx/templates/default.conf.template:ro
       - ./nginx-http-settings.conf:/etc/nginx/templates/00-http-settings.conf.template:ro
-      - ./nginx-security-headers.conf:/etc/nginx/snippets/security-headers.conf:ro
+      # Rendered to /etc/nginx/conf.d/snippets/security-headers.conf so the
+      # FRAME_ANCESTORS substitution applies to the snippet too.
+      - ./nginx-security-headers.conf:/etc/nginx/templates/snippets/security-headers.conf.template:ro
       - omeka_files:/var/www/html:ro
     environment:
-      # Substituted into nginx.conf at container start (see /etc/nginx/templates/).
-      # SERVER_NAME comes from .env (gitignored). NGINX_ENVSUBST_FILTER restricts
-      # envsubst to only this variable so nginx's own $uri, $http_*, etc. are
-      # preserved verbatim in the templates.
+      # Substituted into the nginx templates at container start (see
+      # /etc/nginx/templates/). Values come from .env (gitignored).
+      # NGINX_ENVSUBST_FILTER restricts envsubst to these variables so nginx's
+      # own $uri, $http_*, etc. are preserved verbatim in the templates.
       - SERVER_NAME=${SERVER_NAME:-_}
-      - NGINX_ENVSUBST_FILTER=^SERVER_NAME$$
+      # CSP frame-ancestors: origins allowed to embed this site in an iframe.
+      # Space-separated, keep the quotes around 'self' (see .env.example).
+      - FRAME_ANCESTORS=${FRAME_ANCESTORS:-'self'}
+      - NGINX_ENVSUBST_FILTER=^(SERVER_NAME|FRAME_ANCESTORS)$$
     depends_on:
       php:
         condition: service_healthy
       db:
         condition: service_healthy
-      # No dependency on amira-mcp: nginx.conf resolves it at request time via
-      # Docker's embedded DNS (see the /mcp location), so web boots — and stays
-      # up — even when amira-mcp is missing, stopped, or still building. /mcp
-      # just returns 502 until amira-mcp is reachable again.
     networks:
       - frontend
       - backend
@@ -77,6 +86,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # Applied at image build (the Omeka S core is downloaded then), so the
+        # .env value actually governs fresh builds. Runtime upgrades of an
+        # existing volume go through scripts/update-omeka.sh instead.
+        OMEKA_VERSION: ${OMEKA_VERSION:-4.2.1}
     volumes:
       - omeka_files:/var/www/html:rw
       - ./uploads.ini:/usr/local/etc/php/conf.d/uploads.ini:ro
@@ -141,51 +155,6 @@ services:
       timeout: 10s
       retries: 5
       start_period: 120s
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  # AMIRA MCP server — exposes the public, read-only AMIRA dataset over
-  # Streamable-HTTP/SSE at POST /mcp (health: GET /healthz) on port 8787.
-  # Reached only through the web nginx (location ^~ /mcp); never published to
-  # the host. Built from the upstream repo's main branch. Pull the latest with:
-  #   docker compose build --pull --no-cache amira-mcp && docker compose up -d amira-mcp
-  # (or run ./scripts/update-amira-mcp.sh). --no-cache forces a fresh git clone
-  # and re-runs the build-time data snapshot fetch.
-  amira-mcp:
-    build:
-      context: https://github.com/AM-Digital-Research-Environment/amira-mcp-server.git#main
-    environment:
-      - PORT=8787
-      - HOST=0.0.0.0
-      # Periodically refreshes the bundled snapshot from AMIRA_SITE_BASE.
-      - AMIRA_LIVE_REFRESH=true
-      - AMIRA_CACHE_DIR=/tmp/amira-cache
-      # Citation URLs and live-refresh target our own public domain.
-      - AMIRA_SITE_BASE=https://${SERVER_NAME}
-      - AMIRA_SITE_SLUG=amira
-    networks:
-      - backend
-    restart: unless-stopped
-    # Security hardening
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    read_only: true
-    tmpfs:
-      # Holds AMIRA_CACHE_DIR (read-only rootfs otherwise).
-      - /tmp:mode=1777,size=128M
-    deploy:
-      resources:
-        limits:
-          cpus: '0.25'
-          memory: 256M
-        reservations:
-          cpus: '0.05'
-          memory: 64M
     logging:
       driver: "json-file"
       options:
