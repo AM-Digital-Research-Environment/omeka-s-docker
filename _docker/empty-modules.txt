@@ -1,0 +1,4 @@
+# Placeholder for the EXTRA_MODULES_FILE build arg (see Dockerfile).
+# Deployment overlays point the arg at their own modules file to bake extra
+# modules into the image, e.g. compose.amira.yml -> deploy/amira/modules.txt.
+# This default file intentionally lists nothing.

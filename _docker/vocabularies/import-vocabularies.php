@@ -33,43 +33,39 @@ if ($admin) {
 
 $rdfImporter = $services->get('Omeka\RdfImporter');
 
-$vocabularies = [
-    [
-        'o:prefix'        => 'frapo',
-        'o:namespace_uri' => 'http://purl.org/cerif/frapo/',
-        'o:label'         => 'FRAPO',
-        'o:comment'       => 'Funding, Research Administration and Projects Ontology',
-        'file'            => $vocabDir . '/frapo.owl',
-    ],
-    [
-        'o:prefix'        => 'fabio',
-        'o:namespace_uri' => 'http://purl.org/spar/fabio/',
-        'o:label'         => 'FaBiO',
-        'o:comment'       => 'FRBR-aligned Bibliographic Ontology',
-        'file'            => $vocabDir . '/fabio.owl',
-    ],
-    [
-        'o:prefix'        => 'geo',
-        'o:namespace_uri' => 'http://www.w3.org/2003/01/geo/wgs84_pos#',
-        'o:label'         => 'WGS84 Geo',
-        'o:comment'       => 'WGS84 Geo Positioning: latitude, longitude, altitude',
-        'file'            => $vocabDir . '/geo.rdf',
-    ],
-    [
-        'o:prefix'        => 'marcrel',
-        'o:namespace_uri' => 'http://id.loc.gov/vocabulary/relators/',
-        'o:label'         => 'MARC Relators',
-        'o:comment'       => 'Library of Congress MARC Relator terms for agent roles',
-        'file'            => $vocabDir . '/marcrel.rdf',
-    ],
-    [
-        'o:prefix'        => 'dre',
-        'o:namespace_uri' => 'http://am-digital.org/ontology/dre/',
-        'o:label'         => 'DRE',
-        'o:comment'       => 'Digital Research Environment - Africa Multiple custom vocabulary',
-        'file'            => $vocabDir . '/dre.owl',
-    ],
-];
+// Vocabularies are declared in JSON manifests (*.json) inside the vocab dir,
+// each an array of {prefix, namespace_uri, label, comment, file[, label_property]}
+// entries with `file` relative to the manifest. The base image bakes
+// vocabularies.json (generic vocabularies); deployment overlays can bind-mount
+// additional manifest + ontology pairs into the same directory (e.g.
+// compose.amira.yml adds dre.json + dre.owl).
+$vocabularies = [];
+$manifests = glob($vocabDir . '/*.json') ?: [];
+sort($manifests);
+foreach ($manifests as $manifest) {
+    $entries = json_decode((string) file_get_contents($manifest), true);
+    if (!is_array($entries)) {
+        fwrite(STDERR, "[WARN] Skipping invalid manifest: $manifest\n");
+        continue;
+    }
+    foreach ($entries as $entry) {
+        if (!isset($entry['prefix'], $entry['namespace_uri'], $entry['label'], $entry['file'])) {
+            fwrite(STDERR, "[WARN] Incomplete vocabulary entry in $manifest\n");
+            continue;
+        }
+        $vocab = [
+            'o:prefix'        => $entry['prefix'],
+            'o:namespace_uri' => $entry['namespace_uri'],
+            'o:label'         => $entry['label'],
+            'o:comment'       => $entry['comment'] ?? '',
+            'file'            => dirname($manifest) . '/' . $entry['file'],
+        ];
+        if (!empty($entry['label_property'])) {
+            $vocab['label_property'] = $entry['label_property'];
+        }
+        $vocabularies[] = $vocab;
+    }
+}
 
 foreach ($vocabularies as $vocab) {
     $file = $vocab['file'];

@@ -1,0 +1,9 @@
+[
+    {
+        "prefix": "dre",
+        "namespace_uri": "http://am-digital.org/ontology/dre/",
+        "label": "DRE",
+        "comment": "Digital Research Environment - Africa Multiple custom vocabulary",
+        "file": "dre.owl"
+    }
+]
