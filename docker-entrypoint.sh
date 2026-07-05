@@ -53,6 +53,23 @@ omeka_create_db_config() {
                 --host "${MYSQL_HOST}"
 }
 
+wait_for_db() {
+    # Belt-and-braces on top of the compose service_healthy dependency: never
+    # run the installer/migrations against a database that isn't accepting
+    # TCP connections yet (e.g. after a db restart while php stayed up).
+    log_step "Waiting for the database to accept connections..."
+    local tries=0
+    until php -r 'new mysqli(getenv("MYSQL_HOST"), getenv("MYSQL_USER"), getenv("MYSQL_PASSWORD"), getenv("MYSQL_DATABASE"));' >/dev/null 2>&1; do
+        tries=$((tries + 1))
+        if (( tries >= 30 )); then
+            log_error "Database not reachable after ${tries} attempts, giving up."
+            exit 1
+        fi
+        sleep 2
+    done
+    log_info "Database is up."
+}
+
 omeka_install() {
     # Warn when using "latest" — the resolved version has not been tested against this image
     if [[ "$OMEKA_VERSION" == "latest" ]]; then
@@ -241,6 +258,7 @@ fpm_pool_config
 # The DB config must be written first, as it is used during
 # installation!
 omeka_create_db_config
+wait_for_db
 omeka_install
 omeka_extra_config
 
