@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      MYSQL_PASSWORD: ci-mysql-password
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Shell script syntax
+        run: bash -n docker-entrypoint.sh ensure-composer.sh scripts/*.sh deploy/amira/*.sh .github/scripts/*.sh
+
+      - name: Validate compose config (base)
+        run: docker compose config -q
+
+      - name: Validate compose config (base + AMIRA overlay)
+        run: docker compose -f docker-compose.yml -f compose.amira.yml config -q
+
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: validate
+    steps:
+      - uses: actions/checkout@v7
+
+      # Boots the generic template exactly the way the one-click bootstrap
+      # does (no admin env vars), probes it, and tears down with volumes.
+      - name: Smoke test — base stack
+        run: bash .github/scripts/smoke.sh base
+
+      # Boots base + compose.amira.yml via COMPOSE_FILE in .env: DRE modules
+      # baked into the image, dre vocabulary imported, /mcp location wired
+      # (asserted as 502 — the amira-mcp service itself is not built in CI),
+      # Typesense up under the search profile.
+      - name: Smoke test — AMIRA overlay
+        run: bash .github/scripts/smoke.sh amira
