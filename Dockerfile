@@ -109,7 +109,7 @@ USER www-data
 
 WORKDIR /var/www/html
 
-COPY --from=toolfetcher --chmod=+x /omeka-s-cli.phar /usr/local/bin/omeka-s-cli
+COPY --from=toolfetcher --chmod=0755 /omeka-s-cli.phar /usr/local/bin/omeka-s-cli
 COPY --from=composer/composer:2-bin /composer /usr/bin/composer
 
 # TODO: document usage of the "latest" sentinel value
@@ -157,8 +157,8 @@ USER www-data
 
 COPY --chown=www-data:www-data _docker/vocabularies/ /usr/local/share/omeka-vocabs/
 
-COPY --chmod=+x docker-entrypoint.sh /usr/local/bin/
-COPY --chmod=+x ensure-composer.sh /usr/local/bin/
+COPY --chmod=0755 docker-entrypoint.sh /usr/local/bin/
+COPY --chmod=0755 ensure-composer.sh /usr/local/bin/
 
 # Composer's default cache dir is $HOME/.composer (= /var/www/.composer), which
 # is root-owned and unwritable by www-data — so composer would run cacheless,
