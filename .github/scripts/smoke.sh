@@ -100,6 +100,28 @@ code=$(probe "$url/")
 echo "    GET / -> $code"
 [[ "$code" =~ ^(200|30[123])$ ]]
 
+log "Checking private paths are not web-accessible (regression guard)..."
+# nginx must refuse Omeka's config/source/logs/deps and any stray .php.
+# database.ini leaking here once exposed live DB credentials — never again.
+private_paths=(
+    /config/database.ini
+    /composer.json
+    /composer.lock
+    /application/src/Module.php
+    /vendor/autoload.php
+    /uploads.ini
+    /index.php/../config/database.ini
+)
+for p in "${private_paths[@]}"; do
+    code=$(probe "$url$p")
+    echo "    GET $p -> $code"
+    [[ "$code" == "404" ]] || { echo "SECURITY: $p is reachable ($code)!" >&2; exit 1; }
+done
+# Public asset subtrees under application/ must still load.
+code=$(probe "$url/application/asset/css/style.css")
+echo "    GET /application/asset/css/style.css -> $code"
+[[ "$code" == "200" ]]
+
 log "Probing admin (single shot — the login location is rate-limited)..."
 code=$(curl -s -o /dev/null -w '%{http_code}' -L "$url/admin")
 echo "    GET /admin (followed) -> $code"

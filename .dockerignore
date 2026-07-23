@@ -6,3 +6,12 @@ backups
 sideload
 docs
 README.md
+
+# Never ship secrets into the build context (they could otherwise be sent to
+# the Docker daemon / a remote builder or baked into a layer). Keep the example.
+.env
+.env.*
+!.env.example
+secrets/
+*.key
+*.pem
