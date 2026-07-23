@@ -30,16 +30,16 @@ fpm_pool_config() {
     cat > /usr/local/etc/php-fpm.d/zzz-omeka-pool.conf << FPMEOF
 [www]
 pm = dynamic
-pm.max_children = ${PHP_PM_MAX_CHILDREN:-10}
-pm.start_servers = ${PHP_PM_START_SERVERS:-3}
-pm.min_spare_servers = ${PHP_PM_MIN_SPARE_SERVERS:-2}
-pm.max_spare_servers = ${PHP_PM_MAX_SPARE_SERVERS:-5}
+pm.max_children = ${PHP_PM_MAX_CHILDREN:-5}
+pm.start_servers = ${PHP_PM_START_SERVERS:-2}
+pm.min_spare_servers = ${PHP_PM_MIN_SPARE_SERVERS:-1}
+pm.max_spare_servers = ${PHP_PM_MAX_SPARE_SERVERS:-3}
 pm.max_requests = ${PHP_PM_MAX_REQUESTS:-500}
 pm.process_idle_timeout = 10s
 request_terminate_timeout = 300s
 php_admin_value[date.timezone] = ${OMEKA_TZ:-UTC}
 FPMEOF
-    log_info "PHP-FPM pool: max_children=${PHP_PM_MAX_CHILDREN:-10}, start=${PHP_PM_START_SERVERS:-3}, min_spare=${PHP_PM_MIN_SPARE_SERVERS:-2}, max_spare=${PHP_PM_MAX_SPARE_SERVERS:-5}"
+    log_info "PHP-FPM pool: max_children=${PHP_PM_MAX_CHILDREN:-5}, start=${PHP_PM_START_SERVERS:-2}, min_spare=${PHP_PM_MIN_SPARE_SERVERS:-1}, max_spare=${PHP_PM_MAX_SPARE_SERVERS:-3}"
 }
 
 omeka_create_db_config() {

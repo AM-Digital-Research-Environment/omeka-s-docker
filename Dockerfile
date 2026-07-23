@@ -61,7 +61,7 @@ RUN pecl install apcu && \
 # Set PHP configuration
 RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
     && sed -i \
-        -e 's/memory_limit = 128M/memory_limit = 1024M/' \
+        -e 's/memory_limit = 128M/memory_limit = 512M/' \
         -e 's/upload_max_filesize = 2M/upload_max_filesize = 100M/' \
         -e 's/post_max_size = 8M/post_max_size = 100M/' \
         -e 's/max_execution_time = 30/max_execution_time = 300/' \
