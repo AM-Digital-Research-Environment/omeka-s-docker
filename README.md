@@ -162,16 +162,16 @@ Create a `.env` file from `.env.example`. All supported variables:
 | `EXTRA_MODULES` | No | - | Comma-separated modules to install at runtime (e.g. `DspaceConnector,CSSEditor`) |
 | `EXTRA_THEMES` | No | - | Comma-separated themes to install at runtime (e.g. `Cozy,Foundation`) |
 | `ENABLE_IIIF` | No | `false` | Set to `true` to install IIIF modules (IiifServer, ImageServer, Mirador) |
-| `PHP_PM_MAX_CHILDREN` | No | `10` | PHP-FPM max worker processes |
-| `PHP_PM_START_SERVERS` | No | `3` | PHP-FPM workers started on boot |
-| `PHP_PM_MIN_SPARE_SERVERS` | No | `2` | Minimum idle workers |
-| `PHP_PM_MAX_SPARE_SERVERS` | No | `5` | Maximum idle workers |
+| `PHP_PM_MAX_CHILDREN` | No | `5` | PHP-FPM max worker processes |
+| `PHP_PM_START_SERVERS` | No | `2` | PHP-FPM workers started on boot |
+| `PHP_PM_MIN_SPARE_SERVERS` | No | `1` | Minimum idle workers |
+| `PHP_PM_MAX_SPARE_SERVERS` | No | `3` | Maximum idle workers |
 | `PHP_PM_MAX_REQUESTS` | No | `500` | Requests before worker respawn (prevents memory leaks) |
 
 ## Key Configuration
 
 ### PHP Settings
-- Memory limit: 1024MB
+- Memory limit: 512MB
 - Upload limit: 100MB
 - Max execution time: 300s
 - OPcache with JIT enabled

@@ -110,11 +110,14 @@ services:
       - OMEKA_TZ=${OMEKA_TZ:-}
       - OMEKA_LOCALE=${OMEKA_LOCALE:-}
       - OMEKA_TITLE=${OMEKA_TITLE:-}
-      # PHP-FPM pool tuning (defaults in entrypoint if unset)
-      - PHP_PM_MAX_CHILDREN=${PHP_PM_MAX_CHILDREN:-10}
-      - PHP_PM_START_SERVERS=${PHP_PM_START_SERVERS:-3}
-      - PHP_PM_MIN_SPARE_SERVERS=${PHP_PM_MIN_SPARE_SERVERS:-2}
-      - PHP_PM_MAX_SPARE_SERVERS=${PHP_PM_MAX_SPARE_SERVERS:-5}
+      # PHP-FPM pool tuning (defaults in entrypoint if unset).
+      # Sized for the ~1.5 GiB php container: with memory_limit=512M and
+      # ~512M of shared OPcache+APCu, 5 workers keep worst-case RSS under the
+      # limit. Raise PHP_PM_MAX_CHILDREN in .env on a larger host.
+      - PHP_PM_MAX_CHILDREN=${PHP_PM_MAX_CHILDREN:-5}
+      - PHP_PM_START_SERVERS=${PHP_PM_START_SERVERS:-2}
+      - PHP_PM_MIN_SPARE_SERVERS=${PHP_PM_MIN_SPARE_SERVERS:-1}
+      - PHP_PM_MAX_SPARE_SERVERS=${PHP_PM_MAX_SPARE_SERVERS:-3}
       - PHP_PM_MAX_REQUESTS=${PHP_PM_MAX_REQUESTS:-500}
       # Extra modules/themes installed by entrypoint (comma-separated names)
       - EXTRA_MODULES=${EXTRA_MODULES:-}
@@ -166,7 +169,6 @@ services:
     # MySQL tuning parameters — see docs/DB_TUNING.md for explanations
     command: >-
       --innodb-buffer-pool-size=512M
-      --innodb-buffer-pool-instances=2
       --innodb-log-buffer-size=32M
       --innodb-redo-log-capacity=256M
       --innodb-write-io-threads=4
