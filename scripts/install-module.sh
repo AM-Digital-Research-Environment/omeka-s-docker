@@ -52,6 +52,7 @@ declare -A MODULE_REPOS=(
     ["Hierarchy"]="omeka-s-modules/Hierarchy:main"
     ["InverseProperties"]="omeka-s-modules/InverseProperties:main"
     ["ItemCarouselBlock"]="omeka-s-modules/ItemCarouselBlock:master"
+    ["LocalContexts"]="omeka-s-modules/LocalContexts:main"
     ["Mapping"]="omeka-s-modules/Mapping:master"
     ["NumericDataTypes"]="omeka-s-modules/NumericDataTypes:master"
     ["OutputFormats"]="omeka-s-modules/OutputFormats:main"
