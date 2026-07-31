@@ -18,34 +18,55 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      MYSQL_PASSWORD: ci-mysql-password
+      MYSQL_DATABASE: ci_custom_database
+      MYSQL_USER: ci_custom_user
+      MYSQL_PASSWORD: ci-mysql-password-with-special-chars-#=
+      TYPESENSE_API_KEY: ci-typesense-key
+      SERVER_NAME: ci.example.org
     steps:
-      - uses: actions/checkout@v7
+      # v7 resolved 2026-07-31. Keep the human-readable version in this comment
+      # while pinning the action itself against tag retargeting.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Shell script syntax
-        run: bash -n docker-entrypoint.sh ensure-composer.sh scripts/*.sh deploy/amira/*.sh .github/scripts/*.sh
+        run: bash -n docker-entrypoint.sh scripts/*.sh deploy/amira/*.sh .github/scripts/*.sh
 
-      - name: Validate compose config (base)
-        run: docker compose config -q
+      - name: ShellCheck
+        run: shellcheck --severity=warning docker-entrypoint.sh scripts/*.sh deploy/amira/*.sh .github/scripts/*.sh
 
-      - name: Validate compose config (base + AMIRA overlay)
-        run: docker compose -f docker-compose.yml -f compose.amira.yml config -q
+      - name: PHP and JSON syntax
+        run: |
+          php -l _docker/vocabularies/import-vocabularies.php
+          for file in _docker/vocabularies/*.json deploy/amira/vocabularies/*.json; do
+            python3 -m json.tool "$file" >/dev/null
+          done
+
+      - name: Dockerfile build checks
+        run: docker build --check .
+
+      - name: Validate Compose security contract (base)
+        run: docker compose --profile search config --format json | python3 .github/scripts/check-compose.py base
+
+      - name: Validate Compose security contract (base + AMIRA overlay)
+        run: docker compose --profile search -f docker-compose.yml -f compose.amira.yml config --format json | python3 .github/scripts/check-compose.py amira
 
   smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [base, amira]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
-      # Boots the generic template exactly the way the one-click bootstrap
-      # does (no admin env vars), probes it, and tears down with volumes.
-      - name: Smoke test — base stack
-        run: bash .github/scripts/smoke.sh base
-
-      # Boots base + compose.amira.yml via COMPOSE_FILE in .env: DRE modules
-      # baked into the image, dre vocabulary imported, /mcp location wired
-      # (asserted as 502 — the amira-mcp service itself is not built in CI),
-      # Typesense up under the search profile.
-      - name: Smoke test — AMIRA overlay
-        run: bash .github/scripts/smoke.sh amira
+      # Base checks the generic bootstrap plus a full backup/restore round trip.
+      # AMIRA checks its baked modules/vocabulary, Typesense profile, and /mcp
+      # wiring (as a 502 because the remote amira-mcp image is not built in CI).
+      - name: Smoke test — ${{ matrix.variant }}
+        run: bash .github/scripts/smoke.sh "${{ matrix.variant }}"

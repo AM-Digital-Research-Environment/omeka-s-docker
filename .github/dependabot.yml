@@ -18,7 +18,7 @@ updates:
       - "fmadore"
     open-pull-requests-limit: 5
 
-  # Monitor image tags pinned in docker-compose.yml (nginx, mysql)
+  # Monitor image tags pinned in docker-compose.yml (nginx, mysql, typesense)
   - package-ecosystem: "docker-compose"
     directory: "/"
     schedule:

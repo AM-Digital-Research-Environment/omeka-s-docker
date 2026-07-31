@@ -13,7 +13,7 @@ services:
     # automatically, never getting offered a mainline (1.31.x) release.
     # Refresh: docker pull nginx:stable-alpine && docker inspect \
     #   --format '{{index .RepoDigests 0}}' nginx:stable-alpine
-    image: nginx:stable-alpine@sha256:5f979dcfed4ce6461873f087e8c980d6e29b084b9e8776d9704a7e989b5f4898  # 1.30.2
+    image: nginx:1.30.4-alpine@sha256:97d490c12ba55b4946b01546d1c3ed324e8d41ab1c9fcb2a616aa470620e5b46
     ports:
       # NGINX_BIND controls the interface: the 127.0.0.1 default keeps nginx
       # reachable only through a reverse proxy on the host; set
@@ -39,11 +39,8 @@ services:
     depends_on:
       php:
         condition: service_healthy
-      db:
-        condition: service_healthy
     networks:
       - frontend
-      - backend
     restart: unless-stopped
     # Security hardening
     security_opt:
@@ -100,9 +97,9 @@ services:
       - php_sessions:/var/lib/php-sessions:rw
     environment:
       - MYSQL_HOST=db
-      - MYSQL_DATABASE=omeka
-      - MYSQL_USER=omeka
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-omeka}
+      - MYSQL_USER=${MYSQL_USER:-omeka}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:?You must set MYSQL_PASSWORD in .env}
       - OMEKA_VERSION=${OMEKA_VERSION:-4.2.1}
       - OMEKA_ADMIN_EMAIL=${OMEKA_ADMIN_EMAIL:-}
       - OMEKA_ADMIN_PASSWORD=${OMEKA_ADMIN_PASSWORD:-}
@@ -135,6 +132,7 @@ services:
       db:
         condition: service_healthy
     networks:
+      - frontend
       - backend
     restart: unless-stopped
     # Security hardening
@@ -153,7 +151,7 @@ services:
           cpus: '0.25'
           memory: 512M
     healthcheck:
-      test: ["CMD-SHELL", "php-fpm-healthcheck || exit 1"]
+      test: ["CMD-SHELL", "env -i REQUEST_METHOD=GET SCRIPT_NAME=/status SCRIPT_FILENAME=/status cgi-fcgi -bind -connect 127.0.0.1:9000 2>/dev/null | grep -q '^pool: *www'"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -165,7 +163,7 @@ services:
         max-file: "3"
 
   db:
-    image: mysql:9.7
+    image: mysql:9.7.1@sha256:cbade841779f1661300e705721f9d2ff159865cc7a8a291affbff43ac6ec7f1d
     # MySQL tuning parameters — see docs/DB_TUNING.md for explanations
     command: >-
       --innodb-buffer-pool-size=512M
@@ -235,7 +233,7 @@ services:
   # Stays on the internal backend network — never published to the host; the
   # php service talks to it server-side at http://typesense:8108.
   typesense:
-    image: typesense/typesense:30.2  # bump to a newer stable tag (29.x/30.x) as needed
+    image: typesense/typesense:30.2@sha256:610f2d34b1f93d00762869da2c67736775e5798d19a2c8b91b014b8a0cc1e110
     profiles:
       - search
     # NOTE: TYPESENSE_API_KEY defaults to empty so plain `docker compose up -d`

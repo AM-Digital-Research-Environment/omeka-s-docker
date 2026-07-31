@@ -117,7 +117,7 @@ docker compose pull && docker compose up -d
 
 ```bash
 # Full backup (database + files + sideload + .env)
-# Stops containers during backup for consistency, then restarts
+# Zero-downtime; avoid module/core upgrades while it runs
 bash scripts/backup.sh
 
 # Backup to a custom directory
@@ -125,6 +125,9 @@ bash scripts/backup.sh /tmp/omeka-backup
 
 # Restore from a backup
 bash scripts/restore.sh backups/20260330-120000
+
+# Non-interactive restore (destructive; intended for automation/CI)
+bash scripts/restore.sh --force backups/20260330-120000
 ```
 
 ## Useful Combos
@@ -214,9 +217,10 @@ cp /path/to/files/* sideload/
 # Check container health status
 docker inspect --format='{{json .State.Health}}' "$(docker compose ps -q php)"
 
-# Fix file permissions
-docker compose exec php chown -R www-data:www-data /var/www/html/files
-docker compose exec php chmod -R 775 /var/www/html/files
+# Inspect ownership, then restore least-privilege modes when owned by www-data
+docker compose exec php id
+docker compose exec php ls -ld /var/www/html/files
+docker compose exec php chmod -R u=rwX,go=rX /var/www/html/files
 
 # Clear Omeka cache
 docker compose exec php rm -rf /var/www/html/data/cache/*

@@ -262,14 +262,14 @@ fi
 
 log_step "Step 12: Setting proper permissions..."
 if [[ "$DRY_RUN" == true ]]; then
-    echo "  Would set: chmod -R 775 on files/, modules/, themes/"
+    echo "  Would set: owner write + read/execute-only permissions for group/other"
 else
     # No chown here: the php container runs as www-data with `cap_drop: ALL`,
     # so it cannot change ownership (no CAP_CHOWN). New files are already
     # www-data-owned because Step 8 extracts them through `exec` as www-data.
-    docker compose exec -T php chmod -R 775 "${OMEKA_ROOT}/files"
-    docker compose exec -T php chmod -R 775 "${OMEKA_ROOT}/modules"
-    docker compose exec -T php chmod -R 775 "${OMEKA_ROOT}/themes"
+    docker compose exec -T php chmod -R u=rwX,go=rX "${OMEKA_ROOT}/files"
+    docker compose exec -T php chmod -R u=rwX,go=rX "${OMEKA_ROOT}/modules"
+    docker compose exec -T php chmod -R u=rwX,go=rX "${OMEKA_ROOT}/themes"
     log_info "Permissions set"
 fi
 

@@ -8,12 +8,16 @@ This guide explains how to back up a running Omeka S Docker instance and restore
 |---|---|
 | `omeka_db.sql` | Full MySQL database dump (items, metadata, users, settings) |
 | `omeka_files.tar.gz` | Omeka `files/` volume (uploaded media, modules, themes) |
+| `typesense_data.tar.gz` | Typesense index (only when the volume exists; rebuildable from MySQL) |
 | `sideload.tar.gz` | Sideload directory (only if non-empty) |
 | `.env` | Environment variables (database password, admin credentials) |
+| `SHA256SUMS` | Integrity checksums for every artifact in the backup |
 
 ## Backup
 
-The backup script **stops all containers** during the process to guarantee data consistency, then **restarts them** automatically when done.
+The backup script is **zero-downtime**. It takes an InnoDB
+`--single-transaction` database snapshot and mounts Docker volumes read-only
+while archiving them; application containers remain available.
 
 ```bash
 # Default: creates backups/<timestamp>/ in the project directory
@@ -23,7 +27,15 @@ bash scripts/backup.sh
 bash scripts/backup.sh /path/to/backup-dir
 ```
 
-**Downtime**: typically a few minutes depending on the size of your database and files.
+Do not install or update modules, update Omeka core, or run other schema-changing
+operations during a backup. `--single-transaction` protects the dump from normal
+reads and writes, but not concurrent DDL. Uploaded Omeka media are effectively
+write-once; a file created during the archive may land just outside the database
+snapshot boundary, so retain multiple generations of backups.
+
+The backup directory is created with mode `0700`, `.env` with `0600`, and an
+integrity manifest is generated. Checksums detect corruption, not malicious
+replacement: encrypt backups and store copies away from the Docker host.
 
 ## Restore (same server)
 
@@ -32,6 +44,17 @@ bash scripts/restore.sh backups/20260330-120000
 ```
 
 > **Warning**: restoring on a server with existing data will **overwrite** the current database and files. You will be prompted for confirmation.
+
+The warning is based on whether the Omeka/MySQL volumes exist, even when the
+containers are stopped. For a deliberate non-interactive restore (for example,
+in CI), pass `--force`:
+
+```bash
+bash scripts/restore.sh --force backups/20260330-120000
+```
+
+When `SHA256SUMS` exists, restore verifies it before changing the target. Legacy
+backups without a manifest remain restorable but produce a warning.
 
 ## Migrate to a new server
 
@@ -71,12 +94,12 @@ bash scripts/restore.sh backups/20260330-120000
 
 The restore script will:
 
-1. Copy `.env` from the backup if none exists
-2. Restore the `omeka_files` volume (uploads, modules, themes)
-3. Restore the `sideload` directory (if present in backup)
-4. Start the database and wait for it to be healthy
-5. Import the database dump
-6. Start all services
+1. Validate required files and verify `SHA256SUMS` when present
+2. Copy `.env` from the backup if none exists
+3. Warn before overwriting any existing Omeka/MySQL volumes
+4. Restore `omeka_files`, optional Typesense data, and optional sideload files
+5. Start the database, recreate the configured database, and import the dump
+6. Start all services (including the search profile when Typesense was restored)
 
 ### 5. Verify
 
@@ -100,5 +123,8 @@ If your Omeka S instance uses a domain name, point it to the new server's IP onc
   0 3 * * * cd /path/to/omeka-s-docker && bash scripts/backup.sh && find backups/ -maxdepth 1 -type d -mtime +7 -exec rm -rf {} +
   ```
 - **Test your backups** periodically by restoring to a staging environment.
-- The `.env` file contains the database password. Keep your backups in a secure location.
-- Both scripts are idempotent — safe to re-run if interrupted.
+- The `.env` file contains credentials. Encrypt backups in transit and at rest,
+  restrict access, and keep at least one tested copy off-host.
+- Restore is destructive and not transactional. If it is interrupted, fix the
+  underlying problem and restart it from a verified backup; keep the previous
+  backup until the restored site has been tested.

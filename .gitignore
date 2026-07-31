@@ -22,4 +22,6 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+__pycache__/
+*.py[cod]
 CLAUDE.md

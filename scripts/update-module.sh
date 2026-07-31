@@ -185,8 +185,10 @@ update_module() {
         ARCHIVE_URL="${BASE_URL}/archive/refs/heads/${BRANCH}.zip"
     fi
 
-    local TEMP_DIR=$(mktemp -d)
-    local CONTAINER_ID=$(docker compose ps -q php)
+    local TEMP_DIR
+    local CONTAINER_ID
+    TEMP_DIR=$(mktemp -d)
+    CONTAINER_ID=$(docker compose ps -q php)
 
     if [[ -z "$CONTAINER_ID" ]]; then
         log_error "PHP container is not running. Start it with: docker compose up -d php"
@@ -241,7 +243,7 @@ update_module() {
         | docker compose exec -T php tar -xf - -C /var/www/html/modules/
 
     log_info "Setting permissions..."
-    docker compose exec -T php chmod -R 775 "/var/www/html/modules/$MODULE_NAME"
+    docker compose exec -T php chmod -R u=rwX,go=rX "/var/www/html/modules/$MODULE_NAME"
 
     rm -rf "$TEMP_DIR"
 
@@ -249,7 +251,10 @@ update_module() {
 
     if docker compose exec -T php test -f "/var/www/html/modules/$MODULE_NAME/composer.json"; then
         log_info "Installing composer dependencies..."
-        docker compose exec -T php bash -c "source /usr/local/bin/ensure-composer.sh && ensure_composer"
+        if ! docker compose exec -T php composer --version >/dev/null; then
+            log_error "Composer is missing from the php image. Rebuild it with: docker compose build --pull php"
+            return 1
+        fi
         # Pin composer's metadata cache to the www-data-writable /var/www/.cache.
         # Its default ($HOME/.composer = /var/www/.composer) is root-owned, so
         # composer otherwise runs cacheless and re-downloads every package's
@@ -284,7 +289,8 @@ update_module() {
 update_all_modules() {
     log_info "Updating all installed modules..."
 
-    local CONTAINER_ID=$(docker compose ps -q php)
+    local CONTAINER_ID
+    CONTAINER_ID=$(docker compose ps -q php)
     if [[ -z "$CONTAINER_ID" ]]; then
         log_error "PHP container is not running. Start it with: docker compose up -d php"
         return 1

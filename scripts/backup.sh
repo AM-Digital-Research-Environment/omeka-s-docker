@@ -27,18 +27,13 @@
 #   - .env               Environment file copy
 
 set -euo pipefail
+umask 077
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 BACKUP_DIR="${1:-$PROJECT_DIR/backups/$TIMESTAMP}"
-
-# Read .env values
-MYSQL_PASSWORD="$(grep -E '^MYSQL_PASSWORD=' "$PROJECT_DIR/.env" | cut -d= -f2-)"
-MYSQL_DATABASE="$(grep -E '^MYSQL_DATABASE=' "$PROJECT_DIR/.env" | cut -d= -f2- 2>/dev/null || true)"
-MYSQL_DATABASE="${MYSQL_DATABASE:-omeka}"
-MYSQL_USER="$(grep -E '^MYSQL_USER=' "$PROJECT_DIR/.env" | cut -d= -f2- 2>/dev/null || true)"
-MYSQL_USER="${MYSQL_USER:-omeka}"
+HELPER_IMAGE="alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b"
 
 # Resolve compose project name and volume prefix
 COMPOSE_PROJECT="$(cd "$PROJECT_DIR" && docker compose config --format json 2>/dev/null | python3 -c 'import sys,json; print(json.load(sys.stdin).get("name",""))' 2>/dev/null || basename "$PROJECT_DIR" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_-]//g')"
@@ -49,16 +44,18 @@ echo "    Backup to: $BACKUP_DIR"
 echo ""
 
 mkdir -p "$BACKUP_DIR"
+chmod 700 "$BACKUP_DIR"
 
 # --- 1. Make sure the database is up for the dump ---
 # We never stop it; just confirm it is running and reachable.
-if ! (cd "$PROJECT_DIR" && docker compose ps --status running --format '{{.Service}}' 2>/dev/null | grep -q 'db'); then
+if ! (cd "$PROJECT_DIR" && docker compose ps --status running --format '{{.Service}}' 2>/dev/null | grep -qx 'db'); then
     echo "==> Starting database for dump..."
     (cd "$PROJECT_DIR" && docker compose up -d db)
 fi
 echo "==> Waiting for database to be reachable..."
 TRIES=0
-until (cd "$PROJECT_DIR" && docker compose exec -T db mysqladmin ping -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --silent 2>/dev/null); do
+until (cd "$PROJECT_DIR" && docker compose exec -T db sh -eu -c \
+    'exec mysqladmin ping -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --silent' 2>/dev/null); do
     TRIES=$((TRIES + 1))
     if [ "$TRIES" -ge 30 ]; then
         echo "ERROR: Database did not become ready."
@@ -77,12 +74,17 @@ echo "==> Dumping MySQL database (live, --single-transaction)..."
 # --routines --triggers : include stored programs and triggers.
 # --no-tablespaces : the "omeka" user lacks the PROCESS privilege CREATE
 #   TABLESPACE statements would need on restore.
-(cd "$PROJECT_DIR" && docker compose exec -T db mysqldump \
-    -u"$MYSQL_USER" \
-    -p"$MYSQL_PASSWORD" \
-    --single-transaction --set-gtid-purged=OFF --routines --triggers --no-tablespaces \
-    "$MYSQL_DATABASE" \
-) > "$BACKUP_DIR/omeka_db.sql"
+(cd "$PROJECT_DIR" && docker compose exec -T db sh -eu -c '
+    exec mysqldump \
+        -u"$MYSQL_USER" \
+        -p"$MYSQL_PASSWORD" \
+        --single-transaction --set-gtid-purged=OFF --routines --triggers --no-tablespaces \
+        "$MYSQL_DATABASE"
+') > "$BACKUP_DIR/omeka_db.sql"
+if [ ! -s "$BACKUP_DIR/omeka_db.sql" ]; then
+    echo "ERROR: Database dump is empty." >&2
+    exit 1
+fi
 echo "    Database: $(du -h "$BACKUP_DIR/omeka_db.sql" | cut -f1)"
 
 # --- 3. Omeka files volume (live) ---
@@ -95,10 +97,11 @@ if docker volume inspect "$VOLUME_NAME" > /dev/null 2>&1; then
     docker run --rm \
         -v "$VOLUME_NAME":/data:ro \
         -v "$BACKUP_DIR":/backup \
-        alpine tar czf /backup/omeka_files.tar.gz -C /data .
+        "$HELPER_IMAGE" tar czf /backup/omeka_files.tar.gz -C /data .
     echo "    Files:    $(du -h "$BACKUP_DIR/omeka_files.tar.gz" | cut -f1)"
 else
-    echo "    WARNING: Volume $VOLUME_NAME not found, skipping."
+    echo "ERROR: Required volume $VOLUME_NAME not found; no complete backup can be created." >&2
+    exit 1
 fi
 
 # --- 4. Typesense data volume (optional search backend, live) ---
@@ -110,7 +113,7 @@ if docker volume inspect "$TYPESENSE_VOLUME" > /dev/null 2>&1; then
     docker run --rm \
         -v "$TYPESENSE_VOLUME":/data:ro \
         -v "$BACKUP_DIR":/backup \
-        alpine tar czf /backup/typesense_data.tar.gz -C /data .
+        "$HELPER_IMAGE" tar czf /backup/typesense_data.tar.gz -C /data .
     echo "    Typesense: $(du -h "$BACKUP_DIR/typesense_data.tar.gz" | cut -f1)"
 else
     echo "==> Typesense not in use (no $TYPESENSE_VOLUME volume), skipping."
@@ -128,8 +131,19 @@ fi
 # --- 6. Copy .env ---
 if [ -f "$PROJECT_DIR/.env" ]; then
     cp "$PROJECT_DIR/.env" "$BACKUP_DIR/.env"
+    chmod 600 "$BACKUP_DIR/.env"
     echo "==> Copied .env"
 fi
+
+# --- 7. Integrity manifest ---
+# This detects interrupted transfers and accidental corruption. It is not an
+# authenticity signature: store the backup off-host and encrypt it separately.
+CHECKSUM_FILES=(omeka_db.sql)
+for file in omeka_files.tar.gz typesense_data.tar.gz sideload.tar.gz .env; do
+    [ ! -f "$BACKUP_DIR/$file" ] || CHECKSUM_FILES+=("$file")
+done
+(cd "$BACKUP_DIR" && sha256sum "${CHECKSUM_FILES[@]}" > SHA256SUMS)
+echo "==> Wrote SHA256SUMS"
 
 echo ""
 echo "==> Backup complete: $BACKUP_DIR"
