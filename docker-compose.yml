@@ -13,7 +13,7 @@ services:
     # automatically, never getting offered a mainline (1.31.x) release.
     # Refresh: docker pull nginx:stable-alpine && docker inspect \
     #   --format '{{index .RepoDigests 0}}' nginx:stable-alpine
-    image: nginx:1.30.4-alpine@sha256:97d490c12ba55b4946b01546d1c3ed324e8d41ab1c9fcb2a616aa470620e5b46
+    image: nginx:1.31.3-alpine@sha256:4a73073bd557c65b759505da037898b61f1be6cbcc3c2c3aeac22d2a470c1752
     ports:
       # NGINX_BIND controls the interface: the 127.0.0.1 default keeps nginx
       # reachable only through a reverse proxy on the host; set
