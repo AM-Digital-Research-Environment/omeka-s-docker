@@ -90,8 +90,10 @@ install_theme() {
     local REPO="${THEME_REPOS[$THEME_NAME]}"
     local BASE_URL="https://github.com/${REPO}"
     local ARCHIVE_URL="${BASE_URL}/archive/refs/heads/${BRANCH}.zip"
-    local TEMP_DIR=$(mktemp -d)
-    local CONTAINER_ID=$(docker compose ps -q php)
+    local TEMP_DIR
+    local CONTAINER_ID
+    TEMP_DIR=$(mktemp -d)
+    CONTAINER_ID=$(docker compose ps -q php)
 
     if [[ -z "$CONTAINER_ID" ]]; then
         log_error "PHP container is not running. Start it with: docker compose up -d php"
@@ -152,7 +154,7 @@ install_theme() {
         | docker compose exec -T php tar -xf - -C /var/www/html/themes/
 
     log_info "Setting permissions..."
-    docker compose exec -T php chmod -R 775 "/var/www/html/themes/$THEME_NAME"
+    docker compose exec -T php chmod -R u=rwX,go=rX "/var/www/html/themes/$THEME_NAME"
 
     rm -rf "$TEMP_DIR"
 

@@ -24,6 +24,9 @@ services:
       # /etc/nginx/conf.d/extra-locations/mcp.conf, which the base nginx.conf
       # includes by glob (see the extension point in nginx.conf).
       - ./deploy/amira/nginx-mcp-location.conf:/etc/nginx/templates/extra-locations/mcp.conf.template:ro
+    networks:
+      - frontend
+      - mcp
 
   php:
     build:
@@ -60,10 +63,10 @@ services:
       - AMIRA_LIVE_REFRESH=true
       - AMIRA_CACHE_DIR=/tmp/amira-cache
       # Citation URLs and live-refresh target our own public domain.
-      - AMIRA_SITE_BASE=https://${SERVER_NAME}
+      - AMIRA_SITE_BASE=https://${SERVER_NAME:?You must set SERVER_NAME when using compose.amira.yml}
       - AMIRA_SITE_SLUG=amira
     networks:
-      - backend
+      - mcp
     restart: unless-stopped
     # Security hardening
     security_opt:
@@ -87,3 +90,6 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+networks:
+  mcp: {}

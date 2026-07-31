@@ -22,7 +22,7 @@ docker compose up -d amira-mcp
 
 echo "==> Waiting for health..."
 container_id=$(docker compose ps -q amira-mcp)
-for i in $(seq 1 20); do
+for _ in $(seq 1 20); do
     status=$(docker inspect -f '{{.State.Health.Status}}' "$container_id" 2>/dev/null || echo unknown)
     [ "$status" = "healthy" ] && break
     sleep 2

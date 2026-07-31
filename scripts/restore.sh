@@ -1,6 +1,6 @@
 #!/bin/bash
 # Restore Omeka S Docker instance from a backup
-# Usage: bash scripts/restore.sh <backup-directory>
+# Usage: bash scripts/restore.sh [--force] <backup-directory>
 # Example: bash scripts/restore.sh backups/20260617-082740
 #
 # Expects the backup directory to contain:
@@ -11,13 +11,40 @@
 #   - .env               Environment file (optional, used if no .env exists)
 
 set -euo pipefail
+umask 077
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-BACKUP_DIR="${1:-}"
+BACKUP_DIR=""
+FORCE=false
+HELPER_IMAGE="alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b"
+
+for arg in "$@"; do
+    case "$arg" in
+        --force)
+            FORCE=true
+            ;;
+        -h|--help)
+            echo "Usage: bash scripts/restore.sh [--force] <backup-directory>"
+            echo "  --force  overwrite existing volumes without an interactive prompt"
+            exit 0
+            ;;
+        -*)
+            echo "ERROR: Unknown option: $arg" >&2
+            exit 1
+            ;;
+        *)
+            if [ -n "$BACKUP_DIR" ]; then
+                echo "ERROR: Only one backup directory may be specified." >&2
+                exit 1
+            fi
+            BACKUP_DIR="$arg"
+            ;;
+    esac
+done
 
 if [ -z "$BACKUP_DIR" ]; then
-    echo "Usage: bash scripts/restore.sh <backup-directory>"
+    echo "Usage: bash scripts/restore.sh [--force] <backup-directory>"
     echo "Example: bash scripts/restore.sh backups/20260330-120000"
     exit 1
 fi
@@ -35,6 +62,34 @@ for f in omeka_db.sql omeka_files.tar.gz; do
     fi
 done
 
+# Verify before touching the target. Older backups remain restorable, but new
+# backups always include this manifest.
+if [ -f "$BACKUP_DIR/SHA256SUMS" ]; then
+    echo "==> Verifying backup checksums..."
+    # Accept only the fixed artifact names this project creates. Besides making
+    # accidental truncation obvious, this prevents a crafted manifest from
+    # making sha256sum read paths outside the backup directory.
+    if ! awk '
+        NF != 2 || length($1) != 64 || $1 !~ /^[0-9A-Fa-f]+$/ ||
+        $2 !~ /^(omeka_db[.]sql|omeka_files[.]tar[.]gz|typesense_data[.]tar[.]gz|sideload[.]tar[.]gz|[.]env)$/ ||
+        seen[$2]++ { exit 1 }
+        END { if (!seen["omeka_db.sql"] || !seen["omeka_files.tar.gz"]) exit 1 }
+    ' "$BACKUP_DIR/SHA256SUMS"; then
+        echo "ERROR: SHA256SUMS is malformed, incomplete, or contains unsafe paths." >&2
+        exit 1
+    fi
+    for artifact in omeka_db.sql omeka_files.tar.gz typesense_data.tar.gz sideload.tar.gz .env; do
+        if [ -f "$BACKUP_DIR/$artifact" ] \
+            && ! awk -v name="$artifact" '$2 == name { found = 1 } END { exit !found }' "$BACKUP_DIR/SHA256SUMS"; then
+            echo "ERROR: $artifact exists but is not covered by SHA256SUMS." >&2
+            exit 1
+        fi
+    done
+    (cd "$BACKUP_DIR" && sha256sum --check SHA256SUMS)
+else
+    echo "WARNING: No SHA256SUMS found; integrity cannot be verified." >&2
+fi
+
 echo "==> Omeka S Restore"
 echo "    Project:      $PROJECT_DIR"
 echo "    Restore from: $BACKUP_DIR"
@@ -51,39 +106,41 @@ if [ ! -f "$PROJECT_DIR/.env" ]; then
     fi
 fi
 
-MYSQL_PASSWORD="$(grep -E '^MYSQL_PASSWORD=' "$PROJECT_DIR/.env" | cut -d= -f2-)"
-MYSQL_DATABASE="$(grep -E '^MYSQL_DATABASE=' "$PROJECT_DIR/.env" | cut -d= -f2- || echo omeka)"
-MYSQL_USER="$(grep -E '^MYSQL_USER=' "$PROJECT_DIR/.env" | cut -d= -f2- || echo omeka)"
-# Use defaults if not set in .env
-MYSQL_DATABASE="${MYSQL_DATABASE:-omeka}"
-MYSQL_USER="${MYSQL_USER:-omeka}"
-
 # Resolve compose project name for volume prefix
 COMPOSE_PROJECT="$(cd "$PROJECT_DIR" && docker compose config --format json 2>/dev/null | python3 -c 'import sys,json; print(json.load(sys.stdin).get("name",""))' 2>/dev/null || basename "$PROJECT_DIR" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_-]//g')"
 
-# --- 1. Warn if containers are already running ---
+# --- 1. Confirm any destructive overwrite and stop running services ---
 RUNNING="$(cd "$PROJECT_DIR" && docker compose ps --status running --format '{{.Service}}' 2>/dev/null | wc -l)"
-if [ "$RUNNING" -gt 0 ]; then
-    echo "WARNING: $RUNNING service(s) already running."
-    read -rp "Stop them and restore? This will OVERWRITE existing data. [y/N] " confirm
+VOLUME_NAME="${COMPOSE_PROJECT}_omeka_files"
+MYSQL_VOLUME="${COMPOSE_PROJECT}_mysql_data"
+DATA_EXISTS=false
+if docker volume inspect "$VOLUME_NAME" >/dev/null 2>&1 \
+    || docker volume inspect "$MYSQL_VOLUME" >/dev/null 2>&1; then
+    DATA_EXISTS=true
+fi
+
+if [ "$DATA_EXISTS" = true ] && [ "$FORCE" != true ]; then
+    echo "WARNING: Existing Omeka/MySQL volumes will be overwritten."
+    read -rp "Proceed with restore? This will OVERWRITE existing data. [y/N] " confirm
     if [[ "$confirm" != [yY] ]]; then
         echo "Aborted."
         exit 0
     fi
-    echo "==> Stopping all services..."
+fi
+if [ "$RUNNING" -gt 0 ]; then
+    echo "==> Stopping $RUNNING running service(s)..."
     (cd "$PROJECT_DIR" && docker compose down)
 fi
 
 # --- 2. Restore omeka_files volume ---
 echo "==> Restoring omeka_files volume..."
-VOLUME_NAME="${COMPOSE_PROJECT}_omeka_files"
 # Create volume if it doesn't exist
 docker volume create "$VOLUME_NAME" > /dev/null 2>&1 || true
 # Clear and restore
 docker run --rm \
     -v "$VOLUME_NAME":/data \
     -v "$BACKUP_DIR":/backup:ro \
-    alpine sh -c "rm -rf /data/* /data/..?* /data/.[!.]* 2>/dev/null; cd /data && tar xzf /backup/omeka_files.tar.gz"
+    "$HELPER_IMAGE" sh -c "rm -rf /data/* /data/..?* /data/.[!.]* 2>/dev/null; cd /data && tar xzf /backup/omeka_files.tar.gz"
 echo "    Files volume restored."
 
 # --- 3. Restore Typesense data volume (optional search backend) ---
@@ -95,7 +152,7 @@ if [ -f "$BACKUP_DIR/typesense_data.tar.gz" ]; then
     docker run --rm \
         -v "$TYPESENSE_VOLUME":/data \
         -v "$BACKUP_DIR":/backup:ro \
-        alpine sh -c "rm -rf /data/* /data/..?* /data/.[!.]* 2>/dev/null; cd /data && tar xzf /backup/typesense_data.tar.gz"
+        "$HELPER_IMAGE" sh -c "rm -rf /data/* /data/..?* /data/.[!.]* 2>/dev/null; cd /data && tar xzf /backup/typesense_data.tar.gz"
     TYPESENSE_RESTORED=true
     echo "    Typesense volume restored."
 fi
@@ -114,7 +171,8 @@ echo "==> Starting database..."
 echo "    Waiting for database to be healthy..."
 TRIES=0
 MAX_TRIES=30
-until (cd "$PROJECT_DIR" && docker compose exec -T db mysqladmin ping -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --silent 2>/dev/null); do
+until (cd "$PROJECT_DIR" && docker compose exec -T db sh -eu -c \
+    'exec mysqladmin ping -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --silent' 2>/dev/null); do
     TRIES=$((TRIES + 1))
     if [ "$TRIES" -ge "$MAX_TRIES" ]; then
         echo "ERROR: Database did not become ready after ${MAX_TRIES} attempts."
@@ -126,9 +184,21 @@ echo "    Database is ready."
 
 # --- 6. Import database dump ---
 echo "==> Importing database dump..."
-# Drop and recreate to ensure clean state
-(cd "$PROJECT_DIR" && docker compose exec -T db mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -e "DROP DATABASE IF EXISTS \`$MYSQL_DATABASE\`; CREATE DATABASE \`$MYSQL_DATABASE\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;")
-(cd "$PROJECT_DIR" && docker compose exec -T db mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE") < "$BACKUP_DIR/omeka_db.sql"
+# Drop and recreate to ensure clean state. Restrict the identifier before
+# interpolating it into SQL; credentials stay in the container environment.
+(cd "$PROJECT_DIR" && docker compose exec -T db sh -eu -c '
+    case "$MYSQL_DATABASE" in
+        ""|*[!A-Za-z0-9_]*)
+            echo "ERROR: MYSQL_DATABASE must contain only letters, digits, and underscores." >&2
+            exit 1
+            ;;
+    esac
+    exec mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -e \
+        "DROP DATABASE IF EXISTS \`$MYSQL_DATABASE\`; CREATE DATABASE \`$MYSQL_DATABASE\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+')
+(cd "$PROJECT_DIR" && docker compose exec -T db sh -eu -c \
+    'exec mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"') \
+    < "$BACKUP_DIR/omeka_db.sql"
 echo "    Database imported."
 
 # --- 7. Start all services ---

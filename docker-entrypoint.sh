@@ -51,6 +51,9 @@ omeka_create_db_config() {
                 --password "${MYSQL_PASSWORD}" \
                 --dbname "${MYSQL_DATABASE}" \
                 --host "${MYSQL_HOST}"
+    # The shared document-root volume is also mounted read-only by nginx. Keep
+    # database credentials readable only by the www-data user running PHP.
+    chmod 600 "${OMEKA_ROOT}/config/database.ini"
 }
 
 wait_for_db() {

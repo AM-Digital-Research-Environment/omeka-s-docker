@@ -59,10 +59,10 @@ A reusable Docker template for deploying Omeka S digital archive installations. 
 
 | Service | Image | Port | Purpose |
 |---------|-------|------|---------|
-| **web** | nginx:stable-alpine (1.30, digest-pinned) | 80 | Reverse proxy, static files |
-| **php** | PHP 8.5-FPM | 9000 (internal) | Omeka S application |
-| **db** | MySQL 9.7 | 3306 (internal) | Database |
-| **typesense** _(optional)_ | typesense/typesense:30.2 | 8108 (internal) | Search backend for search modules such as DRESearch — only runs under the `search` profile |
+| **web** | nginx 1.30.4-alpine (digest-pinned) | 80 | Reverse proxy, static files |
+| **php** | PHP 8.5.9-FPM (digest-pinned) | 9000 (internal) | Omeka S application |
+| **db** | MySQL 9.7.1 (digest-pinned) | 3306 (internal) | Database |
+| **typesense** _(optional)_ | Typesense 30.2 (digest-pinned) | 8108 (internal) | Search backend for search modules such as DRESearch — only runs under the `search` profile |
 
 > The **typesense** service is entirely optional. The stack runs normally without it; it is excluded from `docker compose up` unless you opt in with `--profile search` (see [Search Backend](#search-backend-optional)).
 >
@@ -361,7 +361,7 @@ The Typesense setup is designed not to widen the server's attack surface:
 - **Never exposed to the host or internet.** The service publishes **no ports** — it is reachable only on the internal `backend` Docker network, server-side from `php`. Its admin API key therefore stays inside the same trust boundary as MySQL.
 - **API key required.** Starting the `search` profile without `TYPESENSE_API_KEY` set makes Typesense exit immediately (`API key is not specified`) rather than run open. The key lives only in `.env` (gitignored).
 - **Hardened like the rest of the stack:** `cap_drop: ALL`, `no-new-privileges`, a read-only root filesystem, browser CORS disabled, and CPU/memory limits (0.5 CPU / 512M) so it can't starve the host.
-- **Nothing secret to back up.** The index in the `typesense_data` volume is rebuildable from MySQL, so it is excluded from backups.
+- **Rebuildable and backed up when present.** The index in `typesense_data` can be rebuilt from MySQL, but the backup script includes it when the volume exists to shorten disaster recovery.
 
 ## Deployment Overlays
 
@@ -421,10 +421,17 @@ docker compose exec db mysql -u omeka -p -e "SHOW DATABASES"
 ### Permission Issues
 
 ```bash
-# Fix file permissions
-docker compose exec php chown -R www-data:www-data /var/www/html/files
-docker compose exec php chmod -R 775 /var/www/html/files
+# Inspect the runtime user and current ownership first
+docker compose exec php id
+docker compose exec php ls -ld /var/www/html/files
+
+# Restore least-privilege modes when the files are already owned by www-data
+docker compose exec php chmod -R u=rwX,go=rX /var/www/html/files
 ```
+
+New volumes are owned by `www-data`. If an older volume has different ownership,
+back it up before repairing ownership during a maintenance window; the hardened
+container deliberately drops the capability needed to `chown` files at runtime.
 
 ### Clear Cache
 
@@ -457,11 +464,14 @@ This template includes Docker security hardening by default in the main `docker-
 
 #### Known Limitations
 
+The dated, repository-wide findings and remediation status are tracked in
+[docs/SECURITY_REVIEW.md](docs/SECURITY_REVIEW.md).
+
 | Concern | Risk | Mitigation |
 |---------|------|------------|
 | **Shared Kernel** | Kernel exploit affects all containers | Keep host OS updated, use minimal host |
 | **Container Breakout** | Compromised container may access host | Never use `--privileged`, drop capabilities |
-| **Image Vulnerabilities** | Base images may contain CVEs | Scan images with Docker Scout or Trivy |
+| **Image Vulnerabilities** | Base images may contain CVEs | Scan images with Docker Scout or another reviewed, commit-pinned scanner |
 | **Secrets in Environment** | `docker inspect` exposes env vars | Use Docker secrets for sensitive data |
 | **Docker Socket** | Mounting socket = root on host | Never mount in application containers |
 
@@ -606,7 +616,12 @@ bash scripts/backup.sh
 bash scripts/restore.sh backups/20260330-120000
 ```
 
-The backup script stops containers during the process to guarantee data consistency, then restarts them automatically. See [docs/BACKUP_RESTORE.md](docs/BACKUP_RESTORE.md) for the full migration guide.
+The backup is zero-downtime: it uses a consistent InnoDB snapshot and read-only
+volume archives while services stay up. Do not install/update modules or upgrade
+Omeka while it runs, because those operations can change database schema or live
+code. Backups are permission-restricted and include `SHA256SUMS`; encrypt them
+before storing off-host. See [docs/BACKUP_RESTORE.md](docs/BACKUP_RESTORE.md) for
+the full migration and restore guide.
 
 ## License
 

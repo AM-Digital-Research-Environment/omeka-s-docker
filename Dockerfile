@@ -1,4 +1,4 @@
-FROM alpine:3.23.4@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11 AS toolfetcher
+FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS toolfetcher
 
 ARG VERSION=0.9.3
 ARG SHA=9392e779e25b9cfe0e8c1d559d8f5347863f3b0ab56d7a37d107f17f09bb247b
@@ -6,10 +6,12 @@ ARG SHA=9392e779e25b9cfe0e8c1d559d8f5347863f3b0ab56d7a37d107f17f09bb247b
 SHELL ["/bin/ash", "-eo", "pipefail", "-c"]
 
 RUN apk add --no-cache curl \
-    && curl -sL https://github.com/GhentCDH/Omeka-S-Cli/releases/download/v${VERSION}/omeka-s-cli.phar -o /omeka-s-cli.phar \
+    && curl --fail --show-error --location \
+        https://github.com/GhentCDH/Omeka-S-Cli/releases/download/v${VERSION}/omeka-s-cli.phar \
+        --output /omeka-s-cli.phar \
     && echo "${SHA} /omeka-s-cli.phar" | sha256sum -c -
 
-FROM php:8.5-fpm AS runtime
+FROM php:8.5.9-fpm-trixie@sha256:f56f4a81de6cd33ddfd6e99352889a53c94c3ffccce89e494563845a1c8ba75a AS runtime
 
 ARG OMEKA_ROOT=/var/www/html
 ARG OMEKA_VERSION=4.2.1
@@ -37,8 +39,9 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
     && rm -rf /var/lib/apt/lists/*
 
 # Install PHP extensions
-RUN --mount=type=bind,from=ghcr.io/mlocati/php-extension-installer:latest,source=/usr/bin/install-php-extensions,target=/usr/local/bin/install-php-extensions \
+RUN --mount=type=bind,from=ghcr.io/mlocati/php-extension-installer:2.11.1@sha256:bd9ea77afcbc8e55e58d55ca9a39153925367e972827d2f648c949fd0e44aaca,source=/usr/bin/install-php-extensions,target=/usr/local/bin/install-php-extensions \
     install-php-extensions \
+    apcu-5.1.28 \
     bcmath \
     exif \
     gd \
@@ -54,10 +57,6 @@ RUN --mount=type=bind,from=ghcr.io/mlocati/php-extension-installer:latest,source
     xsl \
     zip
         
-# Build APCu
-RUN pecl install apcu && \
-    docker-php-ext-enable apcu
-
 # Set PHP configuration
 RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
     && sed -i \
@@ -92,14 +91,13 @@ apc.shm_size=256M
 apc.ttl=7200
 EOF
 
-# Install php-fpm-healthcheck script for container health monitoring
-RUN curl -o /usr/local/bin/php-fpm-healthcheck \
-    https://raw.githubusercontent.com/renatomefi/php-fpm-healthcheck/master/php-fpm-healthcheck \
-    && chmod +x /usr/local/bin/php-fpm-healthcheck \
-    && echo "pm.status_path = /status" >> /usr/local/etc/php-fpm.d/zz-docker.conf
+# The Compose healthcheck probes this endpoint directly with cgi-fcgi. Keeping
+# the probe local avoids downloading and executing a floating script from a
+# third-party repository during every image build.
+RUN echo "pm.status_path = /status" >> /usr/local/etc/php-fpm.d/zz-docker.conf
 
 RUN chown -R www-data:www-data "$OMEKA_ROOT" \
-    && chmod -R 775 "$OMEKA_ROOT" \
+    && chmod -R u=rwX,go=rX "$OMEKA_ROOT" \
     && chown www-data:www-data /usr/local/etc/php-fpm.d \
     # omeka-s-cli caches into $HOME/.cache, which is /var/www for www-data
     && mkdir -p /var/www/.cache \
@@ -110,7 +108,7 @@ USER www-data
 WORKDIR /var/www/html
 
 COPY --from=toolfetcher --chmod=0755 /omeka-s-cli.phar /usr/local/bin/omeka-s-cli
-COPY --from=composer/composer:2-bin /composer /usr/bin/composer
+COPY --from=composer/composer:2.10.2-bin@sha256:cf313f79f608ebab80220796327f341ae663b9fa8065c73c6148c9b67f0b13b3 /composer /usr/bin/composer
 
 # TODO: document usage of the "latest" sentinel value
 RUN if [ "$OMEKA_VERSION" = "latest" ]; then \
@@ -158,7 +156,6 @@ USER www-data
 COPY --chown=www-data:www-data _docker/vocabularies/ /usr/local/share/omeka-vocabs/
 
 COPY --chmod=0755 docker-entrypoint.sh /usr/local/bin/
-COPY --chmod=0755 ensure-composer.sh /usr/local/bin/
 
 # Composer's default cache dir is $HOME/.composer (= /var/www/.composer), which
 # is root-owned and unwritable by www-data — so composer would run cacheless,
