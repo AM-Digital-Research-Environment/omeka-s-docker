@@ -196,6 +196,17 @@ private_paths=(
     /vendor/autoload.php
     /uploads.ini
     /index.php/../config/database.ini
+    # Modules and themes ship their whole source tree into the document root.
+    # Only asset/ is public: their dependency manifests otherwise enumerate
+    # exact package versions for an attacker to match against known CVEs.
+    /modules/Common/composer.json
+    /modules/Common/composer.lock
+    /modules/Common/vendor/composer/installed.json
+    /modules/Common/README.md
+    /modules/Common/config/module.ini
+    /themes/Freedom/composer.json
+    /themes/Freedom/package.json
+    /themes/Freedom/config/theme.ini
 )
 for p in "${private_paths[@]}"; do
     code=$(probe "$url$p")
@@ -206,6 +217,14 @@ done
 code=$(probe "$url/application/asset/css/style.css")
 echo "    GET /application/asset/css/style.css -> $code"
 [[ "$code" == "200" ]]
+# ...and so must module/theme assets plus the theme thumbnail Omeka's admin
+# theme picker loads from /themes/<id>/theme.jpg (the one allow-listed file
+# outside asset/).
+for p in /themes/Freedom/theme.jpg /themes/Freedom/asset/css/style.css; do
+    code=$(probe "$url$p")
+    echo "    GET $p -> $code"
+    [[ "$code" == "200" ]] || { echo "REGRESSION: $p must stay public ($code)!" >&2; exit 1; }
+done
 
 log "Probing admin (single shot — the login location is rate-limited)..."
 code=$(curl -s -o /dev/null -w '%{http_code}' -L "$url/admin")
