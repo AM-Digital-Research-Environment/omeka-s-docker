@@ -61,7 +61,7 @@ A reusable Docker template for deploying Omeka S digital archive installations. 
 |---------|-------|------|---------|
 | **web** | nginx 1.30.4-alpine (digest-pinned) | 80 | Reverse proxy, static files |
 | **php** | PHP 8.5.9-FPM (digest-pinned) | 9000 (internal) | Omeka S application |
-| **db** | MySQL 9.7.1 (digest-pinned) | 3306 (internal) | Database |
+| **db** | MySQL 9.7.2 (digest-pinned) | 3306 (internal) | Database |
 | **typesense** _(optional)_ | Typesense 30.2 (digest-pinned) | 8108 (internal) | Search backend for search modules such as DRESearch — only runs under the `search` profile |
 
 > The **typesense** service is entirely optional. The stack runs normally without it; it is excluded from `docker compose up` unless you opt in with `--profile search` (see [Search Backend](#search-backend-optional)).

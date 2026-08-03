@@ -72,6 +72,7 @@ MYSQL_PASSWORD="ci-mysql-password-with-special-#=chars"
 NGINX_PORT=${port}
 COMPOSE_FILE=docker-compose.yml:compose.amira.yml
 COMPOSE_PROFILES=search
+SERVER_NAME=ci.example.org
 TYPESENSE_API_KEY=ci-typesense-key
 FRAME_ANCESTORS="'self' https://embed.example.org"
 OMEKA_ADMIN_EMAIL=admin@example.com

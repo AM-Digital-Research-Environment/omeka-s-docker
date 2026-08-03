@@ -17,6 +17,20 @@ updates:
     assignees:
       - "fmadore"
     open-pull-requests-limit: 5
+    # Stay on the nginx stable line. nginx ships two concurrent branches and
+    # encodes them in the minor: even = stable (1.30, 1.32...), odd = mainline
+    # (1.31, 1.33...). `1.31.3-alpine` IS the `mainline-alpine` tag, so any
+    # minor bump silently switches release tracks. Blocking minor + major keeps
+    # 1.30.x patches flowing and makes the (roughly annual) move to the next
+    # stable line a deliberate change:
+    #   docker pull nginx:stable-alpine && docker inspect \
+    #     --format '{{index .RepoDigests 0}}' nginx:stable-alpine
+    # Dependabot security updates are unaffected by version-update ignores.
+    ignore:
+      - dependency-name: "nginx"
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-major"
 
   # Monitor image tags pinned in docker-compose.yml (nginx, mysql, typesense)
   - package-ecosystem: "docker-compose"
@@ -32,6 +46,16 @@ updates:
     assignees:
       - "fmadore"
     open-pull-requests-limit: 5
+    # MySQL ships two concurrent lines: 9.x LTS (the `lts` tag) and the
+    # calendar-versioned Innovation line (26.x = `innovation` = `latest`).
+    # Dependabot only sees that 26 > 9, so a major bump jumps release tracks
+    # rather than moving the version forward. This deployment follows LTS, so
+    # block majors — 9.7.x patches and 9.x minors still flow, and adopting a
+    # future LTS stays a deliberate change.
+    ignore:
+      - dependency-name: "mysql"
+        update-types:
+          - "version-update:semver-major"
 
   # Monitor GitHub Actions for updates (if you add any workflows)
   - package-ecosystem: "github-actions"
