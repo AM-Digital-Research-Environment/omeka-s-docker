@@ -166,7 +166,9 @@ docker compose exec -T php php -r '
     }
 '
 docker compose exec -T php composer --version --no-ansi
-[[ "$(docker compose exec -T php stat -c '%a' /var/www/html/config/database.ini | tr -d '\r')" == "600" ]]
+# -L is required: config/database.ini is a symlink into /run/omeka (tmpfs), and
+# stat without it reports the link's own mode (always 777), not the target's.
+[[ "$(docker compose exec -T php stat -L -c '%a' /var/www/html/config/database.ini | tr -d '\r')" == "600" ]]
 docker compose exec -T php php -r '
     $source = file_get_contents("/var/www/html/application/Module.php");
     if (!preg_match("/const VERSION\\s*=\\s*[^0-9]*([0-9.]+)/", $source, $match)) { exit(1); }
