@@ -2,206 +2,457 @@
 
 [![CI](https://github.com/AM-Digital-Research-Environment/omeka-s-docker/actions/workflows/ci.yml/badge.svg)](https://github.com/AM-Digital-Research-Environment/omeka-s-docker/actions/workflows/ci.yml)
 
-A reusable Docker template for deploying Omeka S digital archive installations. This template provides a production-ready setup with automatic installation, optimized PHP configuration, and module management via [omeka-s-cli](https://github.com/GhentCDH/Omeka-S-Cli).
+A ready-to-run Docker setup for hosting an Omeka S digital archive. Copy it,
+choose your modules and themes, and you have a site that installs itself, is
+hardened for public use, and can be rebuilt identically at any time.
+
+Built for the [Africa Multiple](https://www.africamultiple.uni-bayreuth.de/)
+research-data platform and kept general enough for anyone else to run their own
+instance from it.
 
 ## Features
 
-- **Automatic Installation**: Omeka S is downloaded during build and installed on first run
-- **One-Click Deploy**: [Bootstrap script](https://github.com/AM-Digital-Research-Environment/am-omeka-s-docker-bootstrap) for fresh Linux servers (Docker install, HTTPS via Caddy, launch)
-- **Pre-installed Modules**: Common modules baked into the image
-- **Immutable Application Code**: Core, modules, themes, and assets are baked
-  into matching PHP/nginx images; only media/logs/sessions are writable
-- **Optimized PHP 8.5**: Pre-configured with OPcache, APCu, and Imagick
-- **Non-root Execution**: PHP-FPM workers run as www-data
-- **Network Isolation**: Separate frontend/backend networks isolate PHP and MySQL
-- **Production-Ready Nginx**: Gzip compression, security headers, static file caching
-- **Health Checks**: All services include Docker health checks
-- **Deployment Overlays**: Site-specific services layer on top via `COMPOSE_FILE` — the base stack stays generic (see [Deployment Overlays](#deployment-overlays))
+- **Installs itself**: Omeka S and its modules are set up during the build and
+  configured the first time the site starts
+- **One-command setup**: a [bootstrap script](https://github.com/AM-Digital-Research-Environment/am-omeka-s-docker-bootstrap)
+  takes a blank Linux server to a working HTTPS site
+- **Modules and themes included**: a useful set is ready to switch on, and adding
+  your own is one command
+- **Code can't change underneath you**: Omeka, modules, and themes are fixed at
+  build time; only uploads, logs, and sessions are writable. Updates are
+  deliberate rebuilds, and rolling one back is easy
+- **Tuned for real use**: PHP 8.5 with caching and image processing, MySQL
+  settings sized for an Omeka workload, browser caching and compression
+- **Hardened by default**: the database is unreachable from outside, containers
+  run without root or extra privileges, and only public files are served
+- **Health-checked**: every service reports whether it is actually working, so a
+  broken start is visible immediately
+- **Extendable without forking**: your own services, modules, and vocabularies
+  layer on top in a separate folder, so you can keep pulling updates from here
+  (see [Deployment overlays](#deployment-overlays))
 
 ## Prerequisites
 
-- Docker and Docker Compose v2
+- A Linux server (or any machine) with Docker and Docker Compose v2
+- Roughly 4 GB of RAM for a comfortable small-to-medium instance
 
-## Project Structure
+## Project structure
 
 ```
 .
-├── docker-compose.yml          # Generic base stack (web, php, db, optional typesense)
-├── compose.amira.yml           # AMIRA production overlay (worked example — see deploy/amira/)
-├── Dockerfile                  # Shared PHP runtime + nginx asset build
-├── docker-entrypoint.sh        # PHP container initialization & auto-install
-├── _docker/
-│   ├── default-modules.txt     # Modules downloaded during image build
-│   ├── empty-modules.txt       # Placeholder for the EXTRA_MODULES_FILE build arg
-│   ├── extra-modules.txt       # Operator module pins
-│   ├── extra-themes.txt        # Operator theme pins
-│   ├── local-modules/          # Optional reviewed local module source
-│   ├── local-themes/           # Optional reviewed local theme source
-│   ├── local.config.php        # Default read-only Omeka configuration
-│   └── vocabularies/           # RDF vocabularies + JSON manifests (auto-imported on first run)
+├── .env.example                # Copy to .env — all your settings live there
+├── docker-compose.yml          # The services: web, php, database, optional search
+├── compose.amira.yml           # Example of adding your own services (see deploy/amira/)
+├── Dockerfile                  # How the Omeka image is built
+├── docker-entrypoint.sh        # Runs on startup: install Omeka, modules, vocabularies
+├── _docker/                    # Everything that goes into the build
+│   ├── default-modules.txt     # Modules every site built from this template gets
+│   ├── extra-modules.txt       # Add your own modules here
+│   ├── extra-themes.txt        # Add your own themes here
+│   ├── local-modules/          # Unpublished modules: drop the folder in
+│   ├── local-themes/           # Unpublished themes: drop the folder in
+│   ├── local.config.php        # Omeka's own settings (thumbnails, storage, logging)
+│   ├── vocabularies/           # Vocabularies imported when the site first starts
+│   ├── empty-modules.txt       # Placeholder — leave alone
+│   └── empty-themes.txt        # Placeholder — leave alone
 ├── deploy/
-│   └── amira/                  # Everything specific to the AMIRA deployment (see its README)
-├── nginx.conf                  # Nginx web server configuration
-├── nginx-http-settings.conf    # Nginx HTTP-level settings (gzip, rate limiting)
-├── nginx-security-headers.conf # Nginx security headers snippet
-├── uploads.ini                 # PHP upload settings
-├── .env.example                # Environment variables template
+│   └── amira/                  # A complete worked example of a real deployment
+├── nginx.conf                  # Web server: what is public, what is cached
+├── nginx-http-settings.conf    # Compression, rate limiting, client IP handling
+├── nginx-security-headers.conf # Security headers
+├── uploads.ini                 # Upload size limits
 ├── docs/
-│   ├── COMMANDS.md             # Docker commands quick reference
-│   ├── OMEKA_CLI.md            # omeka-s-cli usage and common workflows
-│   ├── PRODUCTION.md           # Production deploy: reverse proxy, TLS, firewall, hardening
-│   ├── BACKUP_RESTORE.md       # Backup, restore, and migration guide
-│   └── DB_TUNING.md            # MySQL tuning parameter reference
+│   ├── COMMANDS.md             # Everyday commands, in one place
+│   ├── IMMUTABLE_CODE.md       # How code and data are stored; legacy migration
+│   ├── OMEKA_CLI.md            # Managing users, vocabularies and settings from the shell
+│   ├── PRODUCTION.md           # Going public: HTTPS, firewall, server hardening
+│   ├── BACKUP_RESTORE.md       # Backups, restores, moving to another server
+│   └── DB_TUNING.md            # What each database setting does
 ├── scripts/
-│   ├── backup.sh               # Backup database, files, and config
-│   ├── restore.sh              # Restore from backup (migration)
-│   ├── migrate-immutable-storage.sh # One-time legacy-volume migration
-│   ├── rebuild-code.sh         # Build/deploy matching PHP + nginx code
-│   ├── install-module.sh       # Add module build input and rebuild
-│   ├── install-theme.sh        # Add theme build input and rebuild
-│   ├── update-module.sh        # Refresh floating build refs
-│   └── update-omeka.sh         # Update Omeka S core
-└── sideload/                   # Bulk import directory
+│   ├── rebuild-code.sh         # Rebuild and restart after changing modules or themes
+│   ├── install-module.sh       # Add a module, then rebuild
+│   ├── install-theme.sh        # Add a theme, then rebuild
+│   ├── update-module.sh        # Re-download modules that track a branch
+│   ├── update-omeka.sh         # Move to a new Omeka S version
+│   ├── backup.sh               # Back up database, files, and settings
+│   ├── restore.sh              # Restore a backup, here or on a new server
+│   └── migrate-immutable-storage.sh  # One-time migration for older deployments
+├── .github/                    # Automated checks that run on every change
+├── backups/                    # Where backups land by default
+└── sideload/                   # Drop files here for bulk import
 ```
 
-## Services Overview
+## How this template works
 
-| Service | Image | Port | Purpose |
-|---------|-------|------|---------|
-| **web** | nginx 1.30.4-alpine + baked Omeka assets (digest-pinned base) | 80 | Reverse proxy, static files |
-| **php** | PHP 8.5.9-FPM (digest-pinned) | 9000 (internal) | Omeka S application |
-| **db** | MySQL 9.7.2 (digest-pinned) | 3306 (internal) | Database |
-| **typesense** _(optional)_ | Typesense 30.2 (digest-pinned) | 8108 (internal) | Search backend for search modules such as DRESearch — only runs under the `search` profile |
+Please read this before your first build. It is the one way this setup differs
+from a normal Omeka S install, and it explains why a few familiar commands are
+refused.
 
-> The **typesense** service is entirely optional. The stack runs normally without it; it is excluded from `docker compose up` unless you opt in with `--profile search` (see [Search Backend](#search-backend-optional)).
+**Omeka's code is part of the image, not something you edit later.** Omeka
+itself, every module, every theme, and all their supporting files are installed
+when the image is built. Once the site is running, that whole directory is
+read-only. You cannot download a module into a running site, and neither can
+anyone who breaks in.
+
+**To change the code, you rebuild.** The pattern is always the same:
+
+> edit a list of modules or themes → run `bash scripts/rebuild-code.sh` → the
+> site restarts on the new code
+
+Your database, uploaded files, and settings are untouched by a rebuild. They
+live on separate storage.
+
+**The web server and PHP are built together.** They are two halves of one image,
+so the stylesheets nginx serves always match the PHP that produced the page
+asking for them. This is why every helper script rebuilds both — never just one.
+
+**These are the only things that can be written while the site runs:**
+
+| What | Where it lives |
+|------|----------------|
+| Uploaded files and thumbnails | `omeka_media` volume |
+| Omeka's log files | `omeka_logs` volume |
+| Login sessions | `php_sessions` volume |
+| The database password file | Regenerated in memory on every start |
+| Your `local.config.php` | A file on the host, mounted read-only |
+| Everything else | Part of the image — read-only |
+
+The payoff is that a site is reproducible: the same repository at the same
+commit always builds the same site, you can tell exactly what is installed, and
+undoing a bad update is just going back to the previous image.
+
+For the full details, and for the one-time migration if your deployment predates
+this layout, see [docs/IMMUTABLE_CODE.md](docs/IMMUTABLE_CODE.md).
+
+## What runs
+
+The site is made of a few small services that talk to each other:
+
+| Service | What it is | Reachable from | Job |
+|---------|-----------|----------------|-----|
+| **web** | nginx 1.30.4 | The outside world (port 80) | Serves pages and files, hands page requests to `php` |
+| **php** | PHP 8.5.9 | `web` only | Runs Omeka S |
+| **db** | MySQL 9.7.2 | `php` only | Stores everything |
+| **typesense** _(optional)_ | Typesense 30.2 | `php` only | Search index, if you use a search module |
+
+Only `web` is reachable from outside, and even that binds to the machine itself
+by default, expecting an HTTPS proxy in front (see
+[Production SSL/TLS](#production-ssltls)). The database is never exposed.
+
+Every version above is locked to an exact published image, so a rebuild can't
+silently pick up a different one.
+
+> **typesense** is entirely optional and off by default. See
+> [Search backend](#search-backend-optional).
 >
-> Deployment-specific services (for example the AMIRA MCP server) are not part of the base stack — they live in overlay compose files (see [Deployment Overlays](#deployment-overlays)).
+> Services specific to one deployment — the AMIRA MCP server, for example — are
+> not part of this list. They live in a separate file (see
+> [Deployment overlays](#deployment-overlays)).
 
-## Quick Start
+## Quick start
 
-### Option A: One-click install (fresh Linux server)
+### Option A: One command, on a fresh Linux server
 
-On a clean Ubuntu/Debian/Fedora/Rocky/Alma server, one command installs Docker, clones this template at its latest release, optionally sets up HTTPS with Caddy, and launches the stack:
+On a blank Ubuntu, Debian, Fedora, Rocky, or Alma server, this installs Docker,
+downloads the latest release of this template, offers to set up HTTPS with Caddy,
+and starts the site:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/AM-Digital-Research-Environment/am-omeka-s-docker-bootstrap/main/setup.sh | bash
 ```
 
-See [am-omeka-s-docker-bootstrap](https://github.com/AM-Digital-Research-Environment/am-omeka-s-docker-bootstrap) for details and non-interactive usage. Continue below for manual setup.
+It asks a few questions and does the rest. See
+[am-omeka-s-docker-bootstrap](https://github.com/AM-Digital-Research-Environment/am-omeka-s-docker-bootstrap)
+for the details, or carry on below to do it by hand.
 
-### Option B: Manual setup
+Running a script straight from the internet always deserves a moment's thought.
+If you'd rather read it first, download it, look it over, then run it.
 
-#### 1. Clone and Configure
+### Option B: By hand
+
+#### 1. Get the files and set your password
 
 ```bash
-# Clone this template
 git clone https://github.com/AM-Digital-Research-Environment/omeka-s-docker.git my-omeka-site
 cd my-omeka-site
 
-# Create environment file
 cp .env.example .env
-
-# Edit .env with your settings (at minimum, set MYSQL_PASSWORD)
-nano .env
+nano .env          # set MYSQL_PASSWORD — that is the only required setting
 ```
 
-#### 2. Start Services
+#### 2. Start it
 
 ```bash
-# Build and start all services (Omeka S will auto-install on first run)
 docker compose up -d --build
 
-# Watch the installation progress
-docker compose logs -f php
+docker compose logs -f php    # watch it install; press Ctrl-C to stop watching
 ```
 
-#### 3. Access Omeka S
+The first build takes several minutes: it downloads Omeka, all the modules, and
+their supporting libraries. Later builds are much faster.
 
-1. Wait for all services to show as "healthy":
-   ```bash
-   docker compose ps
-   ```
+#### 3. Open it
 
-2. Open your browser to `http://localhost` (or your server IP)
+```bash
+docker compose ps      # wait until everything says "healthy"
+```
 
-3. If you set `OMEKA_ADMIN_EMAIL`, `OMEKA_ADMIN_USERNAME`, and `OMEKA_ADMIN_PASSWORD` in `.env`, an admin account is created automatically. Otherwise, complete the web installation wizard.
+Then visit `http://localhost` (or your server's address).
 
-#### 4. Install Additional Modules (Optional)
+If you filled in `OMEKA_ADMIN_EMAIL`, `OMEKA_ADMIN_USERNAME`, and
+`OMEKA_ADMIN_PASSWORD` in `.env`, your admin account already exists — just log
+in. Otherwise Omeka's setup wizard will walk you through creating one.
 
-Many modules are pre-installed (see below). Add another module as a reviewed
-image build input:
+#### 4. Add more modules (optional)
+
+A useful set of modules is already installed (see
+[Included modules](#included-modules)). To add another:
 
 ```bash
 bash scripts/install-module.sh CSVImport
 bash scripts/install-module.sh gh:owner/repository v1.2.3
 ```
 
-The helper updates `_docker/extra-modules.txt`, builds both PHP and nginx, and
-replaces their containers while retaining database/media volumes. The document
-root is read-only; do not download code into a running container. Use the CLI
-only for module database state after the code is baked:
+This adds the module to your list, rebuilds, and restarts the site. Your
+database and uploaded files are kept.
+
+Note that you cannot download a module into the running site — the code folder
+is read-only on purpose. Once a module's code is built in, these commands turn
+it on and apply its database changes:
 
 ```bash
 docker compose exec php omeka-s-cli module:install ModuleName
 docker compose exec php omeka-s-cli module:upgrade ModuleName
 ```
 
-See [docs/OMEKA_CLI.md](docs/OMEKA_CLI.md) for a fuller walk-through of common CLI workflows (modules, users, vocabularies, resource templates, settings).
+[docs/OMEKA_CLI.md](docs/OMEKA_CLI.md) covers the rest of what you can do from
+the command line: users, vocabularies, resource templates, and settings.
 
-## Environment Variables
+## Building your own instance
 
-Create a `.env` file from `.env.example`. All supported variables:
+This template is meant to be configured, not copied and rewritten. Before you
+start, pick one of two ways to add your own modules and themes:
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `MYSQL_PASSWORD` | Yes | - | MySQL password for the Omeka S database |
-| `OMEKA_VERSION` | No | `4.2.1` | Omeka S version to install |
-| `OMEKA_ADMIN_EMAIL` | No | - | Admin email (skips web wizard if all three admin vars are set) |
-| `OMEKA_ADMIN_USERNAME` | No | - | Admin username |
-| `OMEKA_ADMIN_PASSWORD` | No | - | Admin password |
-| `OMEKA_TZ` | No | `UTC` | Timezone (e.g. `Europe/Berlin`) |
-| `OMEKA_LOCALE` | No | - | Locale (e.g. `en_US`) |
-| `OMEKA_TITLE` | No | - | Site title |
-| `NGINX_PORT` | No | `80` | Host port for nginx (e.g. `8080` behind a reverse proxy) |
-| `NGINX_BIND` | No | `127.0.0.1` | Interface the nginx port binds to. Default is localhost-only (for use behind a host reverse proxy); set `0.0.0.0` to serve HTTP directly |
-| `SERVER_NAME` | No | `_` | Public hostname for nginx `server_name` (e.g. `omeka.example.edu`). Default `_` is a catch-all, safe when behind a trusted reverse proxy. |
-| `FRAME_ANCESTORS` | No | `'self'` | CSP `frame-ancestors`: origins allowed to embed the site in an iframe, e.g. `"'self' https://www.example.org"` |
-| `TYPESENSE_API_KEY` | No | - | API key shared by the Typesense server and search module (only with the `search` profile) |
-| `COMPOSE_FILE` | No | - | Colon-separated compose files — activates a deployment overlay, e.g. `docker-compose.yml:compose.amira.yml` |
-| `COMPOSE_PROFILES` | No | - | Comma-separated profiles to auto-enable, e.g. `search` |
-| `OMEKA_LOCAL_CONFIG` | No | `./_docker/local.config.php` | Host path mounted as read-only `config/local.config.php` |
-| `EXTRA_MODULES` | No | - | Comma-separated module URIs baked at build time (prefer the tracked manifest) |
-| `EXTRA_THEMES` | No | - | Comma-separated theme URIs baked at build time (prefer the tracked manifest) |
-| `ENABLE_IIIF` | No | `false` | Bake IiifServer, ImageServer, and Mirador into both images |
-| `AMIRA_MCP_VERSION` | No | see `compose.amira.yml` | AMIRA overlay only: published MCP server release tag |
-| `PHP_PM_MAX_CHILDREN` | No | `5` | PHP-FPM max worker processes |
-| `PHP_PM_START_SERVERS` | No | `2` | PHP-FPM workers started on boot |
-| `PHP_PM_MIN_SPARE_SERVERS` | No | `1` | Minimum idle workers |
-| `PHP_PM_MAX_SPARE_SERVERS` | No | `3` | Maximum idle workers |
-| `PHP_PM_MAX_REQUESTS` | No | `500` | Requests before worker respawn (prevents memory leaks) |
+| | Edit the lists directly | Add a deployment folder |
+|---|---|---|
+| **Where you work** | `_docker/extra-modules.txt`, `_docker/extra-themes.txt` | `compose.<yourname>.yml` and `deploy/<yourname>/` |
+| **Best if** | You run one site and this repository is yours | You run several sites, or you want to keep pulling updates from this template |
+| **What it affects** | Every build from this copy of the repository | Only the sites that switch it on |
+| **Example to copy** | — | [`deploy/amira/`](deploy/amira/README.md) |
 
-## Key Configuration
+If you expect to pull future updates from this template, take the second option.
+It adds files rather than changing existing ones, so updates merge cleanly. See
+[Deployment overlays](#deployment-overlays) for how to set one up.
 
-### PHP Settings
-- Memory limit: 512MB
-- Upload limit: 100MB
-- Max execution time: 300s
-- OPcache with JIT enabled
-- APCu caching enabled
+### 1. Settings
 
-### MySQL Settings
-- InnoDB buffer pool: 512MB
-- Max connections: 250
-- See [docs/DB_TUNING.md](docs/DB_TUNING.md) for full parameter reference
+```bash
+cp .env.example .env
+```
 
-### Nginx Settings
-- Gzip compression enabled
-- Security headers (X-Frame-Options, etc.)
-- Static file caching (1 year)
+`MYSQL_PASSWORD` is the only value you must set. If the site will be reachable
+from the internet, also set `SERVER_NAME` and read
+[docs/PRODUCTION.md](docs/PRODUCTION.md) first.
 
-## Common Operations
+To change Omeka's own settings — thumbnail sizes, where files are stored, how
+much gets logged — copy `_docker/local.config.php`, edit your copy, and point
+`OMEKA_LOCAL_CONFIG` at it. The site can read that file but never writes to it,
+and the backup script always saves whichever copy is actually in use.
 
-### View Logs
+### 2. Modules and themes
+
+Add each one with its exact version:
+
+```bash
+bash scripts/install-module.sh gh:owner/repository v1.2.3
+bash scripts/install-theme.sh  gh:omeka-s-themes/CenterRow v1.8.0
+```
+
+Each command adds a line to the list, rebuilds, and restarts the site. You can
+also edit the lists by hand and run `bash scripts/rebuild-code.sh` once at the
+end.
+
+Naming an exact version (a release tag or a commit) is worth the small effort:
+it means a rebuild six months from now installs the same code, not whatever the
+module's authors happen to have changed since.
+
+If a module needs extra libraries, the build fetches them for you.
+
+### 3. Code that isn't published anywhere
+
+For a module or theme with no public repository — something written in-house, or
+inherited from an older site — put its files in
+`_docker/local-modules/<ModuleName>/` or `_docker/local-themes/<ThemeName>/`.
+The build installs them for you. See
+[Modules and themes of your own](#modules-and-themes-of-your-own).
+
+### 4. One rule to know about
+
+The web server only serves files from an `asset/` folder inside a module or
+theme. Anything else in there is hidden, on purpose. If you write your own theme
+and put its stylesheets somewhere else, the browser will not be able to load
+them and the site will look unstyled. Most existing modules and themes already
+follow this convention. See [What the site serves](#what-the-site-serves).
+
+### 5. Extra vocabularies
+
+Put the vocabulary file and a small `.json` description of it in
+`_docker/vocabularies/`. They are imported the first time the site starts. See
+[Custom vocabularies](#custom-vocabularies).
+
+### 6. Build and check
+
+```bash
+bash scripts/rebuild-code.sh    # builds and restarts; waits until the site is healthy
+docker compose ps               # everything should say "healthy"
+docker compose logs -f php      # watch the install, modules, and vocabularies load
+```
+
+Commit your module and theme lists and any local code. Do **not** commit `.env`
+— it holds your passwords. With the lists committed, a colleague who clones your
+repository builds exactly the same site you have.
+
+## Settings (the `.env` file)
+
+Everything you can configure lives in one file. Copy `.env.example` to `.env` and
+edit it. Settings marked **rebuild** become part of the image, so changing one
+means running `bash scripts/rebuild-code.sh` rather than just restarting.
+
+### Database
+
+| Setting | Required | Default | What it does |
+|---------|----------|---------|--------------|
+| `MYSQL_PASSWORD` | **Yes** | — | Password for Omeka's database user. Pick a long random one |
+| `MYSQL_DATABASE` | No | `omeka` | Name of the database |
+| `MYSQL_USER` | No | `omeka` | Database user Omeka connects as |
+
+The database's own root password is generated randomly at first start and is
+never needed for day-to-day work.
+
+### The site
+
+| Setting | Required | Default | What it does |
+|---------|----------|---------|--------------|
+| `OMEKA_VERSION` | No | `4.2.1` | **rebuild** — which Omeka S release to install. `latest` picks up whatever is newest at build time, which by definition hasn't been tested with this template; you'll get a warning if you use it |
+| `OMEKA_ADMIN_EMAIL` | No | — | Set all three admin settings and the first account is created for you, skipping the setup wizard. Set only some and they're ignored |
+| `OMEKA_ADMIN_USERNAME` | No | — | Display name of that first account |
+| `OMEKA_ADMIN_PASSWORD` | No | — | Its password. Consider removing it from `.env` once the site is up |
+| `OMEKA_TZ` | No | `UTC` | Timezone, e.g. `Europe/Berlin` |
+| `OMEKA_LOCALE` | No | — | Language, e.g. `en_US` |
+| `OMEKA_TITLE` | No | — | Site title |
+| `OMEKA_LOCAL_CONFIG` | No | `./_docker/local.config.php` | Path to your copy of Omeka's own configuration file |
+
+### Being reachable
+
+| Setting | Required | Default | What it does |
+|---------|----------|---------|--------------|
+| `NGINX_PORT` | No | `80` | Which port on the machine the site answers on. Use `8080` if something else (an HTTPS proxy) holds port 80 |
+| `NGINX_BIND` | No | `127.0.0.1` | Who can reach that port. The default means "this machine only", which is what you want behind an HTTPS proxy. Use `0.0.0.0` to serve plain HTTP directly to the internet |
+| `SERVER_NAME` | No | `_` | Your public hostname, e.g. `omeka.example.edu`. The default accepts any name, which is fine only when a proxy sits in front |
+| `FRAME_ANCESTORS` | No | `'self'` | Which other websites may embed your site in a frame. Default: only your own. Example: `"'self' https://www.example.org"` |
+
+### Modules, themes, and extras
+
+| Setting | Required | Default | What it does |
+|---------|----------|---------|--------------|
+| `ENABLE_IIIF` | No | `false` | **rebuild** — installs IiifServer, ImageServer, and Mirador for IIIF image viewing |
+| `EXTRA_MODULES` | No | — | **rebuild** — modules as a comma-separated list. The `_docker/extra-modules.txt` file is easier to review, so prefer that |
+| `EXTRA_THEMES` | No | — | **rebuild** — same, for themes |
+| `EXTRA_MODULES_FILE` | No | `_docker/empty-modules.txt` | **rebuild** — points at a second module list. This is how a deployment folder adds its own modules |
+| `EXTRA_THEMES_FILE` | No | `_docker/empty-themes.txt` | **rebuild** — the same, for themes |
+| `OMEKA_ASSET_REFRESH` | No | `stable` | **rebuild** — forces modules to be downloaded again. `rebuild-code.sh --refresh` sets it for you; you shouldn't need it by hand |
+
+### Search (optional)
+
+| Setting | Required | Default | What it does |
+|---------|----------|---------|--------------|
+| `TYPESENSE_API_KEY` | No | — | Shared secret between the search engine and the search module. Required once search is switched on |
+| `TYPESENSE_HOST` | No | `typesense` | Where the site finds the search engine |
+| `TYPESENSE_PORT` | No | `8108` | Its port |
+| `TYPESENSE_PROTOCOL` | No | `http` | Plain HTTP is correct here — the traffic never leaves the machine |
+
+### Performance
+
+| Setting | Required | Default | What it does |
+|---------|----------|---------|--------------|
+| `PHP_PM_MAX_CHILDREN` | No | `5` | How many requests the site handles at once. Five fits the memory this container is given; raise both together if you have a bigger server |
+| `PHP_PM_START_SERVERS` | No | `2` | How many workers start up immediately |
+| `PHP_PM_MIN_SPARE_SERVERS` | No | `1` | Keep at least this many idle and ready |
+| `PHP_PM_MAX_SPARE_SERVERS` | No | `3` | Shut down idle workers above this many |
+| `PHP_PM_MAX_REQUESTS` | No | `500` | Restart a worker after this many requests, so slow memory leaks can't build up |
+
+All five must be whole numbers greater than zero, or the site refuses to start.
+
+### Adding your own deployment
+
+| Setting | Required | Default | What it does |
+|---------|----------|---------|--------------|
+| `COMPOSE_FILE` | No | — | Switches on a deployment folder, e.g. `docker-compose.yml:compose.amira.yml`. Once set, every `docker compose` command includes it automatically |
+| `COMPOSE_PROFILES` | No | — | Switches on optional services, e.g. `search` |
+| `AMIRA_MCP_VERSION` | No | see `compose.amira.yml` | AMIRA only: which release of the MCP server to run. Set it with `deploy/amira/update-amira-mcp.sh` |
+
+## What's tuned out of the box
+
+You should not need to change any of this, but it is worth knowing what you have.
+
+### PHP
+- 512 MB memory per request, 100 MB uploads, 5-minute limit on long operations
+- Compiled-code and object caching switched on, so pages don't get re-parsed
+- ImageMagick, Ghostscript, and PDF tools available for thumbnails and derivatives
+
+### Database
+- 512 MB kept in memory for frequently used data
+- Up to 250 simultaneous connections
+- See [docs/DB_TUNING.md](docs/DB_TUNING.md) if you need to change any of it
+
+### Web server
+- Compression for text, CSS, JavaScript, and JSON
+- Images, fonts, and scripts cached in the browser for a year
+- Security headers, including control over who may embed your site in a frame
+- The admin login page is limited to 5 attempts per minute, slowing down
+  password guessing
+- Only public files are served — see [What the site serves](#what-the-site-serves)
+
+## What the site serves
+
+Omeka keeps all of its own code inside the same folder the web server reads
+from. That means the web server, not Omeka, decides what the public can see, and
+this template keeps that list short. If you write your own module or theme,
+these are the rules to work within:
+
+| Someone requests | They get |
+|------------------|----------|
+| The site itself — pages, admin, search | The page, as normal |
+| `asset/` inside a module or theme | The file (stylesheets, scripts, images, data) |
+| `theme.jpg` in a theme | The file — Omeka's theme picker needs it |
+| Anything else inside a module or theme | Nothing (404) |
+| Omeka's own source folders: `config`, `data`, `logs`, `vendor`, `application` | Nothing (404) |
+| `composer.json`, `package-lock.json`, `README.md`, `.env`, and similar | Nothing (404) |
+| Any `.ini`, `.yml`, `.sql`, `.sh`, `.log`, or backup file | Nothing (404) |
+| A `.php` file other than the site's own front page script | Nothing (404) |
+
+Two things follow from this that are worth knowing:
+
+**Put your assets in `asset/`.** The rule lists what *is* public rather than what
+isn't, so a module that later adds a new build tool or test folder can't
+accidentally start exposing it. Data files work fine here too — a dashboard that
+loads JSON from its own `asset/` folder is normal and supported.
+
+**Only one PHP file can ever run.** Omeka routes every page through a single
+entry script, so the web server refuses to run any other PHP file. Even if
+something managed to write a malicious script into the site folder, it could not
+be executed through the web.
+
+Why this matters: without these rules, a visitor could simply request a module's
+`composer.json` and read a precise list of every library version the site runs —
+a shopping list for matching against known vulnerabilities.
+
+Deployment folders can add their own rules without editing `nginx.conf` — see
+[Deployment overlays](#deployment-overlays).
+
+## Everyday operations
+
+### Viewing logs
 
 ```bash
 # All services
@@ -213,7 +464,7 @@ docker compose logs -f web
 docker compose logs -f db
 ```
 
-### Restart Services
+### Restarting services
 
 ```bash
 # Single service
@@ -223,7 +474,7 @@ docker compose restart php
 docker compose down && docker compose up -d
 ```
 
-### Access Container Shell
+### Opening a shell inside a container
 
 ```bash
 # PHP container
@@ -233,82 +484,131 @@ docker compose exec php bash
 docker compose exec db mysql -u omeka -p
 ```
 
-### Update Omeka S Core
+### Update Omeka S itself
 
 ```bash
-# Preview update (dry run)
-./scripts/update-omeka.sh --dry-run
+# See what would change, without changing anything
+bash scripts/update-omeka.sh --dry-run
 
-# Update to latest version
-./scripts/update-omeka.sh
+# Move to the newest release
+bash scripts/update-omeka.sh
 
-# Update to specific version
-./scripts/update-omeka.sh 4.2.1
+# Move to a specific release
+bash scripts/update-omeka.sh 4.2.1
 ```
 
-### Update Modules
+The script backs up first, records the new version in `.env`, and rebuilds. If
+the build fails it puts your old `.env` back and leaves the running site alone.
+Omeka's own database upgrade stays a separate, deliberate step — you confirm it
+in the admin interface once you're happy with the new code.
+
+### Update modules
 
 ```bash
-# Edit a tag/commit in _docker/extra-modules.txt, then deploy
-./scripts/rebuild-code.sh
+# After editing a version in _docker/extra-modules.txt
+bash scripts/rebuild-code.sh
 
-# Refresh any deliberately floating module/theme refs
-./scripts/update-module.sh
+# Re-download any module that tracks a branch rather than a fixed version
+bash scripts/update-module.sh
 ```
 
-## Module Management
+## Modules
 
-### Pre-installed Modules
+### Included modules
 
-The following modules are downloaded during the Docker image build and automatically installed on first run. They are defined in `_docker/default-modules.txt`.
+These come with every site built from this template. They are listed in
+`_docker/default-modules.txt`, installed during the build, and registered the
+first time the site starts — you just switch them on in the admin interface.
 
-| Module | Purpose |
-|--------|---------|
-| **ActivityLog** | Track resource activity |
-| **Common** | Shared library required by many Daniel-KM modules |
-| **Cron** | Schedule background tasks |
-| **CustomVocab** | Create custom controlled vocabularies |
-| **EasyAdmin** | Administration dashboard and tools |
-| **FileSideload** | Import files from server directory |
-| **Hierarchy** | Organize items and item sets hierarchically |
-| **ItemCarouselBlock** | Display items in a carousel block |
-| **Log** | PSR-3 logger for Omeka S |
-| **NumericDataTypes** | Support for numeric and date values |
+| Module | What it's for |
+|--------|---------------|
+| **ActivityLog** | Keeps a record of who changed what |
+| **Common** | Shared code that several of the modules below need |
+| **Cron** | Runs scheduled background jobs |
+| **CustomVocab** | Define your own controlled vocabularies |
+| **EasyAdmin** | Extra admin tools and maintenance tasks |
+| **FileSideload** | Import files placed on the server, instead of uploading one by one |
+| **Hierarchy** | Arrange items and item sets in a tree |
+| **ItemCarouselBlock** | A carousel of items for site pages |
+| **Log** | Writes module and job messages to a readable log |
+| **NumericDataTypes** | Proper number and date fields, so ranges and sorting work |
 
-These modules are ready to activate in the Omeka S admin panel after installation. Deployment overlays can bake additional modules into the image via the `EXTRA_MODULES_FILE` build arg (see [Deployment Overlays](#deployment-overlays)).
+**Switch them on in this order**, because some depend on others:
 
-**Activation order**: When activating modules with dependencies, activate them in order:
-1. Common and Log first
+1. Common and Log
 2. Cron
-3. EasyAdmin and other modules
+3. EasyAdmin, then everything else
 
-### Adding Modules
+### Adding your own
 
-Prefer one pinned Omeka-S-Cli URI per line in `_docker/extra-modules.txt`:
+Put one module per line in `_docker/extra-modules.txt`, ideally with a fixed
+version after the `#`:
 
-```bash
+```
 gh:owner/repository#v1.2.3
 ```
 
-Official registry names and full `gh:` references are supported. A
-comma-separated `EXTRA_MODULES` value remains available as a build argument:
+Plain names work too for modules in Omeka's own registry (`CSVImport`), as do
+full GitHub references. `bash scripts/install-module.sh` writes these lines for
+you and rebuilds in one step.
+
+Only add to `_docker/default-modules.txt` if a module genuinely belongs in
+*every* site built from this template. For anything specific to your own
+deployment, use your own list and point `EXTRA_MODULES_FILE` at it from your
+deployment folder — `compose.amira.yml` shows how.
+
+## Themes
+
+Every image includes Omeka's `freedom` and `lively` themes. Add more the same way
+as modules:
 
 ```bash
-EXTRA_MODULES=ValueSuggest,gh:Daniel-KM/Omeka-S-module-AdvancedSearch
+bash scripts/install-theme.sh gh:omeka-s-themes/CenterRow v1.8.0
 ```
 
-### Adding Shared or Deployment Modules
+### When a theme needs a specific folder name
 
-Add a module to `_docker/default-modules.txt` only when every deployment should
-receive it. Otherwise use the operator manifest and rebuild:
+A line in `_docker/extra-themes.txt` can name the folder the theme should be
+installed into:
 
 ```bash
-bash scripts/rebuild-code.sh
+gh:owner/SomeTheme#v2.0.0                  # usual case: nothing extra needed
+gh:owner/SomeTheme#v2.0.0 my-theme-folder  # install it under this folder name
 ```
 
-To bake deployment-specific modules without touching the shared default list, point the `EXTRA_MODULES_FILE` build arg at your own file from an overlay compose file (see `compose.amira.yml` for a worked example).
+You need the second form only occasionally. The download tool names the folder
+after the theme's display name, but Omeka's database remembers which theme a site
+uses by **folder name**. If a theme is called something like
+`Africa Multiple — DRE`, the folder ends up as `Africa_Multiple_____DRE`, and any
+site that expected `DRE-theme` quietly loses its design. Naming the folder
+explicitly avoids that, without having to copy the theme into this repository.
+`deploy/amira/themes.txt` shows it in use.
 
-## Custom Vocabularies
+If a theme looks unstyled after a build, check
+[What the site serves](#what-the-site-serves) first.
+
+## Modules and themes of your own
+
+For code that isn't published anywhere — something written in-house, a fork you
+haven't released, or a module inherited from an older site — put the files
+straight into the build:
+
+```
+_docker/local-modules/MyModule/     becomes  modules/MyModule
+_docker/local-themes/my-theme/      becomes  themes/my-theme
+```
+
+The folder name is the module or theme name; nothing else needs registering.
+These are copied in *after* the downloads, and they fully replace a downloaded
+module or theme of the same name — so no leftover files from the older version
+can survive underneath. What you commit is exactly what runs.
+
+`scripts/migrate-immutable-storage.sh --adopt-code` also writes here, when it
+rescues code from an older deployment that can't be traced back to a published
+release. If you can later replace that rescued copy with a proper version in
+`_docker/extra-modules.txt`, it's usually worth doing — you get updates again.
+
+## Custom vocabularies
 
 In addition to the built-in vocabularies (Dublin Core, Dublin Core Type, Bibliographic Ontology, Friend of a Friend), the following RDF vocabularies are automatically imported on first run:
 
@@ -319,63 +619,94 @@ In addition to the built-in vocabularies (Dublin Core, Dublin Core Type, Bibliog
 | **WGS84 Geo** | `geo` | Latitude, longitude, altitude positioning |
 | **MARC Relators** | `marcrel` | Library of Congress agent role terms |
 
-The ontology files live in `_docker/vocabularies/`, declared by the `vocabularies.json` manifest next to them (prefix, namespace URI, label, file). The import script scans the vocab directory for `*.json` manifests, so there are two ways to add vocabularies:
+The vocabulary files live in `_docker/vocabularies/`, next to a `vocabularies.json`
+file that says, for each one, its prefix, its namespace URI, a label, and the
+filename. The importer reads any `.json` file it finds in that folder, so you can
+add your own two ways:
 
-- **For every deployment**: drop the ontology file into `_docker/vocabularies/`, add an entry to `vocabularies.json`, and rebuild.
-- **For one deployment**: bind-mount your `<vocab>.owl` + `<vocab>.json` manifest pair into `/usr/local/share/omeka-vocabs/` from an overlay compose file — the AMIRA overlay's `dre` vocabulary (`deploy/amira/vocabularies/`) shows the pattern.
+- **For every site built from this template**: put the vocabulary file in
+  `_docker/vocabularies/`, add an entry to `vocabularies.json`, and rebuild.
+- **For just your site**: keep the pair in your own deployment folder and mount
+  them in — `deploy/amira/vocabularies/` does exactly this with its `dre`
+  vocabulary, and is the shortest thing to copy.
 
-## IIIF Support (Optional)
+Either way they are imported the first time the site starts. Vocabularies already
+imported are left alone on later starts.
 
-Set `ENABLE_IIIF=true` in `.env` to bake IiifServer, ImageServer, and Mirador:
+## IIIF support (optional)
+
+IIIF is the standard that lets other institutions display and cite your images —
+deep zoom, side-by-side comparison, shared annotations. To install the three
+modules that provide it:
 
 ```bash
 # In .env
 ENABLE_IIIF=true
+```
 
-# Build and deploy both PHP and nginx
+```bash
 bash scripts/rebuild-code.sh
 ```
 
-These modules depend on Common, which is pre-installed. After startup, activate modules in this order in the Omeka S admin panel:
-1. Common (if not already active)
+Then switch them on in the admin interface **in this order**, since each depends
+on the one before:
+
+1. Common (already installed)
 2. IiifServer
 3. ImageServer
 4. Mirador
 
-## Search Backend (Optional)
+## Search backend (optional)
 
-The base stack ships an optional [Typesense](https://typesense.org/) service as a search backend, paired with a search module such as [DRESearch](https://github.com/AM-Digital-Research-Environment/DRESearch) (developed for AMIRA, usable by any instance). **It is completely optional** — this template runs fine without it, and the `typesense` service stays out of the way unless you explicitly enable it. Keeping it off costs nothing and keeps the stack reusable for instances that don't need search.
+For faster, richer search than Omeka's built-in one, the template can run
+[Typesense](https://typesense.org/) alongside the site, driven by a search module
+such as [DRESearch](https://github.com/AM-Digital-Research-Environment/DRESearch)
+(written for AMIRA, but usable anywhere).
 
-### Enabling it
+**It is off by default and entirely optional.** Nothing about the rest of the
+template depends on it, and leaving it off costs you nothing.
 
-1. Set a strong, random API key in `.env` (this single key is shared by the Typesense server and the module):
+### Turning it on
+
+1. Put a long random key in `.env`. The same key is used by both the search
+   engine and the module:
    ```bash
-   # In .env — generate one with:  openssl rand -hex 24
+   # generate one with:  openssl rand -hex 24
    TYPESENSE_API_KEY=your-long-random-string
    ```
-2. Start (or recreate) the stack with the `search` profile, which adds the `typesense` service and injects the `TYPESENSE_*` settings into the `php` container:
+2. Start the stack with search included:
    ```bash
    docker compose --profile search up -d
    ```
-3. Install and activate the module, then point it at Typesense (it auto-reads the env vars, so its admin settings can be left blank):
+3. Install the search module. It picks up the connection settings automatically,
+   so you can leave its admin configuration blank:
    ```bash
    bash scripts/install-module.sh gh:AM-Digital-Research-Environment/DRESearch
    ```
 
-To run **without** search again, just start normally — `docker compose up -d` omits the profile and the `typesense` service never starts. Leaving `TYPESENSE_API_KEY` unset (or the module unconfigured) makes the module no-op gracefully.
+To make this permanent, add `COMPOSE_PROFILES=search` to `.env` — then a plain
+`docker compose up -d` includes it. To turn search off again, remove that line
+and start normally.
 
-### Security
+### Why this doesn't make you less safe
 
-The Typesense setup is designed not to widen the server's attack surface:
+- **Not reachable from outside.** The search engine opens no port to the
+  internet or even to the server itself. Only the site can talk to it.
+- **A key is required.** Starting it without `TYPESENSE_API_KEY` makes it exit
+  immediately rather than run unprotected. The key only ever lives in `.env`,
+  which is never committed.
+- **Locked down like everything else**: no special privileges, a read-only
+  filesystem, browser access disabled, and capped at half a CPU and 512 MB so it
+  can't crowd out the site.
+- **Nothing irreplaceable.** The index can always be rebuilt from the database.
+  Backups include it anyway, purely to make recovery faster.
 
-- **Never exposed to the host or internet.** The service publishes **no ports** — it is reachable only on the internal `backend` Docker network, server-side from `php`. Its admin API key therefore stays inside the same trust boundary as MySQL.
-- **API key required.** Starting the `search` profile without `TYPESENSE_API_KEY` set makes Typesense exit immediately (`API key is not specified`) rather than run open. The key lives only in `.env` (gitignored).
-- **Hardened like the rest of the stack:** `cap_drop: ALL`, `no-new-privileges`, a read-only root filesystem, browser CORS disabled, and CPU/memory limits (0.5 CPU / 512M) so it can't starve the host.
-- **Rebuildable and backed up when present.** The index in `typesense_data` can be rebuilt from MySQL, but the backup script includes it when the volume exists to shorten disaster recovery.
+## Deployment overlays
 
-## Deployment Overlays
-
-The base stack in `docker-compose.yml` is deliberately generic. Anything specific to one deployment — extra services, baked-in modules, custom vocabularies, extra nginx locations — lives in an **overlay compose file** activated from `.env`:
+`docker-compose.yml` stays deliberately generic. Anything specific to one
+deployment — extra services, your own modules, custom vocabularies, extra web
+server rules — goes in a **separate file that layers on top** (an *overlay*),
+switched on from `.env`:
 
 ```bash
 # In .env
@@ -383,143 +714,177 @@ COMPOSE_FILE=docker-compose.yml:compose.amira.yml
 COMPOSE_PROFILES=search
 ```
 
-Docker Compose reads both variables from `.env`, so once set, every `docker compose` command transparently includes the overlay. A checkout without those lines runs the plain template — same commands, same docs.
+Once those lines are there, every `docker compose` command picks the overlay up
+automatically — nothing else changes, and all the commands in this README still
+work. A copy of the repository without those lines runs the plain template.
 
-The template provides four extension points that overlays can use without editing any base file:
+The point is that **you never edit the shared files**, so you can keep pulling
+updates from this template without merge conflicts. Four things can be added
+this way:
 
-| Extension point | Mechanism |
-|-----------------|-----------|
-| Extra services | Define them in the overlay compose file (compose merges service maps) |
-| Extra nginx locations | Mount `*.conf.template` files into `/etc/nginx/templates/extra-locations/`; the base `nginx.conf` glob-includes the rendered output |
-| Baked-in modules | Set the `EXTRA_MODULES_FILE` build arg to your own modules list |
-| Custom vocabularies | Bind-mount `<vocab>.owl` + `<vocab>.json` manifest into `/usr/local/share/omeka-vocabs/` |
+| You want to add | How |
+|-----------------|-----|
+| Another service | Define it in your `compose.<name>.yml` |
+| Extra web server rules (a new URL path) | Mount a `.conf.template` file into `/etc/nginx/templates/extra-locations/` |
+| Your own modules or themes | Point `EXTRA_MODULES_FILE` / `EXTRA_THEMES_FILE` at your own list |
+| Custom vocabularies | Mount the vocabulary file and its `.json` description into `/usr/local/share/omeka-vocabs/` |
 
-The worked example is the **AMIRA overlay** (`compose.amira.yml` + `deploy/amira/`), which runs the production instance at [data.africamultiple.uni-bayreuth.de](https://data.africamultiple.uni-bayreuth.de): it adds the [amira-mcp-server](https://github.com/AM-Digital-Research-Environment/amira-mcp-server) (exposing the collection to AI assistants over the [Model Context Protocol](https://modelcontextprotocol.io/) at `/mcp`), bakes in the DRE modules, and imports the `dre` vocabulary. See [deploy/amira/README.md](deploy/amira/README.md) for the full documentation and for how to roll your own overlay.
+**The example to copy** is the AMIRA deployment (`compose.amira.yml` plus
+[`deploy/amira/`](deploy/amira/README.md)), which runs the live site at
+[data.africamultiple.uni-bayreuth.de](https://data.africamultiple.uni-bayreuth.de).
+It uses all four: it adds an [MCP server](https://modelcontextprotocol.io/) that
+lets AI assistants search the collection at `/mcp`, installs the DRE modules and
+theme, and imports the `dre` vocabulary. Its README walks through setting up your
+own.
 
-## Bulk Imports
+## Bulk imports
 
-Use the `sideload/` directory for bulk file imports:
+To import many files at once without uploading them one by one through the
+browser:
 
-1. Place files in the `sideload/` directory
-2. Activate the FileSideload module in the Omeka S admin panel (it is pre-installed)
-3. In Omeka S admin, go to **Modules > FileSideload > Configure** and set the **Sideload directory** to `/var/www/html/sideload`
-4. Import files through the Omeka S admin interface
+1. Copy the files into the `sideload/` folder of this repository
+2. Switch on the FileSideload module in the admin interface (it is already
+   installed)
+3. Go to **Modules > FileSideload > Configure** and set the sideload directory to
+   `/var/www/html/sideload`
+4. Import them from the admin interface as normal
 
 ## Troubleshooting
 
-### Service Won't Start
+### I added a module but nothing changed
+
+Adding a module to a list is not enough on its own — the code has to be built in:
 
 ```bash
-# Check logs
-docker compose logs php
-
-# Check health status
-docker compose ps
-docker inspect <container-name> --format '{{json .State.Health}}'
+bash scripts/rebuild-code.sh
 ```
 
-### Database Connection Issues
+`install-module.sh` does this for you; editing the list by hand does not.
+
+### My theme or module looks unstyled
+
+Its stylesheets are probably not in an `asset/` folder. See
+[What the site serves](#what-the-site-serves).
+
+### A service won't start
 
 ```bash
-# Test database connection
+docker compose ps                  # which one is unhealthy?
+docker compose logs php            # and why
+```
+
+The `php` service can take up to two minutes on a first start — it is installing
+Omeka, its modules, and the vocabularies. Watch the log rather than the status.
+
+### "Existing Omeka database detected without migrated media storage"
+
+Your site predates the current storage layout and the startup check stopped
+before it could serve a site with no media. Run the one-time migration:
+
+```bash
+bash scripts/migrate-immutable-storage.sh
+```
+
+See [docs/IMMUTABLE_CODE.md](docs/IMMUTABLE_CODE.md) first — it takes a backup
+and needs a maintenance window.
+
+### The search service exits immediately
+
+It says `API key is not specified`. Set `TYPESENSE_API_KEY` in `.env` and start
+again. This is deliberate: it refuses to run unprotected.
+
+### Database connection problems
+
+```bash
 docker compose exec db mysql -u omeka -p -e "SELECT 1"
-
-# Check database exists
-docker compose exec db mysql -u omeka -p -e "SHOW DATABASES"
 ```
 
-### Permission Issues
+If that works but the site doesn't, check that `MYSQL_USER`, `MYSQL_DATABASE`,
+and `MYSQL_PASSWORD` in `.env` match what the database was first created with.
+Changing them later does not rename an existing database or user.
+
+### File permission problems
 
 ```bash
-# Inspect the runtime user and current ownership first
 docker compose exec php id
 docker compose exec php ls -ld /var/www/html/files
-
-# Restore least-privilege modes when the files are already owned by www-data
 docker compose exec php chmod -R u=rwX,go=rX /var/www/html/files
 ```
 
-New volumes are owned by `www-data`. If an older volume has different ownership,
-back it up before repairing ownership during a maintenance window; the hardened
-container deliberately drops the capability needed to `chown` files at runtime.
+New installations get this right by themselves. If an older set of files has the
+wrong owner, back it up and fix the ownership during a maintenance window — the
+running container is deliberately not allowed to change file ownership.
 
-### Clear Cache
+### Clearing caches
 
 ```bash
 docker compose up -d --force-recreate php web
 ```
 
-## Security Notes
+## Security
 
-- Store passwords in `.env` file (never commit to git)
-- MySQL uses random root password
-- Security headers are configured in nginx
-- Use a reverse proxy for SSL/TLS in production (see below)
+### What is already done for you
 
-## Security Hardening (Built-in)
+| | |
+|---|---|
+| **The database is unreachable** | It has no port open to the machine or the internet — only the site can talk to it |
+| **The site itself listens locally by default** | It expects an HTTPS proxy in front. See [Production SSL/TLS](#production-ssltls) |
+| **Nothing runs as root** | Omeka runs as an unprivileged user, and containers can't gain new privileges |
+| **The code can't be modified** | The application folder is read-only while running, so nothing can install a backdoor into it |
+| **Only one PHP file can execute** | See [What the site serves](#what-the-site-serves) |
+| **Private files aren't served** | Configuration, logs, source code, and dependency lists all return 404 |
+| **Resource limits** | Each service has a CPU and memory cap, so one misbehaving part can't take the machine down |
+| **Login is rate-limited** | 5 attempts per minute on the admin login page |
+| **Versions are locked** | Every image is pinned to an exact published build, so a rebuild can't silently pull something different |
 
-This template includes Docker security hardening by default in the main `docker-compose.yml`:
+### What is left to you
 
-| Feature | Description |
-|---------|-------------|
-| **Resource Limits** | CPU and memory limits prevent DoS attacks |
-| **no-new-privileges** | Prevents privilege escalation inside containers |
-| **Dropped Capabilities** | Removes unnecessary Linux capabilities |
-| **Read-only Filesystems** | PHP and nginx use read-only roots; media/logs/cache have narrow writable mounts |
-| **Network Isolation** | Separate frontend/backend networks; only nginx is exposed |
-| **Non-root Execution** | PHP-FPM workers run as www-data via pool configuration |
+**Keep your passwords out of Git.** `.env` holds them and is already ignored by
+Git. Backups contain a copy of it, so encrypt backups before moving them
+anywhere.
 
-### Security Considerations for Docker in Production
+**Put HTTPS in front of the site.** The container speaks plain HTTP by design;
+something on the host should terminate TLS. See
+[Production SSL/TLS](#production-ssltls) and
+[docs/PRODUCTION.md](docs/PRODUCTION.md).
 
-#### Known Limitations
+**Anyone who can use Docker on the host is effectively root.** Treat access to
+the server the same way you treat the admin password.
 
-The dated, repository-wide findings and remediation status are tracked in
-[docs/SECURITY_REVIEW.md](docs/SECURITY_REVIEW.md).
+**Remove the admin password from `.env`** once the first account exists — it is
+only needed for the very first start.
 
-| Concern | Risk | Mitigation |
-|---------|------|------------|
-| **Shared Kernel** | Kernel exploit affects all containers | Keep host OS updated, use minimal host |
-| **Container Breakout** | Compromised container may access host | Never use `--privileged`, drop capabilities |
-| **Image Vulnerabilities** | Base images may contain CVEs | Scan images with Docker Scout or another reviewed, commit-pinned scanner |
-| **Secrets in Environment** | `docker inspect` exposes env vars | Use Docker secrets for sensitive data |
-| **Docker Socket** | Mounting socket = root on host | Never mount in application containers |
+**Keep things updated:**
 
-#### Recommended Additional Measures
+```bash
+docker compose pull               # newer database / search images
+bash scripts/rebuild-code.sh --pull   # newer PHP and web server base images
+```
 
-1. **Use a Reverse Proxy** (Traefik, Caddy, or nginx proxy)
-   - Terminate TLS at proxy level
-   - Add rate limiting and WAF rules
-   - Hide internal container topology
+**Consider scanning your images** for known vulnerabilities, e.g.
+`docker scout cves omeka-s-docker-php:latest`, and shipping logs somewhere you
+actually read them.
 
-2. **Image Scanning**
-   ```bash
-   # Scan for vulnerabilities
-   docker scout cves omeka-s-docker-php:latest
-   ```
-
-3. **Regular Updates**
-   ```bash
-   # Pull service images and refresh application base images
-   docker compose pull
-   bash scripts/rebuild-code.sh --pull
-   ```
-
-4. **Network Segmentation**
-   - Database and PHP are on a separate backend network
-   - Only nginx is exposed to the host via the frontend network
-
-5. **Monitoring & Logging**
-   - Ship logs to external aggregator (ELK, Loki)
-   - Monitor container resource usage
-   - Set up alerting for unusual activity
+**One trade-off to be aware of**: the database is configured to favour speed over
+absolute durability, which means an abrupt power loss could lose about one second
+of the very latest changes. If that matters for your content, see
+`innodb-flush-log-at-trx-commit` in [docs/DB_TUNING.md](docs/DB_TUNING.md).
 
 ## Production SSL/TLS
 
-The container's nginx honors the `X-Forwarded-Proto` header, so any reverse proxy that forwards it (Caddy, Traefik, and standard nginx setups all do) will get correct `https://` URLs from Omeka in links, redirects, IIIF manifests, and emails — no extra Omeka configuration needed. Set `SERVER_NAME` in `.env` to the public hostname.
+The site itself speaks plain HTTP. For a public site, put something in front of
+it that handles HTTPS certificates — Caddy is the least work, and the
+[one-command setup script](#option-a-one-command-on-a-fresh-linux-server) sets it
+up for you.
 
-### Caddy (automatic HTTPS)
+Whichever you choose, Omeka will produce correct `https://` links, emails, and
+IIIF manifests automatically, as long as the proxy forwards the usual
+`X-Forwarded-Proto` header (Caddy, Traefik, and standard nginx all do). No Omeka
+configuration is needed. Set `SERVER_NAME` in `.env` to your public hostname.
 
-Install [Caddy](https://caddyserver.com/) on your host and create a Caddyfile:
+### Caddy (easiest — certificates handled for you)
+
+Install [Caddy](https://caddyserver.com/) on the server and create a Caddyfile:
 
 ```
 omeka.example.edu {
@@ -527,7 +892,9 @@ omeka.example.edu {
 }
 ```
 
-Then update your `.env` so the container nginx no longer holds port 80 on the host: `NGINX_PORT=8080`, restart the stack with `docker compose up -d --force-recreate web`, and start Caddy. Certificates are obtained and renewed automatically.
+Then set `NGINX_PORT=8080` in `.env` so Caddy can take port 80, apply it with
+`docker compose up -d --force-recreate web`, and start Caddy. Certificates are
+obtained and renewed automatically from then on.
 
 ### Traefik (Docker-native)
 
@@ -602,39 +969,54 @@ server {
 
 For a full production walk-through (firewall rules, cert provisioning paths, host-OS hardening, verification), see [docs/PRODUCTION.md](docs/PRODUCTION.md).
 
-## Volumes
+## Where your data lives
 
-Data is persisted in Docker volumes:
+Everything that survives a rebuild is stored outside the image:
 
-| Volume | Purpose |
-|--------|---------|
-| `mysql_data` | MySQL database files |
-| `omeka_media` | Uploaded files and generated derivatives only |
-| `omeka_logs` | Omeka application logs |
-| `php_sessions` | PHP session store (survives container restarts, so logins/CSRF tokens do too) |
-| `typesense_data` | Typesense search index (only with the `search` profile; rebuildable from MySQL) |
+| Storage | What's in it | Backed up? |
+|---------|--------------|------------|
+| `mysql_data` | The database — items, users, settings, everything | Yes |
+| `omeka_media` | Uploaded files and the thumbnails made from them | Yes |
+| `omeka_logs` | Omeka's log files | Yes |
+| `php_sessions` | Who is currently logged in. Kept on disk so a restart doesn't log everyone out | No — nothing worth keeping |
+| `typesense_data` | The search index, if you use search | Yes, though it can always be rebuilt |
 
-## Backup & Migration
+Your `.env` and your copy of `local.config.php` are ordinary files in this
+repository folder, and the backup script copies them too.
 
-Backup and restore scripts are included for creating full snapshots and migrating to another server:
+## Backups and moving servers
 
 ```bash
-# Create a full backup (database + files + config)
+# Back up everything
 bash scripts/backup.sh
 
-# Restore from a backup
+# Restore — on this server or a new one
 bash scripts/restore.sh backups/20260330-120000
 ```
 
-The backup is zero-downtime: it uses a consistent InnoDB snapshot and read-only
-volume archives while services stay up. Do not apply module/core database
-migrations while it runs. Backups are permission-restricted and include
-`SHA256SUMS`; encrypt them
-before storing off-host. See [docs/BACKUP_RESTORE.md](docs/BACKUP_RESTORE.md) for
-the full migration and restore guide.
+**The site stays up during a backup.** The database is captured as a single
+consistent snapshot without blocking anyone, and files are read without being
+locked. The one thing to avoid is installing or upgrading a module while a backup
+runs, because that changes the database's structure mid-snapshot.
 
-Deployments created before the immutable layout must run the guarded one-time
-migration in [docs/PROPOSAL_immutable_code.md](docs/PROPOSAL_immutable_code.md).
+Each backup records checksums of everything it contains, so you can tell if a
+copy was corrupted in transit. Those checksums are not encryption: a backup
+contains your `.env`, so **encrypt it before storing it anywhere else**.
+
+[docs/BACKUP_RESTORE.md](docs/BACKUP_RESTORE.md) covers restores, moving to
+another server, and a suggested retention schedule.
+
+If your deployment predates the current storage layout, run the one-time
+migration described in [docs/IMMUTABLE_CODE.md](docs/IMMUTABLE_CODE.md).
+
+## Getting help
+
+- **Everyday commands**: [docs/COMMANDS.md](docs/COMMANDS.md)
+- **Going public**: [docs/PRODUCTION.md](docs/PRODUCTION.md)
+- **Backups and moving servers**: [docs/BACKUP_RESTORE.md](docs/BACKUP_RESTORE.md)
+- **Managing users, vocabularies, settings**: [docs/OMEKA_CLI.md](docs/OMEKA_CLI.md)
+- **A full real-world example**: [deploy/amira/README.md](deploy/amira/README.md)
+- **Omeka S itself**: <https://omeka.org/s/docs/user-manual/>
 
 ## License
 

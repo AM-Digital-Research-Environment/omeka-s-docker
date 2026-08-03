@@ -48,11 +48,13 @@ docker compose exec php omeka-s-cli module:uninstall CSVImport
 docker compose exec php omeka-s-cli module:search facet
 ```
 
-The application document root is read-only. Do not use `module:download` or
-`module:update` in a running container; add/pin the module in the build manifest
-and run `scripts/rebuild-code.sh`. Apply `module:upgrade` only after the new code
-has been tested and a backup exists: rolling an image back cannot reverse a DB
-migration.
+`module:download` and `module:update` will not work here — the application folder
+is read-only while the site runs. Add the module to a list and run
+`bash scripts/rebuild-code.sh` instead.
+
+`module:upgrade` changes the database, so run it only after you have tested the
+new code and taken a backup. Going back to an older image restores the code but
+does not undo a database migration.
 
 ### Users
 
@@ -87,11 +89,14 @@ bash scripts/update-omeka.sh 4.2.1
 
 ### Vocabularies
 
-The Dockerfile pre-stages a set of RDF vocabulary files under `/usr/local/share/omeka-vocabs/` (see [Dockerfile:135](../Dockerfile#L135)):
+The vocabulary files from `_docker/vocabularies/` are placed in
+`/usr/local/share/omeka-vocabs/` during the build, and a deployment folder can
+mount extra ones alongside them. They are imported automatically the first time
+the site starts — the commands below are only needed to import one by hand.
 
 ```bash
 docker compose exec php ls /usr/local/share/omeka-vocabs/
-# dre.owl  fabio.owl  frapo.owl  geo.rdf  marcrel.rdf  ...
+# fabio.owl  frapo.owl  geo.rdf  marcrel.rdf  vocabularies.json  ...
 ```
 
 To import one, supply the file plus the required `--label`, `--namespace-uri`, and `--prefix` flags:
@@ -127,21 +132,22 @@ docker compose exec php omeka-s-cli config:get installation_title
 docker compose exec php omeka-s-cli config:set installation_title "My Archive"
 ```
 
-## CLI vs. immutable-code helpers
+## Scripts or CLI?
 
-Use build helpers for code and the CLI for database/application state:
+The dividing line is simple: **scripts change code, the CLI changes the
+database.**
 
-| Task | Prefer | Why |
+| Task | Use | Why |
 |---|---|---|
-| Add/pin module or theme code | `scripts/install-*.sh` or `_docker/extra-*.txt` | Rebuilds matching PHP/nginx images |
-| Refresh floating refs | `scripts/update-module.sh` | Invalidates download layers; pins are safer |
-| Update Omeka core code | `scripts/update-omeka.sh` | Backup, version pin, matching image rebuild |
-| Activate/disable modules | **omeka-s-cli** | Changes database state, not image code |
-| Apply module/core DB migrations | **omeka-s-cli** | `module:upgrade` and `core:migrate` are explicit |
-| Anything user / vocab / resource-template / settings related | **omeka-s-cli** | The bash scripts don't cover these |
+| Add a module or theme | `scripts/install-module.sh` / `install-theme.sh` | It's code, so it has to be built into the image |
+| Re-download modules that track a branch | `scripts/update-module.sh` | Same |
+| Move to a new Omeka S version | `scripts/update-omeka.sh` | Backs up, pins the version, rebuilds |
+| Turn a module on or off | **omeka-s-cli** | Database state |
+| Apply a module or core database upgrade | **omeka-s-cli** | `module:upgrade`, `core:migrate` — deliberately manual |
+| Users, vocabularies, resource templates, settings | **omeka-s-cli** | The scripts don't cover these |
 
-Code is immutable by design. A failed live download is therefore expected, not
-a permissions problem to work around.
+If a download command fails inside the container, that is the design working, not
+a permissions problem to fix.
 
 ## Where to look when something breaks
 

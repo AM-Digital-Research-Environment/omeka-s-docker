@@ -1,6 +1,6 @@
 # Production deployment
 
-A walk-through for taking this Omeka S stack from a local install to a publicly reachable, TLS-terminated, hardened site. The README has snippets for [Caddy](../README.md#caddy-automatic-https), [Traefik](../README.md#traefik-docker-native), and [standalone nginx](../README.md#standalone-nginx-reverse-proxy) reverse proxies — this guide expands on the standalone-nginx path with everything around it (firewall, cert provisioning, host hardening, verification).
+A walk-through for taking this Omeka S stack from a local install to a publicly reachable, TLS-terminated, hardened site. The README has snippets for [Caddy](../README.md#caddy-easiest-certificates-handled-for-you), [Traefik](../README.md#traefik-docker-native), and [standalone nginx](../README.md#standalone-nginx-reverse-proxy) reverse proxies — this guide expands on the standalone-nginx path with everything around it (firewall, cert provisioning, host hardening, verification).
 
 If you use Caddy or Traefik instead, only sections **2** and **6** (and onward) are still relevant — the proxies handle TLS and HTTPS redirect themselves.
 
@@ -22,7 +22,7 @@ If you use Caddy or Traefik instead, only sections **2** and **6** (and onward) 
                     │ plain HTTP, X-Forwarded-Proto: https
               ┌─────▼──────────┐
               │  127.0.0.1:8080│
-              │  container     │   nginx 1.28 (from this template)
+              │  container     │   nginx (from this template)
               │  nginx         │
               └─────┬──────────┘
                     │ FastCGI
@@ -35,7 +35,8 @@ The host nginx terminates TLS and forwards `X-Forwarded-Proto: https` to the con
 
 ## 2. Free port 80 on the host
 
-By default, the container binds the host's port 80. Move it to 8080 so the host nginx can take 80/443:
+By default the container takes port 80, on the loopback interface only
+(`NGINX_BIND=127.0.0.1`). Move it to 8080 so the host nginx can take 80 and 443:
 
 ```bash
 # In .env
@@ -46,6 +47,12 @@ NGINX_PORT=8080
 docker compose up -d --force-recreate web
 ss -tlnp | grep -E '127\.0\.0\.1:(80|8080)'   # expect only :8080
 ```
+
+Leave `NGINX_BIND` at its default. It means the container is reachable only from
+the server itself, so nothing can bypass the proxy and reach the site over plain
+HTTP. Setting it to `0.0.0.0` is only for the case where you deliberately want to
+serve HTTP directly with no proxy at all — and it also weakens the rate limiting,
+since a client on a private network could then claim any IP address it likes.
 
 ## 3. Install and configure the host nginx
 

@@ -121,7 +121,9 @@ WORKDIR /var/www/html
 COPY --from=toolfetcher --chmod=0755 /omeka-s-cli.phar /usr/local/bin/omeka-s-cli
 COPY --from=composer/composer:2.10.2-bin@sha256:cf313f79f608ebab80220796327f341ae663b9fa8065c73c6148c9b67f0b13b3 /composer /usr/bin/composer
 
-# TODO: document usage of the "latest" sentinel value
+# OMEKA_VERSION=latest resolves to whatever is current at build time, which is by
+# definition untested against this image; the entrypoint warns when it sees it.
+# Documented under "Settings" in README.md.
 RUN if [ "$OMEKA_VERSION" = "latest" ]; then \
         omeka-s-cli core:download "$OMEKA_ROOT"; \
     else \

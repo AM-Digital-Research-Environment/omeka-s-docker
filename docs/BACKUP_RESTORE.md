@@ -17,11 +17,25 @@ Current backups use `omeka-docker-backup-v2` and declare their layout in
 | `.env` | Compose configuration and secrets |
 | `SHA256SUMS` | Integrity checks for every included artifact |
 
-Before the immutable migration, the script detects the legacy whole-root
-volume and writes `layout=legacy` plus `omeka_files.tar.gz`. Restore accepts
-both layouts, but extracts only `files/`, logs, and `local.config.php` from a
-legacy archive. Old executable core/module/theme code is never restored into
-the new runtime.
+### What is deliberately not included
+
+| Not backed up | Why |
+|---|---|
+| Omeka, module, and theme code | It comes from the image. Your module and theme lists in Git are the record of what to build |
+| Login sessions | Nothing worth keeping; people simply log in again |
+| `dre_visualizations_data` (AMIRA only) | Regenerated from the database by the admin "Regenerate" action |
+
+This is why the repository revision matters as much as the backup: the backup
+holds your data and settings, the repository holds the recipe for the code. Keep
+both.
+
+### Backups from before the storage migration
+
+If the deployment still has the old whole-application-folder volume, the script
+notices, records `layout=legacy`, and writes `omeka_files.tar.gz` instead.
+Restore reads both layouts, but from a legacy archive it extracts only `files/`,
+the logs, and `local.config.php`. Old code is never restored into the current
+runtime — that comes from the image.
 
 ## Create a backup
 

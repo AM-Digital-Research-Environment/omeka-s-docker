@@ -1,6 +1,22 @@
-# Docker Commands Reference
+# Command reference
 
-Quick reference for managing your Omeka S Docker setup.
+Quick reference for running an Omeka S site built from this template.
+
+## Which command for which job
+
+| I want to… | Run |
+|-----------|-----|
+| See if everything is working | `docker compose ps` |
+| See what went wrong | `docker compose logs -f php` |
+| Add a module or theme | `bash scripts/install-module.sh …` or `install-theme.sh …` |
+| Apply an edit to a module or theme list | `bash scripts/rebuild-code.sh` |
+| Move to a new Omeka S version | `bash scripts/update-omeka.sh` |
+| Turn a module on, or apply its database changes | `docker compose exec php omeka-s-cli module:install …` |
+| Back up | `bash scripts/backup.sh` |
+| Restore, or move to a new server | `bash scripts/restore.sh <backup-dir>` |
+
+The rule of thumb: **anything that changes code is a script plus a rebuild;
+anything that changes the database is `omeka-s-cli`.**
 
 ## Starting & Stopping
 
@@ -39,20 +55,27 @@ docker compose logs --tail=100 php
 # Check running containers and health
 docker compose ps
 
-# Detailed container info
-docker inspect omeka-s-docker-php-1
+# Why is a service unhealthy?
+docker inspect --format='{{json .State.Health}}' "$(docker compose ps -q php)"
 ```
 
-## Rebuilding immutable code
+## Rebuilding after a code change
+
+Omeka, modules, and themes are part of the image, so a change to any of them
+means a rebuild. This builds both the PHP and web images together and swaps the
+containers, keeping your database and files.
 
 ```bash
-# Build matching PHP/nginx images and restart application services
+# The usual case
 bash scripts/rebuild-code.sh
 
-# Refresh floating module/theme refs, then deploy
+# Also re-download modules that track a branch rather than a fixed version
 bash scripts/rebuild-code.sh --refresh
 
-# Build without replacing running containers
+# Also fetch newer base images (PHP, nginx) first
+bash scripts/rebuild-code.sh --pull
+
+# Build only — don't touch the running site
 bash scripts/rebuild-code.sh --no-start
 ```
 
@@ -76,15 +99,17 @@ docker compose exec php omeka-s-cli --help
 > management, vocabulary imports, resource templates, settings) see
 > [OMEKA_CLI.md](OMEKA_CLI.md).
 
-## ⚠️ Complete Reset (Fresh Install)
+## ⚠️ Starting completely over
 
 ```bash
-# Stop and remove containers, networks, AND volumes (DATA LOSS!)
+# Deletes the database, all uploaded files, everything. There is no undo.
 docker compose down -v
 
-# Then start fresh
 docker compose up -d
 ```
+
+Take a backup first (`bash scripts/backup.sh`) unless you are certain there is
+nothing you want.
 
 ## Disk Cleanup
 
@@ -105,30 +130,30 @@ docker volume prune
 docker system df
 ```
 
-## Pulling Updates
+## Keeping things up to date
 
 ```bash
-# Pull published service images (MySQL/Typesense)
+# Newer database and search engine images
 docker compose pull
 
-# Refresh Dockerfile base images and rebuild Omeka code
+# Newer PHP and web server base images, then rebuild
 bash scripts/rebuild-code.sh --pull
 ```
 
 ## Backup & Restore
 
 ```bash
-# Full backup (database + files + sideload + .env)
-# Zero-downtime; avoid module/core upgrades while it runs
+# Everything: database, files, sideload folder, settings.
+# The site stays up. Just don't install or upgrade a module while it runs.
 bash scripts/backup.sh
 
-# Backup to a custom directory
+# Somewhere other than backups/
 bash scripts/backup.sh /tmp/omeka-backup
 
-# Restore from a backup
+# Restore (asks for confirmation before overwriting anything)
 bash scripts/restore.sh backups/20260330-120000
 
-# Non-interactive restore (destructive; intended for automation/CI)
+# Restore without asking — destructive, for automation only
 bash scripts/restore.sh --force backups/20260330-120000
 ```
 
@@ -145,62 +170,85 @@ docker compose down -v && docker compose up -d --build
 docker compose ps && docker compose logs --tail=20
 ```
 
-## Environment Variables
+## Settings
 
 ```bash
-# See resolved config (with .env applied)
+# See exactly what your .env resolves to
 docker compose config
 
-# Override .env temporarily
+# Try a setting without editing .env
 NGINX_PORT=9000 docker compose up -d
+```
 
-# These are build arguments. Rebuild both images after changing them.
-# EXTRA_MODULES=DspaceConnector,ValueSuggest,CSSEditor
-# EXTRA_THEMES=Cozy,Foundation
-# ENABLE_IIIF=true
+Settings that become part of the image — `OMEKA_VERSION`, `EXTRA_MODULES`,
+`EXTRA_THEMES`, `ENABLE_IIIF`, and the `*_FILE` variants — need a rebuild, not a
+restart:
+
+```bash
 bash scripts/rebuild-code.sh
 ```
 
-## Module Management
+## Optional services and deployment folders
 
 ```bash
-# List available modules
-./scripts/install-module.sh list
+# Start with the search engine included
+docker compose --profile search up -d
 
-# Add an official module to the build manifest and deploy
-./scripts/install-module.sh CSVImport
+# Make that permanent — in .env:
+#   COMPOSE_PROFILES=search
 
-# Add a third-party module pinned to a tag/commit and deploy
-./scripts/install-module.sh gh:owner/repository v1.2.3
+# Run a deployment folder's extra services — in .env:
+#   COMPOSE_FILE=docker-compose.yml:compose.amira.yml
 
-# After editing a pin in _docker/extra-modules.txt, deploy it
-./scripts/rebuild-code.sh
-
-# Force floating refs to be downloaded again (prefer pins)
-./scripts/update-module.sh
-
-# Update Omeka S core (dry run first)
-./scripts/update-omeka.sh --dry-run
-
-# Update Omeka S core to latest
-./scripts/update-omeka.sh
-
-# Update Omeka S core to a specific version
-./scripts/update-omeka.sh 4.2.1
-
-# Activate/install DB state for code already baked into the image
-docker compose exec php omeka-s-cli module:install --base-path /var/www/html ModuleName
-docker compose exec php omeka-s-cli module:upgrade --base-path /var/www/html ModuleName
+# Check what a deployment folder actually adds
+docker compose config --services
 ```
 
-## Theme Management
+Once `COMPOSE_FILE` and `COMPOSE_PROFILES` are in `.env`, every command on this
+page picks them up automatically. Nothing else changes.
+
+## Modules
 
 ```bash
-# Add and deploy a pinned theme
-./scripts/install-theme.sh gh:omeka-s-themes/CenterRow v1.8.0
+# What have I added so far?
+bash scripts/install-module.sh list
 
-# Or edit _docker/extra-themes.txt, then rebuild both images
-./scripts/rebuild-code.sh
+# Add a module from Omeka's own registry
+bash scripts/install-module.sh CSVImport
+
+# Add one from GitHub, at a fixed version
+bash scripts/install-module.sh gh:owner/repository v1.2.3
+
+# After editing a version in _docker/extra-modules.txt
+bash scripts/rebuild-code.sh
+
+# Re-download modules that track a branch instead of a fixed version
+bash scripts/update-module.sh
+```
+
+Once the code is built in, these turn a module on and apply its database changes:
+
+```bash
+docker compose exec php omeka-s-cli module:install ModuleName
+docker compose exec php omeka-s-cli module:upgrade ModuleName
+```
+
+Updating Omeka S itself:
+
+```bash
+bash scripts/update-omeka.sh --dry-run   # see what would change
+bash scripts/update-omeka.sh             # newest release
+bash scripts/update-omeka.sh 4.2.1       # a specific release
+```
+
+## Themes
+
+```bash
+bash scripts/install-theme.sh list
+bash scripts/install-theme.sh gh:omeka-s-themes/CenterRow v1.8.0
+
+# Or edit _docker/extra-themes.txt yourself, then
+bash scripts/rebuild-code.sh
 ```
 
 ## Sideload (Bulk Imports)
@@ -216,17 +264,31 @@ cp /path/to/files/* sideload/
 ## Troubleshooting
 
 ```bash
-# Check container health status
+# Why is a service unhealthy?
 docker inspect --format='{{json .State.Health}}' "$(docker compose ps -q php)"
 
-# Inspect ownership, then restore least-privilege modes when owned by www-data
+# Check who owns the uploaded files, and fix their permissions if needed
 docker compose exec php id
 docker compose exec php ls -ld /var/www/html/files
 docker compose exec php chmod -R u=rwX,go=rX /var/www/html/files
 
-# Clear writable runtime cache by recreating PHP (code remains immutable)
+# Clear caches by recreating the containers (your code and data are untouched)
 docker compose up -d --force-recreate php web
 
-# Test database connection
+# Can the database be reached?
 docker compose exec db mysqladmin ping -u omeka -p
 ```
+
+Things that will *not* work, by design:
+
+```bash
+docker compose exec php omeka-s-cli module:download SomeModule   # read-only code
+docker compose exec php nano /var/www/html/themes/...            # read-only code
+```
+
+Both fail because the application folder is read-only while the site runs. Add
+the module or theme to a list and rebuild instead — see the
+[README](../README.md#how-this-template-works).
+
+For a longer list of specific symptoms and their causes, see
+[Troubleshooting in the README](../README.md#troubleshooting).

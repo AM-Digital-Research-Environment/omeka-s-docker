@@ -1,10 +1,10 @@
 # AMIRA MCP — host nginx configuration
 
-The `amira-mcp` service (see `docker-compose.yml`) and the compose nginx `location ^~ /mcp`
-block (see `nginx.conf`) are version-controlled. The **host** nginx that terminates TLS is
-**not** in this repo — it lives at `/etc/nginx/` and is root-owned. These are the changes it
-needs so that `https://data.africamultiple.uni-bayreuth.de/mcp` reaches the MCP server with
-working SSE.
+The `amira-mcp` service (in [`compose.amira.yml`](../../compose.amira.yml)) and the
+container's `/mcp` rule (in [`nginx-mcp-location.conf`](nginx-mcp-location.conf)) are both
+version-controlled here. The **host** nginx that terminates TLS is **not** — it lives at
+`/etc/nginx/` and is root-owned. These are the changes it needs so that
+`https://data.africamultiple.uni-bayreuth.de/mcp` reaches the MCP server with working SSE.
 
 Why a dedicated block: the host `location /` proxies to the compose nginx on `:8080` with
 default `proxy_buffering on`, which would break Streamable-HTTP/SSE. We add a `/mcp` block
@@ -61,6 +61,5 @@ curl -s -X POST https://data.africamultiple.uni-bayreuth.de/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"curl","version":"0"}}}'
 ```
 
-Expect a streamed `event: message` / `data: {...}` `initialize` result (server
-`amira-mcp-server` v1.3.0) — not an Omeka HTML page or 404.
-</content>
+Expect a streamed `event: message` / `data: {...}` `initialize` result, reporting the
+`amira-mcp-server` version currently deployed — not an Omeka HTML page or a 404.
