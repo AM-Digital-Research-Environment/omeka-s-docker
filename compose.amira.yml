@@ -62,10 +62,17 @@ services:
       # directory". This volume is the writable carve-out — it is generated
       # state, not code, and belongs on a volume by the same rule as media.
       #
-      # It also shadows the module's shipped static inputs (asset/data/geo and
-      # asset/data/wordclouds). They were seeded from the deployed module, so
-      # refresh them here if a future DreVisualizations release changes them —
-      # a rebuilt image alone will not update them.
+      # The contents are disposable and deliberately NOT backed up:
+      # scripts/backup.sh ignores this volume, and everything here is rebuilt by
+      # the admin "Regenerate" action from MySQL. Disaster recovery is restore
+      # the database and media, start the stack, then regenerate.
+      #
+      # The mount also shadows the module's shipped static inputs
+      # (asset/data/geo and asset/data/wordclouds), which Docker seeds from the
+      # image the first time an empty volume is mounted. It will not re-seed
+      # afterwards, so if a DreVisualizations release changes those inputs,
+      # delete the volume and regenerate rather than rebuilding alone:
+      #   docker compose down && docker volume rm omeka-dre-dev_dre_visualizations_data
       #
       # The proper fix is upstream: have the module write under Omeka's files/
       # directory instead of its own asset/ tree. Until then, this mount keeps
