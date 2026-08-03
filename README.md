@@ -173,7 +173,7 @@ Create a `.env` file from `.env.example`. All supported variables:
 | `EXTRA_MODULES` | No | - | Comma-separated module URIs baked at build time (prefer the tracked manifest) |
 | `EXTRA_THEMES` | No | - | Comma-separated theme URIs baked at build time (prefer the tracked manifest) |
 | `ENABLE_IIIF` | No | `false` | Bake IiifServer, ImageServer, and Mirador into both images |
-| `AMIRA_MCP_VERSION` | No | `v1.11.0` | AMIRA overlay only: published MCP server release tag |
+| `AMIRA_MCP_VERSION` | No | see `compose.amira.yml` | AMIRA overlay only: published MCP server release tag |
 | `PHP_PM_MAX_CHILDREN` | No | `5` | PHP-FPM max worker processes |
 | `PHP_PM_START_SERVERS` | No | `2` | PHP-FPM workers started on boot |
 | `PHP_PM_MIN_SPARE_SERVERS` | No | `1` | Minimum idle workers |

@@ -41,7 +41,13 @@ curl -fsSL "$api/releases/tags/$version" >/dev/null \
     || { echo "Published release not found: $version" >&2; exit 1; }
 
 current="$(sed -nE 's/^AMIRA_MCP_VERSION=(.*)$/\1/p' .env | tail -n 1)"
-current="${current:-v1.11.0}"
+if [[ -z "$current" ]]; then
+    # Never restate the version here: compose.amira.yml holds the single
+    # authoritative default, and .env only overrides it.
+    current="$(sed -nE 's/.*amira-mcp-server\.git#\$\{AMIRA_MCP_VERSION:-([^}]+)\}.*/\1/p' \
+        compose.amira.yml | head -n 1)"
+fi
+current="${current:-unknown}"
 echo "AMIRA MCP: $current -> $version"
 if [[ "$dry_run" == true ]]; then
     echo "Would update .env, build the tagged release, and recreate only amira-mcp."

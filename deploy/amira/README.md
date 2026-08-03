@@ -19,7 +19,7 @@ deployment-specific services — copy the pattern, not the content.
 | `dre` custom vocabulary | [`vocabularies/`](vocabularies/) | `dre.owl` + `dre.json` manifest bind-mounted into the image's vocab dir; imported on first run |
 | Typesense search | base `docker-compose.yml` | Enabled via `COMPOSE_PROFILES=search` (backend for the DRESearch module) |
 | iframe embedding | `.env` | `FRAME_ANCESTORS` allows the frederickmadore.com domains |
-| MCP release pin | `.env` | `AMIRA_MCP_VERSION` selects a published upstream tag (default `v1.11.0`) |
+| MCP release pin | `.env` | `AMIRA_MCP_VERSION` selects a published upstream tag; unset takes the default pinned in [`compose.amira.yml`](../../compose.amira.yml) |
 
 ## Activating the overlay
 
@@ -31,8 +31,12 @@ COMPOSE_PROFILES=search
 FRAME_ANCESTORS="'self' https://www.frederickmadore.com https://slides.frederickmadore.com"
 TYPESENSE_API_KEY=<long random string>
 SERVER_NAME=data.africamultiple.uni-bayreuth.de
-AMIRA_MCP_VERSION=v1.11.0
 ```
+
+`AMIRA_MCP_VERSION` is deliberately absent: leaving it unset takes the release
+pinned in [`compose.amira.yml`](../../compose.amira.yml), and
+[`update-amira-mcp.sh`](update-amira-mcp.sh) writes it into `.env` when you move
+to a newer release.
 
 Docker Compose reads `COMPOSE_FILE` and `COMPOSE_PROFILES` from `.env`, so every
 `docker compose` command (`up`, `logs`, `ps`, the backup scripts, …) automatically includes

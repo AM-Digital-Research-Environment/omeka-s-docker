@@ -1,0 +1,38 @@
+name: AMIRA MCP release check
+
+# amira-mcp is pinned by a release tag inside a build-context git URL, which no
+# Dependabot ecosystem parses. This is the stand-in: it reports a new upstream
+# release as an issue rather than a PR, because the version that actually runs
+# lives in the server's .env, not in this repository.
+
+on:
+  schedule:
+    # Mondays, matching the Dependabot cadence in .github/dependabot.yml.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # v7 resolved 2026-07-31. Keep the human-readable version in this comment
+      # while pinning the action itself against tag retargeting.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Compare the pinned release against upstream
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          UPSTREAM: AM-Digital-Research-Environment/amira-mcp-server
+        run: bash .github/scripts/check-amira-mcp-release.sh
