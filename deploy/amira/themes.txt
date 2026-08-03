@@ -1,0 +1,14 @@
+# Themes baked into the AMIRA images by the overlay: compose.amira.yml sets the
+# EXTRA_THEMES_FILE build arg to this file, which the Dockerfile reads in
+# addition to _docker/extra-themes.txt (same omeka-s-cli syntax).
+#
+# Syntax: <omeka-s-cli URI> [target-directory]
+#
+# DRE-theme needs the explicit target: omeka-s-cli names the directory after
+# theme.ini's "name" field ("Africa Multiple — DRE" -> Africa_Multiple_____DRE),
+# but the site rows in the database select the theme by directory name, so the
+# build renames it back to DRE-theme.
+#
+# Tracks master because the theme's releases lag far behind it (latest tag
+# v2.7.1 vs 2.23.0 in master).
+gh:AM-Digital-Research-Environment/DRE-theme#master DRE-theme

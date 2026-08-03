@@ -136,6 +136,15 @@ require(
     web_build.get("args", {}).get("EXTRA_MODULES_FILE") == expected_modules_file,
     f"{variant} module manifest is not wired into both image builds",
 )
+# Deployment-specific code must stay out of the generic base image so partner
+# deployments can build it unmodified.
+expected_themes_file = (
+    "deploy/amira/themes.txt" if variant == "amira" else "_docker/empty-themes.txt"
+)
+require(
+    web_build.get("args", {}).get("EXTRA_THEMES_FILE") == expected_themes_file,
+    f"{variant} theme manifest is not wired into both image builds",
+)
 
 for name in ("web", "php"):
     require(

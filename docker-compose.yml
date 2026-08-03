@@ -17,6 +17,7 @@ services:
       args:
         OMEKA_VERSION: ${OMEKA_VERSION:-4.2.1}
         EXTRA_MODULES_FILE: ${EXTRA_MODULES_FILE:-_docker/empty-modules.txt}
+        EXTRA_THEMES_FILE: ${EXTRA_THEMES_FILE:-_docker/empty-themes.txt}
         EXTRA_MODULES: ${EXTRA_MODULES:-}
         EXTRA_THEMES: ${EXTRA_THEMES:-}
         ENABLE_IIIF: ${ENABLE_IIIF:-false}
@@ -96,6 +97,7 @@ services:
         # requires rebuilding both php and web; the helper scripts do that.
         OMEKA_VERSION: ${OMEKA_VERSION:-4.2.1}
         EXTRA_MODULES_FILE: ${EXTRA_MODULES_FILE:-_docker/empty-modules.txt}
+        EXTRA_THEMES_FILE: ${EXTRA_THEMES_FILE:-_docker/empty-themes.txt}
         EXTRA_MODULES: ${EXTRA_MODULES:-}
         EXTRA_THEMES: ${EXTRA_THEMES:-}
         ENABLE_IIIF: ${ENABLE_IIIF:-false}

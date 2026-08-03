@@ -1,3 +1,8 @@
 # Operator-managed modules baked into both PHP and nginx images.
 # One Omeka S CLI module URI per line. Prefer a release tag or commit, e.g.:
 # gh:owner/repository#v1.2.3
+#
+# This file feeds EVERY build, including the generic base stack that partner
+# deployments start from. Keep it empty unless a module genuinely belongs in
+# every image; deployment-specific modules go in that deployment's manifest
+# instead (e.g. deploy/amira/modules.txt, wired via EXTRA_MODULES_FILE).

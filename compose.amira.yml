@@ -22,11 +22,18 @@ services:
     build:
       args:
         EXTRA_MODULES_FILE: deploy/amira/modules.txt
+        # Must stay identical to the php service below: the two targets share
+        # one code layer, and CI asserts their build args match exactly.
+        EXTRA_THEMES_FILE: deploy/amira/themes.txt
     volumes:
       # Rendered by the nginx image's envsubst step into
       # /etc/nginx/conf.d/extra-locations/mcp.conf, which the base nginx.conf
       # includes by glob (see the extension point in nginx.conf).
       - ./deploy/amira/nginx-mcp-location.conf:/etc/nginx/templates/extra-locations/mcp.conf.template:ro
+      # nginx serves the precomputed dashboard JSON straight to the browser, so
+      # it needs the same volume PHP writes — read-only, exactly like the media
+      # volume. See the php service below for why this exists.
+      - dre_visualizations_data:/var/www/html/modules/DreVisualizations/asset/data:ro
     networks:
       - frontend
       - mcp
@@ -37,12 +44,33 @@ services:
         # Bake the DRE modules into the image on top of
         # _docker/default-modules.txt (see Dockerfile).
         EXTRA_MODULES_FILE: deploy/amira/modules.txt
+        # DRE-theme, downloaded from GitHub and renamed to the directory the
+        # site rows expect (see deploy/amira/themes.txt). Scoping it here keeps
+        # the generic base image free of AMIRA branding.
+        EXTRA_THEMES_FILE: deploy/amira/themes.txt
     volumes:
       # dre vocabulary + its import manifest, picked up on first run by the
       # entrypoint's vocabulary import alongside the generic vocabularies
       # baked into the image at build.
       - ./deploy/amira/vocabularies/dre.owl:/usr/local/share/omeka-vocabs/dre.owl:ro
       - ./deploy/amira/vocabularies/dre.json:/usr/local/share/omeka-vocabs/dre.json:ro
+      # DreVisualizations keeps runtime state inside its own code directory:
+      # the "Regenerate" job writes a generation of precomputed dashboard,
+      # knowledge-graph and photo-gallery JSON to asset/data/generations/ and
+      # flips asset/data/current.json to point at it. With Omeka code immutable
+      # that tree is read-only, so the job fails with "Unable to create
+      # directory". This volume is the writable carve-out — it is generated
+      # state, not code, and belongs on a volume by the same rule as media.
+      #
+      # It also shadows the module's shipped static inputs (asset/data/geo and
+      # asset/data/wordclouds). They were seeded from the deployed module, so
+      # refresh them here if a future DreVisualizations release changes them —
+      # a rebuilt image alone will not update them.
+      #
+      # The proper fix is upstream: have the module write under Omeka's files/
+      # directory instead of its own asset/ tree. Until then, this mount keeps
+      # the precompute working without patching the module.
+      - dre_visualizations_data:/var/www/html/modules/DreVisualizations/asset/data:rw
 
   # AMIRA MCP server — exposes the public, read-only AMIRA dataset over
   # Streamable-HTTP/SSE at POST /mcp (health: GET /healthz) on port 8787.
@@ -94,3 +122,8 @@ services:
 
 networks:
   mcp: {}
+
+volumes:
+  # Precomputed DreVisualizations artifacts (see the php service above).
+  dre_visualizations_data:
+    driver: local

@@ -235,11 +235,23 @@ log "Checking baked modules..."
 if [[ "$variant" == "amira" ]]; then
     docker compose exec -T php test -d /var/www/html/modules/DRESearch
     docker compose exec -T web test -d /var/www/html/modules/DRESearch
-    echo "    DRESearch present (overlay bakes DRE modules)"
+    # Vendored via LOCAL_THEMES_DIR; the directory name must survive the build
+    # because the site rows select the theme by it.
+    docker compose exec -T php test -d /var/www/html/themes/DRE-theme
+    docker compose exec -T web test -d /var/www/html/themes/DRE-theme
+    docker compose exec -T php test ! -d /var/www/html/themes/Africa_Multiple_____DRE
+    echo "    DRESearch and DRE-theme present (overlay bakes DRE code)"
 else
     docker compose exec -T php test ! -d /var/www/html/modules/DRESearch
     docker compose exec -T php test ! -d /var/www/html/modules/ImmutableProbe
-    echo "    DRESearch absent (base image is generic)"
+    # The generic base image must carry no deployment-specific code: no AMIRA
+    # modules and no AMIRA theme, however they were declared.
+    docker compose exec -T php test ! -d /var/www/html/themes/DRE-theme
+    docker compose exec -T web test ! -d /var/www/html/themes/DRE-theme
+    for amira_module in DRESeo DreVisualizations BulkEdit Reference LocalContexts IframeEmbed; do
+        docker compose exec -T php test ! -d "/var/www/html/modules/$amira_module"
+    done
+    echo "    DRESearch, DRE modules and DRE-theme absent (base image is generic)"
 fi
 
 log "Checking vocabulary import..."

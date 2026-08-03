@@ -1,0 +1,2 @@
+# No extra themes in the generic base build (see _docker/extra-themes.txt
+# and the EXTRA_THEMES_FILE build arg in the Dockerfile).

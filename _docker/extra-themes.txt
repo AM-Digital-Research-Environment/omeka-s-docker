@@ -1,2 +1,13 @@
 # Operator-managed themes baked into both PHP and nginx images.
 # EXTRA_THEMES in .env remains available for comma-separated Omeka S CLI URIs.
+#
+# This file feeds EVERY build, including the generic base stack that partner
+# deployments start from, so keep deployment-specific themes out of it.
+#
+# Syntax: <omeka-s-cli URI> [target-directory]
+#
+# The optional target directory matters because omeka-s-cli names the directory
+# after theme.ini's "name" field, while Omeka's site rows select a theme by
+# directory name — so a theme whose display name does not sanitise back to the
+# expected directory needs it spelled out. See deploy/amira/themes.txt for a
+# worked example.

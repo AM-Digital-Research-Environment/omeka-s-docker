@@ -16,6 +16,7 @@ FROM php:8.5.9-fpm-trixie@sha256:f56f4a81de6cd33ddfd6e99352889a53c94c3ffccce89e4
 ARG OMEKA_ROOT=/var/www/html
 ARG OMEKA_VERSION=4.2.1
 ARG EXTRA_MODULES_FILE=_docker/empty-modules.txt
+ARG EXTRA_THEMES_FILE=_docker/empty-themes.txt
 ARG EXTRA_MODULES=""
 ARG EXTRA_THEMES=""
 ARG ENABLE_IIIF=false
@@ -184,19 +185,61 @@ RUN shopt -s nullglob \
     done
 
 COPY --chown=www-data:www-data _docker/extra-themes.txt /tmp/operator-themes.txt
-RUN omeka-s-cli theme:download --base-path "$OMEKA_ROOT" gh:omeka-s-themes/freedom \
-    && omeka-s-cli theme:download --base-path "$OMEKA_ROOT" gh:omeka-s-themes/lively \
-    && while IFS= read -r theme || [ -n "$theme" ]; do \
-        theme=$(printf '%s' "$theme" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'); \
-        case "$theme" in ''|'#'*) continue ;; esac; \
-        omeka-s-cli theme:download --base-path "$OMEKA_ROOT" --force "$theme"; \
-    done < /tmp/operator-themes.txt \
-    && if [ -n "$EXTRA_THEMES" ]; then \
-        while IFS= read -r theme || [ -n "$theme" ]; do \
-            theme=$(printf '%s' "$theme" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'); \
-            [ -z "$theme" ] || omeka-s-cli theme:download --base-path "$OMEKA_ROOT" --force "$theme"; \
-        done < <(printf '%s' "$EXTRA_THEMES" | tr ',' '\n'); \
+
+# Deployment overlays add their themes through this build arg, e.g.
+# compose.amira.yml points it at deploy/amira/themes.txt. The default is an
+# empty placeholder so plain builds add nothing.
+COPY --chown=www-data:www-data ${EXTRA_THEMES_FILE} /tmp/deployment-themes.txt
+
+# A manifest line is "<omeka-s-cli URI> [target-directory]". The optional second
+# field exists because omeka-s-cli derives the theme directory from theme.ini's
+# "name" field, while Omeka's site rows select a theme by directory name — so a
+# theme whose display name does not sanitise back to the expected directory
+# (e.g. "Africa Multiple — DRE" -> Africa_Multiple_____DRE, needed as DRE-theme)
+# would silently detach every site using it. Renaming the freshly created
+# directory keeps such themes declarative instead of vendored into this repo.
+RUN <<'THEMES'
+set -euo pipefail
+
+download_theme() {
+    local uri="$1" target="${2:-}" before after created
+    before="$(ls -1 "${OMEKA_ROOT}/themes" | sort)"
+    omeka-s-cli theme:download --base-path "$OMEKA_ROOT" --force "$uri"
+    [ -n "$target" ] || return 0
+    after="$(ls -1 "${OMEKA_ROOT}/themes" | sort)"
+    created="$(comm -13 <(printf '%s\n' "$before") <(printf '%s\n' "$after"))"
+    if [ -d "${OMEKA_ROOT}/themes/${target}" ] && [ -z "$created" ]; then
+        return 0
     fi
+    if [ "$(printf '%s\n' "$created" | grep -c .)" != 1 ]; then
+        echo "ERROR: '$uri' did not create exactly one theme directory (got: ${created:-none})." >&2
+        return 1
+    fi
+    [ "$created" = "$target" ] || mv "${OMEKA_ROOT}/themes/${created}" "${OMEKA_ROOT}/themes/${target}"
+}
+
+read_manifest() {
+    while IFS= read -r line || [ -n "$line" ]; do
+        line="$(printf '%s' "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+        case "$line" in ''|'#'*) continue ;; esac
+        # shellcheck disable=SC2086 # deliberate split into URI + optional target
+        download_theme $line
+    done < "$1"
+}
+
+download_theme gh:omeka-s-themes/freedom
+download_theme gh:omeka-s-themes/lively
+read_manifest /tmp/operator-themes.txt
+read_manifest /tmp/deployment-themes.txt
+
+if [ -n "${EXTRA_THEMES:-}" ]; then
+    while IFS= read -r theme || [ -n "$theme" ]; do
+        theme="$(printf '%s' "$theme" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+        # shellcheck disable=SC2086 # same "<uri> [target]" syntax as the manifests
+        [ -z "$theme" ] || download_theme $theme
+    done < <(printf '%s' "$EXTRA_THEMES" | tr ',' '\n')
+fi
+THEMES
 
 COPY --chown=www-data:www-data _docker/local-themes/ /tmp/local-themes/
 RUN shopt -s nullglob \
@@ -205,10 +248,15 @@ RUN shopt -s nullglob \
         rm -rf "${OMEKA_ROOT}/themes/${theme_name}"; \
         cp -a "$theme_dir" "${OMEKA_ROOT}/themes/${theme_name}"; \
     done \
+    # Vendor every module that declares dependencies but does not ship them.
+    # Presence of composer.lock must NOT gate this: modules that gitignore their
+    # lock file (DRESearch, DRESeo) still require vendor/autoload.php at runtime,
+    # and skipping them leaves the module fatally broken at boot. composer
+    # install resolves from composer.json when no lock is present.
     && for composer_json in "${OMEKA_ROOT}"/modules/*/composer.json; do \
         [ -f "$composer_json" ] || continue; \
         module_dir=$(dirname "$composer_json"); \
-        [ ! -f "$module_dir/composer.lock" ] || [ -d "$module_dir/vendor" ] || composer install \
+        [ -d "$module_dir/vendor" ] || composer install \
             --working-dir "$module_dir" --no-dev --no-interaction \
             --prefer-dist --optimize-autoloader; \
     done
