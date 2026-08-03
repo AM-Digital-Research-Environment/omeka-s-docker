@@ -1,115 +1,98 @@
-# Proposal: separate immutable Omeka code from persistent data
+# Immutable Omeka code and storage migration
 
-> **Status:** proposed — not yet implemented. Deliberately scoped as its own PR
-> because it changes the deploy/rollback/update model and needs a maintenance
-> window plus a fresh backup. Filed 2026-07-23 from the production-readiness
-> review.
+> **Status:** implemented 2026-07-31. Existing deployments that still have the
+> legacy `omeka_files:/var/www/html` volume must run the migration below once.
 
-## Problem
+## Architecture
 
-`docker-compose.yml` mounts the whole Omeka root as one read-write volume:
+The container image, not a volume, is now authoritative for Omeka core,
+modules, themes, dependencies, and public assets. PHP and nginx are separate
+targets in the same Dockerfile and receive identical build arguments. The
+nginx target copies `/var/www/html` from the PHP runtime target, preventing
+static assets from drifting from executable PHP code.
 
-```yaml
-php:
-  volumes:
-    - omeka_files:/var/www/html:rw   # core + modules + themes + files + config
+Only runtime state is writable:
+
+| Path | Storage | Access |
+|---|---|---|
+| `/var/www/html/files` | `omeka_media` volume | PHP read/write; nginx read-only |
+| `/var/www/html/logs` | `omeka_logs` volume | PHP read/write |
+| `/var/www/html/config/local.config.php` | host file | PHP read-only |
+| `/var/www/html/config/database.ini` | symlink to `/run/omeka/database.ini` | regenerated with mode `0600` on tmpfs |
+| `/tmp`, `/run/omeka`, `/run/php-fpm`, `/var/www/.cache` | tmpfs | PHP read/write |
+| `/var/lib/php-sessions` | `php_sessions` volume | PHP read/write |
+| everything else under `/var/www/html` | image layer | read-only |
+
+The PHP root filesystem is read-only. A marker at
+`files/.immutable-layout-v1` distinguishes migrated media storage from an
+accidentally empty volume. If Omeka is already installed but that marker is
+missing, startup fails instead of silently serving a site without its media.
+
+## One-time migration
+
+Schedule a maintenance window and update this repository checkout first. The
+migration script performs a backup and a read-only preflight before stopping
+services:
+
+```bash
+bash scripts/migrate-immutable-storage.sh
 ```
 
-Docker copies image content into a named volume **only when the volume is
-empty**. Once `omeka_files` is populated (i.e. after the very first boot), the
-volume *masks* whatever the image ships at `/var/www/html`. Consequences:
+The preflight builds the new PHP/nginx images and compares the deployed core,
+module, and theme names and versions with the image. Any mismatch aborts before
+the running stack is touched.
 
-- `docker compose up -d --build` can rebuild the image to Omeka 4.2.1 (or bump a
-  module/theme) while the container keeps executing the **older** code that
-  already lives in the volume. The rebuild silently does nothing.
-- Updated modules/themes baked via `modules.txt` never reach an existing
-  deployment.
-- Image CVE scans and SBOMs describe the image, **not** the code actually
-  running from the volume.
-- Rollback can't just select the previous image tag — the volume, not the image,
-  is the source of truth.
-- Every build re-downloads core/modules/themes that an existing install ignores.
+If a legacy extension cannot be reproduced from a release manifest, explicitly
+adopt the exact deployed source into the image build context:
 
-The current update path (`scripts/update-omeka.sh`, `scripts/update-module.sh`)
-exists precisely to work *around* this — mutating files inside the live volume —
-which is why those scripts are destructive and non-atomic.
-
-## Target architecture
-
-Keep **code immutable in the image**; persist **only mutable data** on volumes.
-
-Omeka S writes to exactly these paths at runtime:
-
-| Path | Nature | Handling |
-|------|--------|----------|
-| `files/` | uploaded media, thumbnails, temp, sideload originals | **volume** (already have `omeka_files` — repoint it here) |
-| `logs/` | application log | **volume** (or ship to stdout) |
-| `config/database.ini` | generated secret (entrypoint writes it) | small **volume** or regenerate on boot into a `tmpfs` |
-| `config/local.config.php` | optional local overrides | bake into image, or mount read-only if deployment-specific |
-| everything else (`application/`, `modules/`, `themes/`, `vendor/`, `index.php`, `.htaccess`) | code | **baked in image, no mount** |
-
-Sketch:
-
-```yaml
-php:
-  volumes:
-    - omeka_media:/var/www/html/files:rw
-    - omeka_logs:/var/www/html/logs:rw
-    - omeka_config:/var/www/html/config:rw      # or regenerate database.ini on boot
-    - ./uploads.ini:/usr/local/etc/php/conf.d/uploads.ini:ro
-    - php_sessions:/var/lib/php-sessions:rw     # already separate — good pattern
+```bash
+bash scripts/migrate-immutable-storage.sh --adopt-code
 ```
 
-The web (nginx) service mounts the same **media** volume read-only (it only
-needs to serve `/files/...` and the baked assets, which now come from the image
-layer it shares):
+This copies legacy modules and themes into `_docker/local-modules/` and
+`_docker/local-themes/`, then repeats the same exact-version preflight. Review
+and commit that adopted source, or replace it with pinned upstream entries in
+`_docker/extra-modules.txt` and `_docker/extra-themes.txt` later.
 
-```yaml
-web:
-  volumes:
-    - omeka_media:/var/www/html/files:ro
-    # ...plus the image's /var/www/html for assets — see "Open question" below.
+On confirmation, the script:
+
+1. Keeps a mandatory backup under `backups/pre-immutable-*`.
+2. Preserves legacy `config/local.config.php` as a read-only host config.
+3. Stops services and copies only `files/` and `logs/` to dedicated volumes.
+4. Verifies the media file count and writes the immutable-layout marker.
+5. Starts the new stack and checks DB/PHP/nginx health and code immutability.
+
+The old `<project>_omeka_files` volume is deliberately never deleted. Keep it
+until the public site, admin, representative media, modules, themes, and IIIF
+have been verified and a new-format backup has been restored in staging.
+
+## Updates and rollback
+
+Code changes now use image rebuilds:
+
+```bash
+# Add pinned build inputs and deploy matching PHP/nginx images
+bash scripts/install-module.sh gh:owner/repository v1.2.3
+bash scripts/install-theme.sh gh:owner/theme 0123456789abcdef
+
+# Rebuild after editing manifests or local source
+bash scripts/rebuild-code.sh
+
+# Refresh floating refs (less reproducible; pin tags/commits where possible)
+bash scripts/update-module.sh
 ```
 
-## What this unlocks
+An image rollback restores application code but cannot undo a database schema
+migration. Back up first, deploy and test new code, then apply core/module DB
+migrations as a separate decision.
 
-- `docker compose build && docker compose up -d php` deploys new core/modules/
-  themes deterministically. Update becomes "build a new image, swap it in."
-- Rollback = redeploy the previous image tag.
-- Scans/SBOMs describe what actually runs.
-- `scripts/update-*.sh` collapse into a rebuild; the destructive in-place mutation
-  goes away.
+## Regression coverage
 
-## Migration (needs a maintenance window + fresh backup)
+CI boots module set A, writes database and media probes, performs a destructive
+backup/restore round trip, rebuilds module set A+B on the same volumes, and
+asserts that:
 
-1. `scripts/backup.sh` — full DB + `files/` backup first.
-2. Introduce the new volumes; **seed `omeka_media` from the current
-   `omeka_files:/var/www/html/files`** (e.g. `docker run --rm -v omeka_files:/src
-   -v omeka_media:/dst alpine cp -a /src/files/. /dst/`). Same for `logs/` and
-   `config/`.
-3. Bake all currently runtime-installed modules/themes (`EXTRA_MODULES`,
-   `EXTRA_THEMES`, IIIF, DRE) into the image via the existing `modules.txt`
-   build-arg path so nothing is lost when the code volume is dropped.
-4. Swap the compose mounts; `docker compose up -d --build`.
-5. Verify: front page, admin, a known media file under `/files/...`, module list,
-   IIIF manifest.
-6. Retire `omeka_files` once confirmed.
-
-## Open questions / risks
-
-- **nginx needs the code too** (it serves `/application/asset/...`, module/theme
-  assets). Either share the image filesystem with web (build web from the same
-  image, or copy assets in) or keep serving assets through PHP. Decide before
-  implementing.
-- **Runtime module install** (`EXTRA_MODULES` in `.env`) is incompatible with an
-  immutable code layer — it must move fully to build time. This is the main
-  behavioural change for operators.
-- The `sideload/` bind mount stays as-is (host ingest dir).
-- One-shot data migration must be idempotent and reversible (keep `omeka_files`
-  until verified).
-
-## CI regression test to add alongside
-
-Build an image at module set A, boot, assert a module is **absent**; rebuild at
-module set A+B on the *same volumes*, redeploy, assert the new module is now
-**present**. This would have caught the volume-masking behaviour.
+- the added module appears in both PHP and nginx;
+- PHP/nginx contain byte-identical module source;
+- the database and media probes survive;
+- application code and nginx media remain non-writable.

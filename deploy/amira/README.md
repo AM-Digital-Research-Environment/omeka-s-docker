@@ -19,6 +19,7 @@ deployment-specific services — copy the pattern, not the content.
 | `dre` custom vocabulary | [`vocabularies/`](vocabularies/) | `dre.owl` + `dre.json` manifest bind-mounted into the image's vocab dir; imported on first run |
 | Typesense search | base `docker-compose.yml` | Enabled via `COMPOSE_PROFILES=search` (backend for the DRESearch module) |
 | iframe embedding | `.env` | `FRAME_ANCESTORS` allows the frederickmadore.com domains |
+| MCP release pin | `.env` | `AMIRA_MCP_VERSION` selects a published upstream tag (default `v1.11.0`) |
 
 ## Activating the overlay
 
@@ -30,6 +31,7 @@ COMPOSE_PROFILES=search
 FRAME_ANCESTORS="'self' https://www.frederickmadore.com https://slides.frederickmadore.com"
 TYPESENSE_API_KEY=<long random string>
 SERVER_NAME=data.africamultiple.uni-bayreuth.de
+AMIRA_MCP_VERSION=v1.11.0
 ```
 
 Docker Compose reads `COMPOSE_FILE` and `COMPOSE_PROFILES` from `.env`, so every
@@ -70,17 +72,17 @@ per-client rate-limiting at that layer, see the optional tweaks in
 
 ### Keeping it up to date
 
-The service builds from the upstream repo's `main` branch, so updating is a plain rebuild —
-no version pinning to bump:
+The service builds from a published upstream release tag. Preview or deploy the
+latest stable release with:
 
 ```bash
-bash deploy/amira/update-amira-mcp.sh
-# equivalent to:
-#   docker compose build --pull --no-cache amira-mcp && docker compose up -d amira-mcp
+bash deploy/amira/update-amira-mcp.sh latest --dry-run
+bash deploy/amira/update-amira-mcp.sh latest
 ```
 
-`--no-cache` forces a fresh git clone and re-runs the build-time data snapshot fetch. Only
-the `amira-mcp` container is recreated; the rest of the stack keeps running.
+The helper validates the published tag, records it in `.env`, builds it, and
+recreates only `amira-mcp`. Use `--refresh-data` for a same-version rebuild of
+the bundled data snapshot. The rest of the stack keeps running.
 
 ### Security
 

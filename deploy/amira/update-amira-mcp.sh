@@ -1,40 +1,81 @@
-#!/bin/bash
-# Update the AMIRA MCP server to the latest upstream main.
-# Usage: bash deploy/amira/update-amira-mcp.sh
-#
-# Requires the AMIRA overlay to be active (COMPOSE_FILE listing
-# compose.amira.yml in .env — see deploy/amira/README.md).
-#
-# The amira-mcp service builds from the upstream repo's main branch (see the
-# build context in compose.amira.yml), so updating is just a fresh rebuild.
-# --pull refreshes the node base image; --no-cache forces a new git clone and
-# re-runs the build-time data snapshot fetch. The running site is untouched —
-# only the amira-mcp container is recreated.
+#!/usr/bin/env bash
+# Pin and deploy an AMIRA MCP release without touching Omeka state.
 
-set -e
+set -Eeuo pipefail
+
+usage() {
+    cat <<'EOF'
+Usage: deploy/amira/update-amira-mcp.sh [latest|vX.Y.Z] [--refresh-data] [--dry-run]
+
+The release tag is stored as AMIRA_MCP_VERSION in .env. --refresh-data forces
+the same release to rebuild its bundled public-data snapshot without cache.
+EOF
+}
+
+version=latest
+refresh_data=false
+dry_run=false
+for arg in "$@"; do
+    case "$arg" in
+        latest|v[0-9]*) version="$arg" ;;
+        --refresh-data) refresh_data=true ;;
+        --dry-run) dry_run=true ;;
+        -h|--help) usage; exit 0 ;;
+        *) echo "Unknown argument: $arg" >&2; usage >&2; exit 2 ;;
+    esac
+done
+
 cd "$(dirname "$0")/../.."
+[[ -f .env ]] || { echo ".env is required." >&2; exit 1; }
+command -v curl >/dev/null 2>&1 || { echo "curl is required." >&2; exit 1; }
 
-echo "==> Rebuilding amira-mcp from upstream main (fresh clone + data snapshot)..."
-docker compose build --pull --no-cache amira-mcp
+api="https://api.github.com/repos/AM-Digital-Research-Environment/amira-mcp-server"
+if [[ "$version" == latest ]]; then
+    version="$(curl -fsSL "$api/releases/latest" \
+        | sed -nE 's/.*"tag_name"[[:space:]]*:[[:space:]]*"(v[0-9]+\.[0-9]+\.[0-9]+)".*/\1/p' \
+        | head -n 1)"
+fi
+[[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+    || { echo "Invalid AMIRA MCP release tag: $version" >&2; exit 1; }
+curl -fsSL "$api/releases/tags/$version" >/dev/null \
+    || { echo "Published release not found: $version" >&2; exit 1; }
 
-echo "==> Recreating the amira-mcp container..."
+current="$(sed -nE 's/^AMIRA_MCP_VERSION=(.*)$/\1/p' .env | tail -n 1)"
+current="${current:-v1.11.0}"
+echo "AMIRA MCP: $current -> $version"
+if [[ "$dry_run" == true ]]; then
+    echo "Would update .env, build the tagged release, and recreate only amira-mcp."
+    exit 0
+fi
+
+original_env="$(mktemp)"
+new_env="$(mktemp)"
+trap 'rm -f -- "$original_env" "$new_env"' EXIT
+cp .env "$original_env"
+awk -v version="$version" '
+    BEGIN { replaced = 0 }
+    /^AMIRA_MCP_VERSION=/ { print "AMIRA_MCP_VERSION=" version; replaced = 1; next }
+    { print }
+    END { if (!replaced) print "AMIRA_MCP_VERSION=" version }
+' .env > "$new_env"
+mv "$new_env" .env
+
+build_args=(--pull)
+[[ "$refresh_data" == true ]] && build_args+=(--no-cache)
+if ! docker compose build "${build_args[@]}" amira-mcp; then
+    cp "$original_env" .env
+    echo "Build failed; restored the previous .env." >&2
+    exit 1
+fi
+
 docker compose up -d amira-mcp
-
-echo "==> Waiting for health..."
-container_id=$(docker compose ps -q amira-mcp)
-for _ in $(seq 1 20); do
-    status=$(docker inspect -f '{{.State.Health.Status}}' "$container_id" 2>/dev/null || echo unknown)
-    [ "$status" = "healthy" ] && break
+container_id="$(docker compose ps -q amira-mcp)"
+for _ in $(seq 1 60); do
+    status="$(docker inspect -f '{{.State.Health.Status}}' "$container_id" 2>/dev/null || echo unknown)"
+    [[ "$status" == healthy ]] && break
     sleep 2
 done
-echo "    health: ${status:-unknown}"
+[[ "${status:-unknown}" == healthy ]] \
+    || { docker compose logs --tail 100 amira-mcp >&2; echo "amira-mcp is not healthy." >&2; exit 1; }
 
-echo "==> Version check:"
-curl -s http://127.0.0.1:8080/mcp \
-    -X POST \
-    -H 'Content-Type: application/json' \
-    -H 'Accept: application/json, text/event-stream' \
-    -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"update-script","version":"0"}}}' \
-    | sed -n 's/.*"serverInfo":{\("name":"[^}]*"\)}.*/    \1/p'
-
-echo "==> Done. Endpoint: https://data.africamultiple.uni-bayreuth.de/mcp"
+echo "AMIRA MCP $version is healthy."

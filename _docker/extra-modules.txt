@@ -1,0 +1,3 @@
+# Operator-managed modules baked into both PHP and nginx images.
+# One Omeka S CLI module URI per line. Prefer a release tag or commit, e.g.:
+# gh:owner/repository#v1.2.3

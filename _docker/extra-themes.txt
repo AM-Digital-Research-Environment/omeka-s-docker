@@ -1,0 +1,2 @@
+# Operator-managed themes baked into both PHP and nginx images.
+# EXTRA_THEMES in .env remains available for comma-separated Omeka S CLI URIs.

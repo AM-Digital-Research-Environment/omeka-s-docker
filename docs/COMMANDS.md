@@ -43,15 +43,17 @@ docker compose ps
 docker inspect omeka-s-docker-php-1
 ```
 
-## Rebuilding (after Dockerfile changes)
+## Rebuilding immutable code
 
 ```bash
-# Rebuild and restart
-docker compose up -d --build
+# Build matching PHP/nginx images and restart application services
+bash scripts/rebuild-code.sh
 
-# Force rebuild without cache
-docker compose build --no-cache
-docker compose up -d
+# Refresh floating module/theme refs, then deploy
+bash scripts/rebuild-code.sh --refresh
+
+# Build without replacing running containers
+bash scripts/rebuild-code.sh --no-start
 ```
 
 ## Accessing Containers
@@ -106,11 +108,11 @@ docker system df
 ## Pulling Updates
 
 ```bash
-# Pull latest images (nginx, mysql)
+# Pull published service images (MySQL/Typesense)
 docker compose pull
 
-# Pull and restart with new images
-docker compose pull && docker compose up -d
+# Refresh Dockerfile base images and rebuild Omeka code
+bash scripts/rebuild-code.sh --pull
 ```
 
 ## Backup & Restore
@@ -152,11 +154,11 @@ docker compose config
 # Override .env temporarily
 NGINX_PORT=9000 docker compose up -d
 
-# Install extra modules/themes at runtime (set in .env)
+# These are build arguments. Rebuild both images after changing them.
 # EXTRA_MODULES=DspaceConnector,ValueSuggest,CSSEditor
 # EXTRA_THEMES=Cozy,Foundation
 # ENABLE_IIIF=true
-docker compose down && docker compose up -d
+bash scripts/rebuild-code.sh
 ```
 
 ## Module Management
@@ -165,17 +167,17 @@ docker compose down && docker compose up -d
 # List available modules
 ./scripts/install-module.sh list
 
-# Install a module
-./scripts/install-module.sh AdvancedSearch
+# Add an official module to the build manifest and deploy
+./scripts/install-module.sh CSVImport
 
-# Install a module at a specific version
-./scripts/install-module.sh AdvancedSearch 3.5.46
+# Add a third-party module pinned to a tag/commit and deploy
+./scripts/install-module.sh gh:owner/repository v1.2.3
 
-# Update a module
-./scripts/update-module.sh CSVImport
+# After editing a pin in _docker/extra-modules.txt, deploy it
+./scripts/rebuild-code.sh
 
-# Update all modules
-./scripts/update-module.sh all
+# Force floating refs to be downloaded again (prefer pins)
+./scripts/update-module.sh
 
 # Update Omeka S core (dry run first)
 ./scripts/update-omeka.sh --dry-run
@@ -186,19 +188,19 @@ docker compose down && docker compose up -d
 # Update Omeka S core to a specific version
 ./scripts/update-omeka.sh 4.2.1
 
-# Install modules via omeka-s-cli inside the container
-docker compose exec php omeka-s-cli module:download --base-path /var/www/html ModuleName
+# Activate/install DB state for code already baked into the image
 docker compose exec php omeka-s-cli module:install --base-path /var/www/html ModuleName
+docker compose exec php omeka-s-cli module:upgrade --base-path /var/www/html ModuleName
 ```
 
 ## Theme Management
 
 ```bash
-# Install a theme
-./scripts/install-theme.sh CenterRow
+# Add and deploy a pinned theme
+./scripts/install-theme.sh gh:omeka-s-themes/CenterRow v1.8.0
 
-# Install a theme at a specific version
-./scripts/install-theme.sh Foundation 1.4.0
+# Or edit _docker/extra-themes.txt, then rebuild both images
+./scripts/rebuild-code.sh
 ```
 
 ## Sideload (Bulk Imports)
@@ -222,9 +224,8 @@ docker compose exec php id
 docker compose exec php ls -ld /var/www/html/files
 docker compose exec php chmod -R u=rwX,go=rX /var/www/html/files
 
-# Clear Omeka cache
-docker compose exec php rm -rf /var/www/html/data/cache/*
-docker compose restart php
+# Clear writable runtime cache by recreating PHP (code remains immutable)
+docker compose up -d --force-recreate php web
 
 # Test database connection
 docker compose exec db mysqladmin ping -u omeka -p

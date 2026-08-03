@@ -24,4 +24,6 @@ Thumbs.db
 *.swo
 __pycache__/
 *.py[cod]
+_docker/restored-local.config.php
+_docker/migrated-local.config.php
 CLAUDE.md

@@ -9,6 +9,8 @@ A reusable Docker template for deploying Omeka S digital archive installations. 
 - **Automatic Installation**: Omeka S is downloaded during build and installed on first run
 - **One-Click Deploy**: [Bootstrap script](https://github.com/AM-Digital-Research-Environment/am-omeka-s-docker-bootstrap) for fresh Linux servers (Docker install, HTTPS via Caddy, launch)
 - **Pre-installed Modules**: Common modules baked into the image
+- **Immutable Application Code**: Core, modules, themes, and assets are baked
+  into matching PHP/nginx images; only media/logs/sessions are writable
 - **Optimized PHP 8.5**: Pre-configured with OPcache, APCu, and Imagick
 - **Non-root Execution**: PHP-FPM workers run as www-data
 - **Network Isolation**: Separate frontend/backend networks isolate PHP and MySQL
@@ -26,11 +28,16 @@ A reusable Docker template for deploying Omeka S digital archive installations. 
 .
 ├── docker-compose.yml          # Generic base stack (web, php, db, optional typesense)
 ├── compose.amira.yml           # AMIRA production overlay (worked example — see deploy/amira/)
-├── Dockerfile                  # PHP-FPM container build (multi-stage)
+├── Dockerfile                  # Shared PHP runtime + nginx asset build
 ├── docker-entrypoint.sh        # PHP container initialization & auto-install
 ├── _docker/
 │   ├── default-modules.txt     # Modules downloaded during image build
 │   ├── empty-modules.txt       # Placeholder for the EXTRA_MODULES_FILE build arg
+│   ├── extra-modules.txt       # Operator module pins
+│   ├── extra-themes.txt        # Operator theme pins
+│   ├── local-modules/          # Optional reviewed local module source
+│   ├── local-themes/           # Optional reviewed local theme source
+│   ├── local.config.php        # Default read-only Omeka configuration
 │   └── vocabularies/           # RDF vocabularies + JSON manifests (auto-imported on first run)
 ├── deploy/
 │   └── amira/                  # Everything specific to the AMIRA deployment (see its README)
@@ -48,9 +55,11 @@ A reusable Docker template for deploying Omeka S digital archive installations. 
 ├── scripts/
 │   ├── backup.sh               # Backup database, files, and config
 │   ├── restore.sh              # Restore from backup (migration)
-│   ├── install-module.sh       # Install new modules
-│   ├── install-theme.sh        # Install themes from GitHub
-│   ├── update-module.sh        # Update existing modules
+│   ├── migrate-immutable-storage.sh # One-time legacy-volume migration
+│   ├── rebuild-code.sh         # Build/deploy matching PHP + nginx code
+│   ├── install-module.sh       # Add module build input and rebuild
+│   ├── install-theme.sh        # Add theme build input and rebuild
+│   ├── update-module.sh        # Refresh floating build refs
 │   └── update-omeka.sh         # Update Omeka S core
 └── sideload/                   # Bulk import directory
 ```
@@ -59,7 +68,7 @@ A reusable Docker template for deploying Omeka S digital archive installations. 
 
 | Service | Image | Port | Purpose |
 |---------|-------|------|---------|
-| **web** | nginx 1.30.4-alpine (digest-pinned) | 80 | Reverse proxy, static files |
+| **web** | nginx 1.30.4-alpine + baked Omeka assets (digest-pinned base) | 80 | Reverse proxy, static files |
 | **php** | PHP 8.5.9-FPM (digest-pinned) | 9000 (internal) | Omeka S application |
 | **db** | MySQL 9.7.2 (digest-pinned) | 3306 (internal) | Database |
 | **typesense** _(optional)_ | Typesense 30.2 (digest-pinned) | 8108 (internal) | Search backend for search modules such as DRESearch — only runs under the `search` profile |
@@ -119,21 +128,22 @@ docker compose logs -f php
 
 #### 4. Install Additional Modules (Optional)
 
-Many modules are pre-installed (see below). To add more at runtime, set `EXTRA_MODULES` in your `.env`:
+Many modules are pre-installed (see below). Add another module as a reviewed
+image build input:
 
 ```bash
-# In .env
-EXTRA_MODULES=DspaceConnector,ValueSuggest,CSSEditor
-
-# Then restart
-docker compose down && docker compose up -d
+bash scripts/install-module.sh CSVImport
+bash scripts/install-module.sh gh:owner/repository v1.2.3
 ```
 
-You can also use the `omeka-s-cli` inside the container:
+The helper updates `_docker/extra-modules.txt`, builds both PHP and nginx, and
+replaces their containers while retaining database/media volumes. The document
+root is read-only; do not download code into a running container. Use the CLI
+only for module database state after the code is baked:
 
 ```bash
-docker compose exec php omeka-s-cli module:download ModuleName
 docker compose exec php omeka-s-cli module:install ModuleName
+docker compose exec php omeka-s-cli module:upgrade ModuleName
 ```
 
 See [docs/OMEKA_CLI.md](docs/OMEKA_CLI.md) for a fuller walk-through of common CLI workflows (modules, users, vocabularies, resource templates, settings).
@@ -159,9 +169,11 @@ Create a `.env` file from `.env.example`. All supported variables:
 | `TYPESENSE_API_KEY` | No | - | API key shared by the Typesense server and search module (only with the `search` profile) |
 | `COMPOSE_FILE` | No | - | Colon-separated compose files — activates a deployment overlay, e.g. `docker-compose.yml:compose.amira.yml` |
 | `COMPOSE_PROFILES` | No | - | Comma-separated profiles to auto-enable, e.g. `search` |
-| `EXTRA_MODULES` | No | - | Comma-separated modules to install at runtime (e.g. `DspaceConnector,CSSEditor`) |
-| `EXTRA_THEMES` | No | - | Comma-separated themes to install at runtime (e.g. `Cozy,Foundation`) |
-| `ENABLE_IIIF` | No | `false` | Set to `true` to install IIIF modules (IiifServer, ImageServer, Mirador) |
+| `OMEKA_LOCAL_CONFIG` | No | `./_docker/local.config.php` | Host path mounted as read-only `config/local.config.php` |
+| `EXTRA_MODULES` | No | - | Comma-separated module URIs baked at build time (prefer the tracked manifest) |
+| `EXTRA_THEMES` | No | - | Comma-separated theme URIs baked at build time (prefer the tracked manifest) |
+| `ENABLE_IIIF` | No | `false` | Bake IiifServer, ImageServer, and Mirador into both images |
+| `AMIRA_MCP_VERSION` | No | `v1.11.0` | AMIRA overlay only: published MCP server release tag |
 | `PHP_PM_MAX_CHILDREN` | No | `5` | PHP-FPM max worker processes |
 | `PHP_PM_START_SERVERS` | No | `2` | PHP-FPM workers started on boot |
 | `PHP_PM_MIN_SPARE_SERVERS` | No | `1` | Minimum idle workers |
@@ -237,11 +249,11 @@ docker compose exec db mysql -u omeka -p
 ### Update Modules
 
 ```bash
-# Update a specific module
-./scripts/update-module.sh CSVImport
+# Edit a tag/commit in _docker/extra-modules.txt, then deploy
+./scripts/rebuild-code.sh
 
-# Update all modules
-./scripts/update-module.sh all
+# Refresh any deliberately floating module/theme refs
+./scripts/update-module.sh
 ```
 
 ## Module Management
@@ -270,30 +282,28 @@ These modules are ready to activate in the Omeka S admin panel after installatio
 2. Cron
 3. EasyAdmin and other modules
 
-### Adding Modules at Runtime
+### Adding Modules
 
-Use the `EXTRA_MODULES` environment variable in `.env` to install additional modules when the container starts:
+Prefer one pinned Omeka-S-Cli URI per line in `_docker/extra-modules.txt`:
 
 ```bash
-EXTRA_MODULES=DspaceConnector,ValueSuggest,CSSEditor
+gh:owner/repository#v1.2.3
 ```
 
-The entrypoint accepts module names from the official `omeka-s-modules` GitHub org, or full `gh:` references for third-party modules:
+Official registry names and full `gh:` references are supported. A
+comma-separated `EXTRA_MODULES` value remains available as a build argument:
 
 ```bash
 EXTRA_MODULES=ValueSuggest,gh:Daniel-KM/Omeka-S-module-AdvancedSearch
 ```
 
-### Adding Modules to the Image
+### Adding Shared or Deployment Modules
 
-To permanently add a module to the image (so it's always available), add it to `_docker/default-modules.txt` and rebuild:
+Add a module to `_docker/default-modules.txt` only when every deployment should
+receive it. Otherwise use the operator manifest and rebuild:
 
 ```bash
-# Edit the file
-echo "ValueSuggest" >> _docker/default-modules.txt
-
-# Rebuild
-docker compose up -d --build
+bash scripts/rebuild-code.sh
 ```
 
 To bake deployment-specific modules without touching the shared default list, point the `EXTRA_MODULES_FILE` build arg at your own file from an overlay compose file (see `compose.amira.yml` for a worked example).
@@ -316,14 +326,14 @@ The ontology files live in `_docker/vocabularies/`, declared by the `vocabularie
 
 ## IIIF Support (Optional)
 
-Set `ENABLE_IIIF=true` in your `.env` file to automatically install IiifServer, ImageServer, and Mirador on first run:
+Set `ENABLE_IIIF=true` in `.env` to bake IiifServer, ImageServer, and Mirador:
 
 ```bash
 # In .env
 ENABLE_IIIF=true
 
-# Then start or recreate containers
-docker compose up -d
+# Build and deploy both PHP and nginx
+bash scripts/rebuild-code.sh
 ```
 
 These modules depend on Common, which is pre-installed. After startup, activate modules in this order in the Omeka S admin panel:
@@ -349,7 +359,7 @@ The base stack ships an optional [Typesense](https://typesense.org/) service as 
    ```
 3. Install and activate the module, then point it at Typesense (it auto-reads the env vars, so its admin settings can be left blank):
    ```bash
-   bash scripts/install-module.sh DRESearch
+   bash scripts/install-module.sh gh:AM-Digital-Research-Environment/DRESearch
    ```
 
 To run **without** search again, just start normally — `docker compose up -d` omits the profile and the `typesense` service never starts. Leaving `TYPESENSE_API_KEY` unset (or the module unconfigured) makes the module no-op gracefully.
@@ -436,8 +446,7 @@ container deliberately drops the capability needed to `chown` files at runtime.
 ### Clear Cache
 
 ```bash
-docker compose exec php rm -rf /var/www/html/data/cache/*
-docker compose restart php
+docker compose up -d --force-recreate php web
 ```
 
 ## Security Notes
@@ -456,7 +465,7 @@ This template includes Docker security hardening by default in the main `docker-
 | **Resource Limits** | CPU and memory limits prevent DoS attacks |
 | **no-new-privileges** | Prevents privilege escalation inside containers |
 | **Dropped Capabilities** | Removes unnecessary Linux capabilities |
-| **Read-only Filesystems** | nginx runs with read-only root filesystem |
+| **Read-only Filesystems** | PHP and nginx use read-only roots; media/logs/cache have narrow writable mounts |
 | **Network Isolation** | Separate frontend/backend networks; only nginx is exposed |
 | **Non-root Execution** | PHP-FPM workers run as www-data via pool configuration |
 
@@ -490,9 +499,9 @@ The dated, repository-wide findings and remediation status are tracked in
 
 3. **Regular Updates**
    ```bash
-   # Pull latest base images
+   # Pull service images and refresh application base images
    docker compose pull
-   docker compose up -d --build
+   bash scripts/rebuild-code.sh --pull
    ```
 
 4. **Network Segmentation**
@@ -600,7 +609,8 @@ Data is persisted in Docker volumes:
 | Volume | Purpose |
 |--------|---------|
 | `mysql_data` | MySQL database files |
-| `omeka_files` | Omeka S installation and uploads |
+| `omeka_media` | Uploaded files and generated derivatives only |
+| `omeka_logs` | Omeka application logs |
 | `php_sessions` | PHP session store (survives container restarts, so logins/CSRF tokens do too) |
 | `typesense_data` | Typesense search index (only with the `search` profile; rebuildable from MySQL) |
 
@@ -617,11 +627,14 @@ bash scripts/restore.sh backups/20260330-120000
 ```
 
 The backup is zero-downtime: it uses a consistent InnoDB snapshot and read-only
-volume archives while services stay up. Do not install/update modules or upgrade
-Omeka while it runs, because those operations can change database schema or live
-code. Backups are permission-restricted and include `SHA256SUMS`; encrypt them
+volume archives while services stay up. Do not apply module/core database
+migrations while it runs. Backups are permission-restricted and include
+`SHA256SUMS`; encrypt them
 before storing off-host. See [docs/BACKUP_RESTORE.md](docs/BACKUP_RESTORE.md) for
 the full migration and restore guide.
+
+Deployments created before the immutable layout must run the guarded one-time
+migration in [docs/PROPOSAL_immutable_code.md](docs/PROPOSAL_immutable_code.md).
 
 ## License
 

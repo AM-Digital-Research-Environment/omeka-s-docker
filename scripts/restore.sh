@@ -5,7 +5,8 @@
 #
 # Expects the backup directory to contain:
 #   - omeka_db.sql       MySQL database dump (required)
-#   - omeka_files.tar.gz Omeka files volume (required)
+#   - omeka_media.tar.gz Omeka media volume (current format), or
+#   - omeka_files.tar.gz Legacy whole document root (pre-migration format)
 #   - typesense_data.tar.gz Typesense search index (optional)
 #   - sideload.tar.gz    Sideload directory (optional)
 #   - .env               Environment file (optional, used if no .env exists)
@@ -54,8 +55,27 @@ if [[ "$BACKUP_DIR" != /* ]]; then
     BACKUP_DIR="$(pwd)/$BACKUP_DIR"
 fi
 
-# Validate backup contents
-for f in omeka_db.sql omeka_files.tar.gz; do
+# Detect the backup generation and validate its required data artifact.
+LAYOUT="legacy"
+if [ -f "$BACKUP_DIR/BACKUP_FORMAT" ]; then
+    if [ "$(sed -n '1p' "$BACKUP_DIR/BACKUP_FORMAT")" != "omeka-docker-backup-v2" ]; then
+        echo "ERROR: Unsupported backup format." >&2
+        exit 1
+    fi
+    LAYOUT="$(sed -n 's/^layout=//p' "$BACKUP_DIR/BACKUP_FORMAT")"
+    if [ "$LAYOUT" != "immutable" ] && [ "$LAYOUT" != "legacy" ]; then
+        echo "ERROR: Invalid layout in BACKUP_FORMAT." >&2
+        exit 1
+    fi
+fi
+
+REQUIRED_FILES=(omeka_db.sql)
+if [ "$LAYOUT" = "immutable" ]; then
+    REQUIRED_FILES+=(omeka_media.tar.gz local.config.php)
+else
+    REQUIRED_FILES+=(omeka_files.tar.gz)
+fi
+for f in "${REQUIRED_FILES[@]}"; do
     if [ ! -f "$BACKUP_DIR/$f" ]; then
         echo "ERROR: Missing required file: $BACKUP_DIR/$f"
         exit 1
@@ -71,14 +91,14 @@ if [ -f "$BACKUP_DIR/SHA256SUMS" ]; then
     # making sha256sum read paths outside the backup directory.
     if ! awk '
         NF != 2 || length($1) != 64 || $1 !~ /^[0-9A-Fa-f]+$/ ||
-        $2 !~ /^(omeka_db[.]sql|omeka_files[.]tar[.]gz|typesense_data[.]tar[.]gz|sideload[.]tar[.]gz|[.]env)$/ ||
+        $2 !~ /^(BACKUP_FORMAT|omeka_db[.]sql|omeka_media[.]tar[.]gz|omeka_logs[.]tar[.]gz|omeka_files[.]tar[.]gz|typesense_data[.]tar[.]gz|sideload[.]tar[.]gz|local[.]config[.]php|images[.]json|[.]env)$/ ||
         seen[$2]++ { exit 1 }
-        END { if (!seen["omeka_db.sql"] || !seen["omeka_files.tar.gz"]) exit 1 }
+        END { if (!seen["omeka_db.sql"]) exit 1 }
     ' "$BACKUP_DIR/SHA256SUMS"; then
         echo "ERROR: SHA256SUMS is malformed, incomplete, or contains unsafe paths." >&2
         exit 1
     fi
-    for artifact in omeka_db.sql omeka_files.tar.gz typesense_data.tar.gz sideload.tar.gz .env; do
+    for artifact in BACKUP_FORMAT omeka_db.sql omeka_media.tar.gz omeka_logs.tar.gz omeka_files.tar.gz typesense_data.tar.gz sideload.tar.gz local.config.php images.json .env; do
         if [ -f "$BACKUP_DIR/$artifact" ] \
             && ! awk -v name="$artifact" '$2 == name { found = 1 } END { exit !found }' "$BACKUP_DIR/SHA256SUMS"; then
             echo "ERROR: $artifact exists but is not covered by SHA256SUMS." >&2
@@ -89,6 +109,7 @@ if [ -f "$BACKUP_DIR/SHA256SUMS" ]; then
 else
     echo "WARNING: No SHA256SUMS found; integrity cannot be verified." >&2
 fi
+echo "    Backup layout: $LAYOUT"
 
 echo "==> Omeka S Restore"
 echo "    Project:      $PROJECT_DIR"
@@ -106,15 +127,44 @@ if [ ! -f "$PROJECT_DIR/.env" ]; then
     fi
 fi
 
+# Restore the exact read-only deployment config separately from the image. The
+# database secret remains ephemeral under /run and is never written here.
+RESTORED_CONFIG="$PROJECT_DIR/_docker/restored-local.config.php"
+if [ -f "$BACKUP_DIR/local.config.php" ]; then
+    cp "$BACKUP_DIR/local.config.php" "$RESTORED_CONFIG"
+elif [ "$LAYOUT" = "legacy" ]; then
+    if ! docker run --rm -v "$BACKUP_DIR":/backup:ro "$HELPER_IMAGE" sh -eu -c '
+        path=$(tar tzf /backup/omeka_files.tar.gz | sed -n "s#^\(./\)\?config/local[.]config[.]php$#&#p" | head -n 1)
+        test -n "$path"
+        tar xOzf /backup/omeka_files.tar.gz "$path"
+    ' > "$RESTORED_CONFIG"; then
+        rm -f "$RESTORED_CONFIG"
+        echo "ERROR: Legacy backup has no readable config/local.config.php." >&2
+        exit 1
+    fi
+fi
+if [ -f "$RESTORED_CONFIG" ]; then
+    chmod 644 "$RESTORED_CONFIG"
+    if grep -q '^OMEKA_LOCAL_CONFIG=' "$PROJECT_DIR/.env"; then
+        sed -i 's|^OMEKA_LOCAL_CONFIG=.*|OMEKA_LOCAL_CONFIG=./_docker/restored-local.config.php|' "$PROJECT_DIR/.env"
+    else
+        printf '\nOMEKA_LOCAL_CONFIG=./_docker/restored-local.config.php\n' >> "$PROJECT_DIR/.env"
+    fi
+    echo "==> Restored local.config.php as a read-only deployment config"
+fi
+
 # Resolve compose project name for volume prefix
 COMPOSE_PROJECT="$(cd "$PROJECT_DIR" && docker compose config --format json 2>/dev/null | python3 -c 'import sys,json; print(json.load(sys.stdin).get("name",""))' 2>/dev/null || basename "$PROJECT_DIR" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_-]//g')"
 
 # --- 1. Confirm any destructive overwrite and stop running services ---
 RUNNING="$(cd "$PROJECT_DIR" && docker compose ps --status running --format '{{.Service}}' 2>/dev/null | wc -l)"
-VOLUME_NAME="${COMPOSE_PROJECT}_omeka_files"
+MEDIA_VOLUME="${COMPOSE_PROJECT}_omeka_media"
+LOGS_VOLUME="${COMPOSE_PROJECT}_omeka_logs"
+LEGACY_VOLUME="${COMPOSE_PROJECT}_omeka_files"
 MYSQL_VOLUME="${COMPOSE_PROJECT}_mysql_data"
 DATA_EXISTS=false
-if docker volume inspect "$VOLUME_NAME" >/dev/null 2>&1 \
+if docker volume inspect "$MEDIA_VOLUME" >/dev/null 2>&1 \
+    || docker volume inspect "$LEGACY_VOLUME" >/dev/null 2>&1 \
     || docker volume inspect "$MYSQL_VOLUME" >/dev/null 2>&1; then
     DATA_EXISTS=true
 fi
@@ -132,18 +182,61 @@ if [ "$RUNNING" -gt 0 ]; then
     (cd "$PROJECT_DIR" && docker compose down)
 fi
 
-# --- 2. Restore omeka_files volume ---
-echo "==> Restoring omeka_files volume..."
-# Create volume if it doesn't exist
-docker volume create "$VOLUME_NAME" > /dev/null 2>&1 || true
-# Clear and restore
-docker run --rm \
-    -v "$VOLUME_NAME":/data \
-    -v "$BACKUP_DIR":/backup:ro \
-    "$HELPER_IMAGE" sh -c "rm -rf /data/* /data/..?* /data/.[!.]* 2>/dev/null; cd /data && tar xzf /backup/omeka_files.tar.gz"
-echo "    Files volume restored."
+# --- 2. Restore media into the immutable storage layout ---
+echo "==> Restoring Omeka media volume..."
+docker volume create "$MEDIA_VOLUME" > /dev/null 2>&1 || true
+if [ "$LAYOUT" = "immutable" ]; then
+    docker run --rm \
+        -v "$MEDIA_VOLUME":/data \
+        -v "$BACKUP_DIR":/backup:ro \
+        "$HELPER_IMAGE" sh -eu -c '
+            rm -rf /data/* /data/..?* /data/.[!.]* 2>/dev/null || true
+            tar xzf /backup/omeka_media.tar.gz -C /data
+            test -f /data/.immutable-layout-v1
+        '
+else
+    # Legacy archives contain the entire document root. Extract only files/
+    # into the new media volume and leave all old executable code behind.
+    docker run --rm \
+        -v "$MEDIA_VOLUME":/data \
+        -v "$BACKUP_DIR":/backup:ro \
+        "$HELPER_IMAGE" sh -eu -c '
+            rm -rf /data/* /data/..?* /data/.[!.]* 2>/dev/null || true
+            mkdir /data/.legacy-root
+            tar xzf /backup/omeka_files.tar.gz -C /data/.legacy-root
+            test -d /data/.legacy-root/files
+            cp -a /data/.legacy-root/files/. /data/
+            rm -rf /data/.legacy-root
+            touch /data/.immutable-layout-v1
+        '
+fi
+echo "    Media volume restored."
 
-# --- 3. Restore Typesense data volume (optional search backend) ---
+# --- 3. Restore logs (optional operational history) ---
+docker volume create "$LOGS_VOLUME" > /dev/null 2>&1 || true
+if [ -f "$BACKUP_DIR/omeka_logs.tar.gz" ]; then
+    echo "==> Restoring Omeka logs volume..."
+    docker run --rm \
+        -v "$LOGS_VOLUME":/data \
+        -v "$BACKUP_DIR":/backup:ro \
+        "$HELPER_IMAGE" sh -eu -c '
+            rm -rf /data/* /data/..?* /data/.[!.]* 2>/dev/null || true
+            tar xzf /backup/omeka_logs.tar.gz -C /data
+        '
+elif [ "$LAYOUT" = "legacy" ]; then
+    docker run --rm \
+        -v "$LOGS_VOLUME":/data \
+        -v "$BACKUP_DIR":/backup:ro \
+        "$HELPER_IMAGE" sh -eu -c '
+            rm -rf /data/* /data/..?* /data/.[!.]* 2>/dev/null || true
+            mkdir /data/.legacy-root
+            tar xzf /backup/omeka_files.tar.gz -C /data/.legacy-root
+            if [ -d /data/.legacy-root/logs ]; then cp -a /data/.legacy-root/logs/. /data/; fi
+            rm -rf /data/.legacy-root
+        '
+fi
+
+# --- 4. Restore Typesense data volume (optional search backend) ---
 TYPESENSE_RESTORED=false
 if [ -f "$BACKUP_DIR/typesense_data.tar.gz" ]; then
     echo "==> Restoring Typesense data volume..."
@@ -157,7 +250,7 @@ if [ -f "$BACKUP_DIR/typesense_data.tar.gz" ]; then
     echo "    Typesense volume restored."
 fi
 
-# --- 4. Restore sideload ---
+# --- 5. Restore sideload ---
 if [ -f "$BACKUP_DIR/sideload.tar.gz" ]; then
     echo "==> Restoring sideload directory..."
     mkdir -p "$PROJECT_DIR/sideload"
@@ -165,7 +258,7 @@ if [ -f "$BACKUP_DIR/sideload.tar.gz" ]; then
     echo "    Sideload restored."
 fi
 
-# --- 5. Start database and wait for it ---
+# --- 6. Start database and wait for it ---
 echo "==> Starting database..."
 (cd "$PROJECT_DIR" && docker compose up -d db)
 echo "    Waiting for database to be healthy..."
@@ -182,7 +275,7 @@ until (cd "$PROJECT_DIR" && docker compose exec -T db sh -eu -c \
 done
 echo "    Database is ready."
 
-# --- 6. Import database dump ---
+# --- 7. Import database dump ---
 echo "==> Importing database dump..."
 # Drop and recreate to ensure clean state. Restrict the identifier before
 # interpolating it into SQL; credentials stay in the container environment.
@@ -201,7 +294,7 @@ echo "==> Importing database dump..."
     < "$BACKUP_DIR/omeka_db.sql"
 echo "    Database imported."
 
-# --- 7. Start all services ---
+# --- 8. Start all services ---
 echo "==> Starting all services..."
 if [ "$TYPESENSE_RESTORED" = true ]; then
     # Restored a Typesense index — bring it back with the "search" profile.

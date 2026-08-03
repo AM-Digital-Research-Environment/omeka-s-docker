@@ -15,6 +15,11 @@ FROM php:8.5.9-fpm-trixie@sha256:f56f4a81de6cd33ddfd6e99352889a53c94c3ffccce89e4
 
 ARG OMEKA_ROOT=/var/www/html
 ARG OMEKA_VERSION=4.2.1
+ARG EXTRA_MODULES_FILE=_docker/empty-modules.txt
+ARG EXTRA_MODULES=""
+ARG EXTRA_THEMES=""
+ARG ENABLE_IIIF=false
+ARG OMEKA_ASSET_REFRESH=stable
 
 # We're never going to be able to give feedback to apt during build
 ENV DEBIAN_FRONTEND=noninteractive
@@ -96,6 +101,11 @@ EOF
 # third-party repository during every image build.
 RUN echo "pm.status_path = /status" >> /usr/local/etc/php-fpm.d/zz-docker.conf
 
+# Runtime pool tuning is written under /run (tmpfs) because the application
+# container's root filesystem is read-only. PHP-FPM loads this second include
+# after its image-baked pool configuration.
+RUN echo "include=/run/php-fpm/*.conf" >> /usr/local/etc/php-fpm.conf
+
 RUN chown -R www-data:www-data "$OMEKA_ROOT" \
     && chmod -R u=rwX,go=rX "$OMEKA_ROOT" \
     && chown www-data:www-data /usr/local/etc/php-fpm.d \
@@ -117,27 +127,91 @@ RUN if [ "$OMEKA_VERSION" = "latest" ]; then \
         omeka-s-cli core:download "$OMEKA_ROOT" "$OMEKA_VERSION"; \
     fi
 
+# Keep deployment configuration immutable/read-only while the database secret
+# is regenerated into /run/omeka on every start. The Compose bind lets a
+# deployment provide a reviewed local.config.php without making the code tree
+# writable.
+COPY --chown=www-data:www-data _docker/local.config.php ${OMEKA_ROOT}/config/local.config.php
+RUN rm -f "${OMEKA_ROOT}/config/database.ini" \
+    && ln -s /run/omeka/database.ini "${OMEKA_ROOT}/config/database.ini"
+
 COPY --chown=www-data:www-data _docker/default-modules.txt /tmp/default-modules.txt
+COPY --chown=www-data:www-data _docker/extra-modules.txt /tmp/operator-modules.txt
 
 # Deployment overlays can bake additional modules into the image by pointing
 # this build arg at another modules file (same omeka-s-cli syntax), e.g.
 # compose.amira.yml sets it to deploy/amira/modules.txt. The default is an
 # empty placeholder so plain builds add nothing.
-ARG EXTRA_MODULES_FILE=_docker/empty-modules.txt
-COPY --chown=www-data:www-data ${EXTRA_MODULES_FILE} /tmp/extra-modules.txt
+COPY --chown=www-data:www-data ${EXTRA_MODULES_FILE} /tmp/deployment-modules.txt
 
-RUN for list in /tmp/default-modules.txt /tmp/extra-modules.txt; do \
+RUN echo "Asset refresh token: ${OMEKA_ASSET_REFRESH}" \
+    && while IFS= read -r mod || [ -n "$mod" ]; do \
+        mod=$(printf '%s' "$mod" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'); \
+        case "$mod" in ''|'#'*) continue ;; esac; \
+        omeka-s-cli module:download --base-path "$OMEKA_ROOT" "$mod"; \
+    done < /tmp/default-modules.txt \
+    && for list in /tmp/operator-modules.txt /tmp/deployment-modules.txt; do \
         while IFS= read -r mod || [ -n "$mod" ]; do \
-            # strip comments, trim spaces at beginning/end of line
-            mod=$(echo "$mod" | sed 's/#.*//;s/^[[:space:]]*//;s/[[:space:]]*$//'); \
-            # skip empty lines
-            [ -z "$mod" ] && continue; \
-            omeka-s-cli module:download --base-path "$OMEKA_ROOT" "$mod"; \
+            mod=$(printf '%s' "$mod" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'); \
+            case "$mod" in ''|'#'*) continue ;; esac; \
+            omeka-s-cli module:download --base-path "$OMEKA_ROOT" --force "$mod"; \
         done < "$list"; \
+    done \
+    && if [ -n "$EXTRA_MODULES" ]; then \
+        while IFS= read -r mod || [ -n "$mod" ]; do \
+            mod=$(printf '%s' "$mod" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'); \
+            [ -z "$mod" ] || omeka-s-cli module:download --base-path "$OMEKA_ROOT" --force "$mod"; \
+        done < <(printf '%s' "$EXTRA_MODULES" | tr ',' '\n'); \
+    fi \
+    && if [ "$ENABLE_IIIF" = "true" ]; then \
+        for mod in \
+            gh:Daniel-KM/Omeka-S-module-IiifServer \
+            gh:Daniel-KM/Omeka-S-module-ImageServer \
+            gh:Daniel-KM/Omeka-S-module-Mirador; do \
+            omeka-s-cli module:download --base-path "$OMEKA_ROOT" --force "$mod"; \
+        done; \
+    fi
+
+# Local source directories are the deterministic escape hatch for private or
+# migrated extensions. Each directory replaces a same-named downloaded module
+# or theme rather than merging stale files into it.
+COPY --chown=www-data:www-data _docker/local-modules/ /tmp/local-modules/
+RUN shopt -s nullglob \
+    && for module_dir in /tmp/local-modules/*/; do \
+        module_name=$(basename "$module_dir"); \
+        rm -rf "${OMEKA_ROOT}/modules/${module_name}"; \
+        cp -a "$module_dir" "${OMEKA_ROOT}/modules/${module_name}"; \
     done
 
+COPY --chown=www-data:www-data _docker/extra-themes.txt /tmp/operator-themes.txt
 RUN omeka-s-cli theme:download --base-path "$OMEKA_ROOT" gh:omeka-s-themes/freedom \
-    && omeka-s-cli theme:download --base-path "$OMEKA_ROOT" gh:omeka-s-themes/lively
+    && omeka-s-cli theme:download --base-path "$OMEKA_ROOT" gh:omeka-s-themes/lively \
+    && while IFS= read -r theme || [ -n "$theme" ]; do \
+        theme=$(printf '%s' "$theme" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'); \
+        case "$theme" in ''|'#'*) continue ;; esac; \
+        omeka-s-cli theme:download --base-path "$OMEKA_ROOT" --force "$theme"; \
+    done < /tmp/operator-themes.txt \
+    && if [ -n "$EXTRA_THEMES" ]; then \
+        while IFS= read -r theme || [ -n "$theme" ]; do \
+            theme=$(printf '%s' "$theme" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'); \
+            [ -z "$theme" ] || omeka-s-cli theme:download --base-path "$OMEKA_ROOT" --force "$theme"; \
+        done < <(printf '%s' "$EXTRA_THEMES" | tr ',' '\n'); \
+    fi
+
+COPY --chown=www-data:www-data _docker/local-themes/ /tmp/local-themes/
+RUN shopt -s nullglob \
+    && for theme_dir in /tmp/local-themes/*/; do \
+        theme_name=$(basename "$theme_dir"); \
+        rm -rf "${OMEKA_ROOT}/themes/${theme_name}"; \
+        cp -a "$theme_dir" "${OMEKA_ROOT}/themes/${theme_name}"; \
+    done \
+    && for composer_json in "${OMEKA_ROOT}"/modules/*/composer.json; do \
+        [ -f "$composer_json" ] || continue; \
+        module_dir=$(dirname "$composer_json"); \
+        [ ! -f "$module_dir/composer.lock" ] || [ -d "$module_dir/vendor" ] || composer install \
+            --working-dir "$module_dir" --no-dev --no-interaction \
+            --prefer-dist --optimize-autoloader; \
+    done
 
 # Persist PHP sessions on a dedicated volume (mounted in docker-compose.yml)
 # instead of the default tmpfs /tmp, so container restarts/recreates no longer
@@ -145,9 +219,10 @@ RUN omeka-s-cli theme:download --base-path "$OMEKA_ROOT" gh:omeka-s-themes/freed
 # owned by www-data so the fresh named volume inherits that ownership on first
 # mount — the running container drops CAP_CHOWN and cannot fix it afterwards.
 USER root
-RUN mkdir -p /var/lib/php-sessions \
+RUN mkdir -p /var/lib/php-sessions /run/omeka /run/php-fpm \
     && chown www-data:www-data /var/lib/php-sessions \
-    && chmod 700 /var/lib/php-sessions
+    && chown www-data:www-data /run/omeka /run/php-fpm \
+    && chmod 700 /var/lib/php-sessions /run/omeka /run/php-fpm
 COPY <<EOF /usr/local/etc/php/conf.d/92-sessions.ini
 session.save_path = "/var/lib/php-sessions"
 EOF
@@ -169,3 +244,10 @@ ENV COMPOSER_CACHE_DIR=/var/www/.cache/composer
 ENTRYPOINT ["docker-entrypoint.sh"]
 
 CMD ["php-fpm"]
+
+# nginx serves the exact static assets baked into the PHP image. Keeping both
+# targets in one Dockerfile guarantees core/module/theme assets change together
+# while media remains a separately mounted read-only volume.
+FROM nginx:1.30.4-alpine@sha256:97d490c12ba55b4946b01546d1c3ed324e8d41ab1c9fcb2a616aa470620e5b46 AS web
+
+COPY --from=runtime --chown=nginx:nginx /var/www/html /var/www/html

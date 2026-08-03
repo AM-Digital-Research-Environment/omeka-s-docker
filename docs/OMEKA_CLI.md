@@ -30,21 +30,14 @@ docker compose exec php omeka-s-cli module:update --help
 ### Modules
 
 ```bash
-# List installed modules (state, version, latest available, update flag)
+# List module code and database state
 docker compose exec php omeka-s-cli module:list
 
-# Update one module to the latest released version
-docker compose exec php omeka-s-cli module:update Cron
-
-# Update all modules
-docker compose exec php omeka-s-cli module:update --all
-
-# Update and run any pending DB upgrade migrations in one go
-docker compose exec php omeka-s-cli module:update Cron --upgrade
-
-# Install a new module (download + activate)
-docker compose exec php omeka-s-cli module:download CSVImport
+# Activate code already baked into the image
 docker compose exec php omeka-s-cli module:install CSVImport
+
+# Apply a pending module database migration after deploying new code
+docker compose exec php omeka-s-cli module:upgrade CSVImport
 
 # Disable / enable / uninstall
 docker compose exec php omeka-s-cli module:disable CSVImport
@@ -55,7 +48,11 @@ docker compose exec php omeka-s-cli module:uninstall CSVImport
 docker compose exec php omeka-s-cli module:search facet
 ```
 
-`--upgrade` is the important one after a module update — some modules ship DB migrations that only run when the module's `upgrade` hook fires.
+The application document root is read-only. Do not use `module:download` or
+`module:update` in a running container; add/pin the module in the build manifest
+and run `scripts/rebuild-code.sh`. Apply `module:upgrade` only after the new code
+has been tested and a backup exists: rolling an image back cannot reverse a DB
+migration.
 
 ### Users
 
@@ -84,9 +81,8 @@ docker compose exec php omeka-s-cli core:version
 # older backup)
 docker compose exec php omeka-s-cli core:migrate
 
-# Upgrade the core (does NOT run DB migrations automatically — follow with
-# core:migrate)
-docker compose exec php omeka-s-cli core:update
+# Core code upgrades are image builds, not live CLI writes
+bash scripts/update-omeka.sh 4.2.1
 ```
 
 ### Vocabularies
@@ -131,19 +127,21 @@ docker compose exec php omeka-s-cli config:get installation_title
 docker compose exec php omeka-s-cli config:set installation_title "My Archive"
 ```
 
-## CLI vs. the `scripts/` bash helpers
+## CLI vs. immutable-code helpers
 
-This repo also ships `scripts/install-module.sh`, `scripts/update-module.sh`, etc. They overlap with the CLI but serve different needs:
+Use build helpers for code and the CLI for database/application state:
 
 | Task | Prefer | Why |
 |---|---|---|
-| Routine module install/update | **omeka-s-cli** | Knows upstream registries, handles enable/migrate lifecycle |
-| Update one module to a *specific* tag or off-default branch | `scripts/update-module.sh <name> <tag>` | The bash scripts let you pin to an arbitrary git ref |
-| Install a module that isn't in the CLI's known registries | `scripts/install-module.sh` | The bash scripts have an explicit repo map you can edit |
-| Bulk operations that touch the DB (migrations) | **omeka-s-cli** | `module:update --upgrade` and `core:migrate` are CLI-native |
+| Add/pin module or theme code | `scripts/install-*.sh` or `_docker/extra-*.txt` | Rebuilds matching PHP/nginx images |
+| Refresh floating refs | `scripts/update-module.sh` | Invalidates download layers; pins are safer |
+| Update Omeka core code | `scripts/update-omeka.sh` | Backup, version pin, matching image rebuild |
+| Activate/disable modules | **omeka-s-cli** | Changes database state, not image code |
+| Apply module/core DB migrations | **omeka-s-cli** | `module:upgrade` and `core:migrate` are explicit |
 | Anything user / vocab / resource-template / settings related | **omeka-s-cli** | The bash scripts don't cover these |
 
-In short: reach for the CLI first; fall back to the bash scripts when you need version pinning or are working with a module the CLI doesn't know about.
+Code is immutable by design. A failed live download is therefore expected, not
+a permissions problem to work around.
 
 ## Where to look when something breaks
 

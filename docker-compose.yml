@@ -8,12 +8,19 @@
 
 services:
   web:
-    # Track the stable branch only (even minor = stable, odd = mainline). Pinned
-    # by digest so Dependabot bumps the SHA and we ride the latest stable
-    # automatically, never getting offered a mainline (1.31.x) release.
-    # Refresh: docker pull nginx:stable-alpine && docker inspect \
-    #   --format '{{index .RepoDigests 0}}' nginx:stable-alpine
-    image: nginx:1.30.4-alpine@sha256:97d490c12ba55b4946b01546d1c3ed324e8d41ab1c9fcb2a616aa470620e5b46
+    # Build nginx from the same immutable Omeka code layer as PHP so module,
+    # theme, and core assets can never drift between the two services.
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: web
+      args:
+        OMEKA_VERSION: ${OMEKA_VERSION:-4.2.1}
+        EXTRA_MODULES_FILE: ${EXTRA_MODULES_FILE:-_docker/empty-modules.txt}
+        EXTRA_MODULES: ${EXTRA_MODULES:-}
+        EXTRA_THEMES: ${EXTRA_THEMES:-}
+        ENABLE_IIIF: ${ENABLE_IIIF:-false}
+        OMEKA_ASSET_REFRESH: ${OMEKA_ASSET_REFRESH:-stable}
     ports:
       # NGINX_BIND controls the interface: the 127.0.0.1 default keeps nginx
       # reachable only through a reverse proxy on the host; set
@@ -25,7 +32,7 @@ services:
       # Rendered to /etc/nginx/conf.d/snippets/security-headers.conf so the
       # FRAME_ANCESTORS substitution applies to the snippet too.
       - ./nginx-security-headers.conf:/etc/nginx/templates/snippets/security-headers.conf.template:ro
-      - omeka_files:/var/www/html:ro
+      - omeka_media:/var/www/html/files:ro
     environment:
       # Substituted into the nginx templates at container start (see
       # /etc/nginx/templates/). Values come from .env (gitignored).
@@ -83,13 +90,20 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: runtime
       args:
-        # Applied at image build (the Omeka S core is downloaded then), so the
-        # .env value actually governs fresh builds. Runtime upgrades of an
-        # existing volume go through scripts/update-omeka.sh instead.
+        # Core/modules/themes are image content. Changing any of these values
+        # requires rebuilding both php and web; the helper scripts do that.
         OMEKA_VERSION: ${OMEKA_VERSION:-4.2.1}
+        EXTRA_MODULES_FILE: ${EXTRA_MODULES_FILE:-_docker/empty-modules.txt}
+        EXTRA_MODULES: ${EXTRA_MODULES:-}
+        EXTRA_THEMES: ${EXTRA_THEMES:-}
+        ENABLE_IIIF: ${ENABLE_IIIF:-false}
+        OMEKA_ASSET_REFRESH: ${OMEKA_ASSET_REFRESH:-stable}
     volumes:
-      - omeka_files:/var/www/html:rw
+      - omeka_media:/var/www/html/files:rw
+      - omeka_logs:/var/www/html/logs:rw
+      - ${OMEKA_LOCAL_CONFIG:-./_docker/local.config.php}:/var/www/html/config/local.config.php:ro
       - ./uploads.ini:/usr/local/etc/php/conf.d/uploads.ini:ro
       - ./sideload:/var/www/html/sideload:rw
       # Persistent PHP session store (off tmpfs) so php restarts don't log
@@ -116,11 +130,6 @@ services:
       - PHP_PM_MIN_SPARE_SERVERS=${PHP_PM_MIN_SPARE_SERVERS:-1}
       - PHP_PM_MAX_SPARE_SERVERS=${PHP_PM_MAX_SPARE_SERVERS:-3}
       - PHP_PM_MAX_REQUESTS=${PHP_PM_MAX_REQUESTS:-500}
-      # Extra modules/themes installed by entrypoint (comma-separated names)
-      - EXTRA_MODULES=${EXTRA_MODULES:-}
-      - EXTRA_THEMES=${EXTRA_THEMES:-}
-      # Set to "true" to install IIIF modules (IiifServer, ImageServer, Mirador)
-      - ENABLE_IIIF=${ENABLE_IIIF:-false}
       # Typesense connection for the DRESearch module (optional). The module
       # reads these when its admin settings are blank; leave TYPESENSE_API_KEY
       # unset to run without search (the module then no-ops gracefully).
@@ -140,8 +149,12 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    read_only: true
     tmpfs:
       - /tmp:mode=1777,size=256M
+      - /run/omeka:uid=33,gid=33,mode=0700,size=1M
+      - /run/php-fpm:uid=33,gid=33,mode=0700,size=1M
+      - /var/www/.cache:uid=33,gid=33,mode=0700,size=256M
     deploy:
       resources:
         limits:
@@ -282,7 +295,9 @@ services:
 volumes:
   mysql_data:
     driver: local
-  omeka_files:
+  omeka_media:
+    driver: local
+  omeka_logs:
     driver: local
   typesense_data:
     driver: local

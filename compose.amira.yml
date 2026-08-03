@@ -19,6 +19,9 @@
 
 services:
   web:
+    build:
+      args:
+        EXTRA_MODULES_FILE: deploy/amira/modules.txt
     volumes:
       # Rendered by the nginx image's envsubst step into
       # /etc/nginx/conf.d/extra-locations/mcp.conf, which the base nginx.conf
@@ -44,10 +47,8 @@ services:
   # AMIRA MCP server — exposes the public, read-only AMIRA dataset over
   # Streamable-HTTP/SSE at POST /mcp (health: GET /healthz) on port 8787.
   # Reached only through the web nginx (location ^~ /mcp); never published to
-  # the host. Built from the upstream repo's main branch. Pull the latest with:
-  #   docker compose build --pull --no-cache amira-mcp && docker compose up -d amira-mcp
-  # (or run ./deploy/amira/update-amira-mcp.sh). --no-cache forces a fresh git
-  # clone and re-runs the build-time data snapshot fetch.
+  # the host. Built from an upstream release tag, never a floating branch.
+  # Update AMIRA_MCP_VERSION with deploy/amira/update-amira-mcp.sh.
   #
   # web declares no dependency on this service: the /mcp location resolves the
   # upstream at request time via Docker's embedded DNS, so the site boots — and
@@ -55,7 +56,7 @@ services:
   # just returns 502 until amira-mcp is reachable again.
   amira-mcp:
     build:
-      context: https://github.com/AM-Digital-Research-Environment/amira-mcp-server.git#main
+      context: https://github.com/AM-Digital-Research-Environment/amira-mcp-server.git#${AMIRA_MCP_VERSION:-v1.11.0}
     environment:
       - PORT=8787
       - HOST=0.0.0.0

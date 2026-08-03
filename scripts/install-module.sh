@@ -1,426 +1,46 @@
-#!/bin/bash
-# Script to install Omeka S modules from GitHub/GitLab
-# Usage: bash scripts/install-module.sh <module-name> [branch/tag]
-# Example: bash scripts/install-module.sh AdvancedSearch
-# Example: bash scripts/install-module.sh AdvancedSearch 3.5.46
+#!/usr/bin/env bash
+# Add a module to the operator manifest, then rebuild immutable code images.
 
-set -e
+set -Eeuo pipefail
 
-# Pre-installed modules (installed automatically by docker-entrypoint.sh)
-PREINSTALLED_MODULES=(
-    "Common"
-    "DspaceConnector"
-    "FileSideload"
-    "Hierarchy"
-    "IframeEmbed"
-    "ItemCarouselBlock"
-    "Log"
-    "NumericDataTypes"
-    "ValueSuggest"
-)
-
-# Configuration - Map module names to their repositories and default branches
-# Format: "repo:branch"
-declare -A MODULE_REPOS=(
-    # Daniel-KM modules (GitHub)
-    ["AdvancedSearch"]="Daniel-KM/Omeka-S-module-AdvancedSearch:master"
-    ["AnalyticsSnippet"]="Daniel-KM/Omeka-S-module-AnalyticsSnippet:master"
-    ["BulkEdit"]="Daniel-KM/Omeka-S-module-BulkEdit:master"
-    ["BulkExport"]="Daniel-KM/Omeka-S-module-BulkExport:master"
-    ["Common"]="Daniel-KM/Omeka-S-module-Common:master"
-    ["Cron"]="Daniel-KM/Omeka-S-module-Cron:master"
-    ["EasyAdmin"]="Daniel-KM/Omeka-S-module-EasyAdmin:master"
-    ["IiifServer"]="Daniel-KM/Omeka-S-module-IiifServer:master"
-    ["ImageServer"]="Daniel-KM/Omeka-S-module-ImageServer:master"
-    ["Log"]="Daniel-KM/Omeka-S-module-Log:master"
-    ["Mirador"]="Daniel-KM/Omeka-S-module-Mirador:master"
-    ["OaiPmhRepository"]="Daniel-KM/Omeka-S-module-OaiPmhRepository:master"
-    ["Reference"]="Daniel-KM/Omeka-S-module-Reference:master"
-    ["SearchSolr"]="Daniel-KM/Omeka-S-module-SearchSolr:master"
-
-    # Official Omeka-S modules
-    ["ActivityLog"]="omeka-s-modules/ActivityLog:master"
-    ["Collecting"]="omeka-s-modules/Collecting:master"
-    ["CSSEditor"]="omeka-s-modules/CSSEditor:master"
-    ["CSVImport"]="omeka-s-modules/CSVImport:develop"
-    ["CustomVocab"]="omeka-s-modules/CustomVocab:master"
-    ["Datavis"]="omeka-s-modules/Datavis:main"
-    ["DspaceConnector"]="omeka-s-modules/DspaceConnector:develop"
-    ["Exports"]="omeka-s-modules/Exports:main"
-    ["FacetedBrowse"]="omeka-s-modules/FacetedBrowse:master"
-    ["FileSideload"]="omeka-s-modules/FileSideload:master"
-    ["Hierarchy"]="omeka-s-modules/Hierarchy:main"
-    ["InverseProperties"]="omeka-s-modules/InverseProperties:main"
-    ["ItemCarouselBlock"]="omeka-s-modules/ItemCarouselBlock:master"
-    ["LocalContexts"]="omeka-s-modules/LocalContexts:main"
-    ["Mapping"]="omeka-s-modules/Mapping:master"
-    ["NumericDataTypes"]="omeka-s-modules/NumericDataTypes:master"
-    ["OutputFormats"]="omeka-s-modules/OutputFormats:main"
-    ["ResourceMeta"]="omeka-s-modules/ResourceMeta:master"
-    ["ValueSuggest"]="omeka-s-modules/ValueSuggest:master"
-    ["ZoteroImport"]="omeka-s-modules/ZoteroImport:master"
-
-    # Other modules
-    ["DRESearch"]="AM-Digital-Research-Environment/DRESearch:main"
-    # Repo is DRE-SEO but the module namespace/dir is DRESeo, so that must be the key.
-    ["DRESeo"]="AM-Digital-Research-Environment/DRE-SEO:main"
-    # Repo is ResourceVisualizations but the module namespace/dir is DreVisualizations, so that must be the key.
-    ["DreVisualizations"]="AM-Digital-Research-Environment/ResourceVisualizations:main"
-    ["IframeEmbed"]="fmadore/IframeEmbed:main"
-    ["RightsStatements"]="zerocrates/RightsStatements:master"
-    ["Sitemaps"]="ManOnDaMoon/omeka-s-module-Sitemaps:master"
-    ["Wikidata"]="nishad/omeka-s-wikidata:master"
-)
-
-# Configuration - Map module names to their GitLab repositories
-# Format: "repo:branch"
-declare -A GITLAB_REPOS=(
-    # Daniel-KM modules (GitLab)
-    ["IiifSearch"]="Daniel-KM/Omeka-S-module-IiifSearch:master"
-    ["Internationalisation"]="Daniel-KM/Omeka-S-module-Internationalisation:master"
-)
-
-# Module dependencies - modules that must be installed first
-# Format: "dependency1 dependency2 ..."
-declare -A MODULE_DEPENDENCIES=(
-    ["EasyAdmin"]="Common Cron"
-    ["AdvancedSearch"]="Common"
-    ["BulkEdit"]="Common"
-    ["BulkExport"]="Common"
-    ["IiifServer"]="Common"
-    ["ImageServer"]="Common"
-    ["Log"]="Common"
-    ["OaiPmhRepository"]="Common"
-    ["Reference"]="Common"
-    ["SearchSolr"]="Common AdvancedSearch"
-    ["IiifSearch"]="Common"
-    ["Internationalisation"]="Common"
-)
-
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
-
-log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
-log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
-log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
-
-# Function to check if a module is pre-installed
-is_preinstalled() {
-    local module="$1"
-    for preinstalled in "${PREINSTALLED_MODULES[@]}"; do
-        if [[ "$preinstalled" == "$module" ]]; then
-            return 0
-        fi
-    done
-    return 1
-}
-
-# Function to check if a module is already installed in the container
-is_module_installed() {
-    local module="$1"
-    docker compose exec -T php test -d "/var/www/html/modules/$module" 2>/dev/null
-}
-
-# Function to install module dependencies
-install_dependencies() {
-    local MODULE_NAME="$1"
-    local deps="${MODULE_DEPENDENCIES[$MODULE_NAME]}"
-
-    if [[ -z "$deps" ]]; then
-        return 0
-    fi
-
-    log_info "Checking dependencies for $MODULE_NAME: $deps"
-
-    for dep in $deps; do
-        if ! is_module_installed "$dep"; then
-            log_info "Installing required dependency: $dep"
-            # Recursively install dependencies (in case the dependency has its own dependencies)
-            install_dependencies "$dep"
-            install_module "$dep"
-            if [[ $? -ne 0 ]]; then
-                log_error "Failed to install dependency: $dep"
-                return 1
-            fi
-        else
-            log_info "Dependency $dep is already installed"
-        fi
-    done
-
-    return 0
-}
-
-# Function to get repo and branch from MODULE_REPOS or GITLAB_REPOS
-get_module_info() {
-    local MODULE_NAME="$1"
-    local entry=""
-    local is_gitlab=false
-
-    if [[ -n "${MODULE_REPOS[$MODULE_NAME]}" ]]; then
-        entry="${MODULE_REPOS[$MODULE_NAME]}"
-    elif [[ -n "${GITLAB_REPOS[$MODULE_NAME]}" ]]; then
-        entry="${GITLAB_REPOS[$MODULE_NAME]}"
-        is_gitlab=true
-    else
-        return 1
-    fi
-
-    # Parse "repo:branch" format
-    local repo="${entry%%:*}"
-    local branch="${entry##*:}"
-
-    echo "$repo|$branch|$is_gitlab"
-}
-
-# Function to display usage
 usage() {
-    echo "Usage: $0 <module-name> [branch/tag]"
-    echo ""
-    echo "Available modules (GitHub):"
-    for module in "${!MODULE_REPOS[@]}"; do
-        local entry="${MODULE_REPOS[$module]}"
-        local branch="${entry##*:}"
-        echo "  - $module (default: $branch)"
-    done | sort
-    echo ""
-    echo "Available modules (GitLab):"
-    for module in "${!GITLAB_REPOS[@]}"; do
-        local entry="${GITLAB_REPOS[$module]}"
-        local branch="${entry##*:}"
-        echo "  - $module (default: $branch)"
-    done | sort
-    echo ""
-    echo "Options:"
-    echo "  module-name    Name of the module to install"
-    echo "  branch/tag     Optional: override default branch/tag"
-    echo ""
-    echo "Examples:"
-    echo "  $0 CSVImport              # Uses default branch (develop)"
-    echo "  $0 AdvancedSearch 3.5.46  # Override with specific tag"
-    echo "  $0 list                   # List all available modules"
-    exit 1
+    cat <<'EOF'
+Usage: scripts/install-module.sh <Omeka-CLI-module-URI> [tag|branch|commit]
+       scripts/install-module.sh list
+
+Examples:
+  scripts/install-module.sh CSVImport
+  scripts/install-module.sh gh:owner/repository v1.2.3
+  scripts/install-module.sh gh:owner/repository 0123456789abcdef
+
+The URI syntax is documented by GhentCDH/Omeka-S-Cli. Prefer a release tag or
+full commit SHA. The module is baked into both PHP and nginx images; no live
+container files are modified.
+EOF
 }
 
-# Function to install a single module
-install_module() {
-    local MODULE_NAME="$1"
-    local BRANCH_OVERRIDE="$2"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$script_dir/.."
+manifest="_docker/extra-modules.txt"
 
-    # Get module info (repo, default branch, is_gitlab)
-    local module_info
-    module_info=$(get_module_info "$MODULE_NAME")
-    if [[ $? -ne 0 ]]; then
-        log_error "Unknown module: $MODULE_NAME"
-        echo ""
-        echo "Use '$0 list' to see available modules"
-        return 1
-    fi
+[[ ${1:-} == list ]] && { grep -Ev '^[[:space:]]*(#|$)' "$manifest" || true; exit 0; }
+[[ $# -ge 1 && $# -le 2 ]] || { usage >&2; exit 2; }
 
-    # Parse module info
-    local REPO="${module_info%%|*}"
-    local remainder="${module_info#*|}"
-    local DEFAULT_BRANCH="${remainder%%|*}"
-    local IS_GITLAB="${remainder##*|}"
-
-    # Use override branch if provided, otherwise use default
-    local BRANCH="${BRANCH_OVERRIDE:-$DEFAULT_BRANCH}"
-
-    local BASE_URL=""
-    local ARCHIVE_URL=""
-
-    if [[ "$IS_GITLAB" == "true" ]]; then
-        BASE_URL="https://gitlab.com/${REPO}"
-        ARCHIVE_URL="${BASE_URL}/-/archive/${BRANCH}/${REPO##*/}-${BRANCH}.zip"
-    else
-        BASE_URL="https://github.com/${REPO}"
-        ARCHIVE_URL="${BASE_URL}/archive/refs/heads/${BRANCH}.zip"
-    fi
-
-    local TEMP_DIR
-    local CONTAINER_ID
-    TEMP_DIR=$(mktemp -d)
-    CONTAINER_ID=$(docker compose ps -q php)
-
-    if [[ -z "$CONTAINER_ID" ]]; then
-        log_error "PHP container is not running. Start it with: docker compose up -d php"
-        return 1
-    fi
-
-    # Check if module is pre-installed
-    if is_preinstalled "$MODULE_NAME"; then
-        log_info "Module $MODULE_NAME is pre-installed by default."
-        if docker compose exec -T php test -d "/var/www/html/modules/$MODULE_NAME"; then
-            log_info "Module is already present. Use update-module.sh to update it if needed."
-            return 0
-        fi
-    fi
-
-    # Check if module already exists
-    if docker compose exec -T php test -d "/var/www/html/modules/$MODULE_NAME"; then
-        log_warn "Module $MODULE_NAME already exists. Use update-module.sh to update it."
-        return 0
-    fi
-
-    log_info "Installing module: $MODULE_NAME from $BASE_URL (branch: $BRANCH)"
-
-    # Download the module
-    log_info "Downloading module..."
-    local HTTP_CODE
-    HTTP_CODE=$(curl -sL -w "%{http_code}" "$ARCHIVE_URL" -o "$TEMP_DIR/module.zip")
-    if [[ "$HTTP_CODE" != "200" ]]; then
-        # Try as a tag if branch fails
-        if [[ "$IS_GITLAB" == "true" ]]; then
-            ARCHIVE_URL="${BASE_URL}/-/archive/${BRANCH}/${REPO##*/}-${BRANCH}.zip"
-        else
-            ARCHIVE_URL="${BASE_URL}/archive/refs/tags/${BRANCH}.zip"
-        fi
-        log_warn "Branch not found (HTTP $HTTP_CODE), trying as tag..."
-        HTTP_CODE=$(curl -sL -w "%{http_code}" "$ARCHIVE_URL" -o "$TEMP_DIR/module.zip")
-        if [[ "$HTTP_CODE" != "200" ]]; then
-            log_error "Failed to download module (HTTP $HTTP_CODE). Check if branch/tag '$BRANCH' exists."
-            rm -rf "$TEMP_DIR"
-            return 1
-        fi
-    fi
-
-    # Extract the module
-    log_info "Extracting module..."
-    unzip -q "$TEMP_DIR/module.zip" -d "$TEMP_DIR"
-
-    # Find the extracted directory
-    EXTRACTED_DIR=$(find "$TEMP_DIR" -maxdepth 1 -type d -name "Omeka-S-module-*" -o -type d -name "Omeka-s-module-*" | head -1)
-    if [[ -z "$EXTRACTED_DIR" ]]; then
-        EXTRACTED_DIR=$(find "$TEMP_DIR" -maxdepth 1 -type d ! -name "$(basename "$TEMP_DIR")" | head -1)
-    fi
-    if [[ -z "$EXTRACTED_DIR" ]]; then
-        log_error "Failed to find extracted module directory"
-        rm -rf "$TEMP_DIR"
-        return 1
-    fi
-
-    # Rename to proper module name
-    mv "$EXTRACTED_DIR" "$TEMP_DIR/$MODULE_NAME"
-
-    # Copy module to container
-    log_info "Copying module to container..."
-    # Pipe a tar stream so files are extracted by the in-container user
-    # (www-data) and land already owned by www-data. `docker cp` would import
-    # files with the host UID, which www-data cannot chown afterwards because
-    # the container drops CAP_CHOWN (see docker-compose.yml: cap_drop: ALL).
-    tar -C "$TEMP_DIR" -cf - "$MODULE_NAME" \
-        | docker compose exec -T php tar -xf - -C /var/www/html/modules/
-
-    # Set permissions (ownership is already www-data from the tar extraction above)
-    log_info "Setting permissions..."
-    docker compose exec -T php chmod -R u=rwX,go=rX "/var/www/html/modules/$MODULE_NAME"
-
-    # Cleanup
-    rm -rf "$TEMP_DIR"
-
-    log_info "Module $MODULE_NAME installed successfully!"
-
-    # Install composer dependencies if composer.json exists
-    if docker compose exec -T php test -f "/var/www/html/modules/$MODULE_NAME/composer.json"; then
-        log_info "Installing composer dependencies..."
-        if ! docker compose exec -T php composer --version >/dev/null; then
-            log_error "Composer is missing from the php image. Rebuild it with: docker compose build --pull php"
-            return 1
-        fi
-        # Pin composer's metadata cache to the www-data-writable /var/www/.cache.
-        # Its default ($HOME/.composer = /var/www/.composer) is root-owned, so
-        # composer otherwise runs cacheless and re-downloads every package's
-        # metadata on each run; in this environment those live fetches
-        # intermittently truncate and composer misreports them as bogus version
-        # conflicts (e.g. "only one of these can be installed:
-        # php-http/guzzle7-adapter"). A warm cache makes resolution consistent;
-        # we still retry once to absorb a flaky first fetch. (The Dockerfile
-        # bakes COMPOSER_CACHE_DIR in too; this inline copy keeps already-built
-        # containers working without a rebuild.)
-        local composer_run="cd /var/www/html/modules/$MODULE_NAME && COMPOSER_CACHE_DIR=/var/www/.cache/composer composer install --no-dev"
-        local composer_ok=false
-        for attempt in 1 2; do
-            if docker compose exec -T php bash -c "$composer_run"; then
-                composer_ok=true
-                break
-            fi
-            if [[ $attempt -lt 2 ]]; then
-                log_warn "Composer install failed (attempt $attempt); retrying with a warm cache..."
-            fi
-        done
-        if [[ "$composer_ok" == true ]]; then
-            log_info "Composer dependencies installed successfully!"
-        else
-            log_error "Composer dependencies FAILED for $MODULE_NAME after 2 attempts."
-            log_error "The module will NOT load until they install (its Module.php may 'require vendor/autoload.php'). Run manually:"
-            echo "  docker compose exec php bash -c 'cd /var/www/html/modules/$MODULE_NAME && COMPOSER_CACHE_DIR=/var/www/.cache/composer composer install --no-dev'"
-        fi
-    fi
-}
-
-# Main script
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR/.."
-
-# Check arguments
-if [[ $# -lt 1 ]]; then
-    usage
+uri="$1"
+ref="${2:-}"
+[[ "$uri" != *$'\n'* && "$uri" != *$'\r'* && "$uri" != \#* && "$uri" != *','* && "$uri" != *' '* ]] \
+    || { echo "Invalid module URI: $uri" >&2; exit 2; }
+if [[ -n "$ref" ]]; then
+    [[ "$uri" != *'#'* ]] || { echo "URI already includes a ref." >&2; exit 2; }
+    [[ "$ref" =~ ^[A-Za-z0-9._/-]+$ ]] || { echo "Invalid module ref: $ref" >&2; exit 2; }
+    uri="${uri}#${ref}"
 fi
 
-MODULE_NAME="$1"
-BRANCH_OVERRIDE="$2"  # Optional: override default branch
-
-# Check if docker compose is available
-if ! command -v docker &> /dev/null; then
-    log_error "Docker is not installed or not in PATH"
-    exit 1
+if grep -Fxq "$uri" "$manifest"; then
+    echo "Module already present in $manifest: $uri"
+else
+    printf '%s\n' "$uri" >> "$manifest"
+    echo "Added module to $manifest: $uri"
 fi
 
-# List modules if requested
-if [[ "$MODULE_NAME" == "list" ]]; then
-    echo "Pre-installed modules (included by default):"
-    for module in "${PREINSTALLED_MODULES[@]}"; do
-        echo "  - $module"
-    done | sort
-    echo ""
-    echo "Available modules (GitHub):"
-    for module in "${!MODULE_REPOS[@]}"; do
-        entry="${MODULE_REPOS[$module]}"
-        branch="${entry##*:}"
-        if is_preinstalled "$module"; then
-            echo "  - $module [branch: $branch] (pre-installed)"
-        else
-            echo "  - $module [branch: $branch]"
-        fi
-    done | sort
-    echo ""
-    echo "Available modules (GitLab):"
-    for module in "${!GITLAB_REPOS[@]}"; do
-        entry="${GITLAB_REPOS[$module]}"
-        branch="${entry##*:}"
-        echo "  - $module [branch: $branch]"
-    done | sort
-    exit 0
-fi
-
-# Install dependencies first (if any)
-install_dependencies "$MODULE_NAME"
-if [[ $? -ne 0 ]]; then
-    log_error "Failed to install dependencies for $MODULE_NAME"
-    exit 1
-fi
-
-# Install the requested module
-install_module "$MODULE_NAME" "$BRANCH_OVERRIDE"
-
-echo ""
-log_info "Don't forget to:"
-echo "  1. Activate the module (and any dependencies) in Omeka S admin panel"
-echo "  2. Configure the module as needed"
-echo ""
-if [[ -n "${MODULE_DEPENDENCIES[$MODULE_NAME]}" ]]; then
-    log_info "Note: Dependencies were auto-installed: ${MODULE_DEPENDENCIES[$MODULE_NAME]}"
-    echo "  Make sure to activate them in the correct order in Omeka S admin."
-fi
+exec bash scripts/rebuild-code.sh

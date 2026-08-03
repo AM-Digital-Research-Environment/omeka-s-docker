@@ -20,6 +20,7 @@ url="http://127.0.0.1:${port}"
 created_env=false
 stack_started=false
 backup_dir=""
+probe_module_dir="_docker/local-modules/ImmutableProbe"
 
 log() { printf '\n==> %s\n' "$*"; }
 
@@ -40,6 +41,8 @@ cleanup() {
     if [[ -n "$backup_dir" && -d "$backup_dir" ]]; then
         rm -rf -- "$backup_dir"
     fi
+    rm -rf -- "$probe_module_dir"
+    rm -f -- _docker/restored-local.config.php
     if [[ "$created_env" == true ]]; then
         rm -f .env
     fi
@@ -130,6 +133,7 @@ for svc in web php db; do
 done
 [[ "$(docker inspect -f '{{.Config.User}}' "$(docker compose ps -q php)")" == "www-data" ]]
 [[ "$(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' "$(docker compose ps -q web)")" == "true" ]]
+[[ "$(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' "$(docker compose ps -q php)")" == "true" ]]
 for svc in php db; do
     [[ -z "$(docker port "$(docker compose ps -q "$svc")")" ]]
 done
@@ -140,7 +144,17 @@ if [[ "$variant" == "amira" ]]; then
     [[ "$(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' "$cid")" == "true" ]]
     [[ -z "$(docker port "$cid")" ]]
 fi
-echo "    capabilities, users, read-only roots, and port exposure: OK"
+docker compose exec -T php sh -eu -c '
+    test -f /var/www/html/files/.immutable-layout-v1
+    ! touch /var/www/html/application/.ci-must-not-write
+    printf %s writable > /var/www/html/files/.ci-media-write
+    rm /var/www/html/files/.ci-media-write
+'
+docker compose exec -T web sh -eu -c '
+    test -f /var/www/html/files/.immutable-layout-v1
+    ! touch /var/www/html/files/.ci-must-not-write
+'
+echo "    capabilities, users, immutable code, media permissions, and port exposure: OK"
 
 log "Checking PHP/Omeka runtime..."
 docker compose exec -T php php -r '
@@ -218,9 +232,11 @@ fi
 log "Checking baked modules..."
 if [[ "$variant" == "amira" ]]; then
     docker compose exec -T php test -d /var/www/html/modules/DRESearch
+    docker compose exec -T web test -d /var/www/html/modules/DRESearch
     echo "    DRESearch present (overlay bakes DRE modules)"
 else
     docker compose exec -T php test ! -d /var/www/html/modules/DRESearch
+    docker compose exec -T php test ! -d /var/www/html/modules/ImmutableProbe
     echo "    DRESearch absent (base image is generic)"
 fi
 
@@ -247,6 +263,11 @@ if [[ "$variant" == "base" ]]; then
     bash scripts/backup.sh "$backup_dir"
     [[ "$(stat -c '%a' "$backup_dir")" == "700" ]]
     [[ "$(stat -c '%a' "$backup_dir/.env")" == "600" ]]
+    [[ "$(stat -c '%a' "$backup_dir/local.config.php")" == "600" ]]
+    grep -Fxq 'omeka-docker-backup-v2' "$backup_dir/BACKUP_FORMAT"
+    grep -Fxq 'layout=immutable' "$backup_dir/BACKUP_FORMAT"
+    [[ -f "$backup_dir/omeka_media.tar.gz" ]]
+    [[ ! -e "$backup_dir/omeka_files.tar.gz" ]]
     (cd "$backup_dir" && sha256sum --check SHA256SUMS)
 
     docker compose exec -T php rm /var/www/html/files/ci-backup-marker.txt
@@ -266,6 +287,26 @@ if [[ "$variant" == "base" ]]; then
     code=$(probe "$url/")
     [[ "$code" =~ ^(200|30[123])$ ]]
     echo "    checksums, permissions, database, files, and restarted HTTP: OK"
+
+    log "A/B test: rebuilding code while preserving database and media..."
+    cp -R .github/fixtures/ImmutableProbe "$probe_module_dir"
+    bash scripts/rebuild-code.sh --refresh
+
+    docker compose exec -T php test -f /var/www/html/modules/ImmutableProbe/Module.php
+    docker compose exec -T web test -f /var/www/html/modules/ImmutableProbe/Module.php
+    php_hash=$(docker compose exec -T php sha256sum /var/www/html/modules/ImmutableProbe/Module.php | awk '{print $1}')
+    web_hash=$(docker compose exec -T web sha256sum /var/www/html/modules/ImmutableProbe/Module.php | awk '{print $1}')
+    [[ "$php_hash" == "$web_hash" ]]
+    [[ "$(docker compose exec -T php cat /var/www/html/files/ci-backup-marker.txt)" == "ci-file-marker" ]]
+    db_marker=$(docker compose exec -T db sh -eu -c '
+        exec mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --batch --skip-column-names \
+            "$MYSQL_DATABASE" -e "SELECT value FROM ci_backup_probe LIMIT 1;"
+    ' | tr -d '\r')
+    [[ "$db_marker" == "ci-db-marker" ]]
+    docker compose exec -T php test -f /var/www/html/files/.immutable-layout-v1
+    code=$(probe "$url/")
+    [[ "$code" =~ ^(200|30[123])$ ]]
+    echo "    new code is identical in PHP/nginx; database and media survived: OK"
 fi
 
 log "Smoke test passed ($variant)."

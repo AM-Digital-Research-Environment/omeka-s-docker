@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from typing import Any
 
@@ -27,6 +28,18 @@ def environment(service: dict[str, Any]) -> dict[str, str]:
         key, _, item = str(entry).partition("=")
         result[key] = item
     return result
+
+
+def mounts_at(service: dict[str, Any], target: str) -> list[dict[str, Any]]:
+    return [
+        mount
+        for mount in service.get("volumes", [])
+        if isinstance(mount, dict) and mount.get("target") == target
+    ]
+
+
+def tmpfs_targets(service: dict[str, Any]) -> set[str]:
+    return {str(entry).split(":", 1)[0] for entry in service.get("tmpfs", [])}
 
 
 variant = sys.argv[1] if len(sys.argv) > 1 else "base"
@@ -87,7 +100,7 @@ for name, service in services.items():
             f"{name} must not mount the Docker socket",
         )
 
-for name in ("web", "typesense"):
+for name in ("web", "php", "typesense"):
     require(services[name].get("read_only") is True, f"{name} root filesystem must be read-only")
 if variant == "amira":
     require(
@@ -103,10 +116,57 @@ if web_ports and isinstance(web_ports[0], dict):
 for name in ("web", "php", "db", "typesense"):
     require("healthcheck" in services[name], f"{name} healthcheck is missing")
 
-for name in ("web", "db", "typesense"):
+for name in ("db", "typesense"):
     image = str(services[name].get("image", ""))
     require("@sha256:" in image, f"{name} image must be digest-pinned")
     require(":latest" not in image, f"{name} image must not use latest")
+
+# Omeka code is immutable image content in both application containers. The
+# two targets must use the exact same build inputs so nginx cannot serve stale
+# assets after PHP is rebuilt with a new module, theme, or core release.
+web_build = services["web"].get("build", {})
+php_build = services["php"].get("build", {})
+require(web_build.get("target") == "web", "web must use the Dockerfile web target")
+require(php_build.get("target") == "runtime", "php must use the Dockerfile runtime target")
+require(web_build.get("context") == php_build.get("context"), "web/php build contexts differ")
+require(web_build.get("dockerfile") == php_build.get("dockerfile"), "web/php Dockerfiles differ")
+require(web_build.get("args") == php_build.get("args"), "web/php immutable-code build args differ")
+expected_modules_file = "deploy/amira/modules.txt" if variant == "amira" else "_docker/empty-modules.txt"
+require(
+    web_build.get("args", {}).get("EXTRA_MODULES_FILE") == expected_modules_file,
+    f"{variant} module manifest is not wired into both image builds",
+)
+
+for name in ("web", "php"):
+    require(
+        not mounts_at(services[name], "/var/www/html"),
+        f"{name} must not mask the immutable document root with a volume",
+    )
+
+web_media = mounts_at(services["web"], "/var/www/html/files")
+php_media = mounts_at(services["php"], "/var/www/html/files")
+php_logs = mounts_at(services["php"], "/var/www/html/logs")
+php_config = mounts_at(services["php"], "/var/www/html/config/local.config.php")
+require(len(web_media) == 1, "web must mount exactly one media volume")
+require(len(php_media) == 1, "php must mount exactly one media volume")
+require(len(php_logs) == 1, "php must mount exactly one logs volume")
+require(len(php_config) == 1, "php must mount exactly one local.config.php")
+if web_media and php_media:
+    require(
+        web_media[0].get("source") == php_media[0].get("source") == "omeka_media",
+        "web/php media volume sources differ",
+    )
+    require(web_media[0].get("read_only") is True, "web media mount must be read-only")
+    require(php_media[0].get("read_only") is not True, "php media mount must be writable")
+if php_logs:
+    require(php_logs[0].get("source") == "omeka_logs", "php logs must use omeka_logs")
+    require(php_logs[0].get("read_only") is not True, "php logs mount must be writable")
+if php_config:
+    require(php_config[0].get("read_only") is True, "local.config.php must be read-only")
+
+php_tmpfs = tmpfs_targets(services["php"])
+for target in ("/tmp", "/run/omeka", "/run/php-fpm", "/var/www/.cache"):
+    require(target in php_tmpfs, f"php writable tmpfs is missing: {target}")
 
 expected_web_networks = {"frontend", "mcp"} if variant == "amira" else {"frontend"}
 require(
@@ -123,6 +183,11 @@ if variant == "amira":
     require(
         set(services["amira-mcp"].get("networks", {})) == {"mcp"},
         "amira-mcp network exposure changed",
+    )
+    mcp_context = str(services["amira-mcp"].get("build", {}).get("context", ""))
+    require(
+        re.search(r"#v\d+\.\d+\.\d+$", mcp_context) is not None,
+        "amira-mcp must build from a release tag, not a floating branch",
     )
 
 if errors:

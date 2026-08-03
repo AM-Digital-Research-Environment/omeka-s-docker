@@ -39,6 +39,9 @@ jobs:
       - name: PHP and JSON syntax
         run: |
           php -l _docker/vocabularies/import-vocabularies.php
+          php -l _docker/local.config.php
+          php -l .github/fixtures/ImmutableProbe/Module.php
+          php -l .github/fixtures/ImmutableProbe/config/module.config.php
           for file in _docker/vocabularies/*.json deploy/amira/vocabularies/*.json; do
             python3 -m json.tool "$file" >/dev/null
           done
@@ -65,7 +68,8 @@ jobs:
         with:
           persist-credentials: false
 
-      # Base checks the generic bootstrap plus a full backup/restore round trip.
+      # Base checks bootstrap, backup/restore, and an A/B image rebuild proving
+      # code changes while database/media volumes remain intact.
       # AMIRA checks its baked modules/vocabulary, Typesense profile, and /mcp
       # wiring (as a 502 because the remote amira-mcp image is not built in CI).
       - name: Smoke test — ${{ matrix.variant }}
