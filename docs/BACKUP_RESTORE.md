@@ -37,13 +37,16 @@ This is why the repository matters as much as the backup: the backup holds your
 data and settings, the repository holds the recipe for Omeka. Keep both, and
 note which commit you built from.
 
-### Backups from sites on the older storage layout
+### Restoring archives written before August 2026
 
-If a site still has the old single volume covering the whole application folder,
-the script notices, records `layout=legacy`, and writes `omeka_files.tar.gz`
-instead. Restore reads both layouts. From a legacy archive it takes only the
-uploaded files, the logs, and `local.config.php` — old code is never put back
-into a running site, because code comes from the image.
+Backups from the older storage layout — a single volume covering the whole
+application folder, recorded as `layout=legacy` with an `omeka_files.tar.gz` —
+can still be restored. Restore takes only the uploaded files, the logs, and
+`local.config.php` from them; old code is never put back into a running site,
+because code comes from the image.
+
+New backups are always written in the current format. Nothing produces a legacy
+archive any more, so this is a read path kept for archives you already hold.
 
 ## Making a backup
 

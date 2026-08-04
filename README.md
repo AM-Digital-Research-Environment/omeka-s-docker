@@ -80,8 +80,7 @@ instance from it.
 │   ├── update-module.sh        # Re-download modules that track a branch
 │   ├── update-omeka.sh         # Move to a new Omeka S version
 │   ├── backup.sh               # Back up database, files, and settings
-│   ├── restore.sh              # Restore a backup, here or on a new server
-│   └── migrate-immutable-storage.sh  # One-time migration for older deployments
+│   └── restore.sh              # Restore a backup, here or on a new server
 ├── .github/                    # Automated checks that run on every change
 ├── backups/                    # Where backups land by default
 └── sideload/                   # Drop files here for bulk import
@@ -695,10 +694,9 @@ These are copied in *after* the downloads, and they fully replace a downloaded
 module or theme of the same name — so no leftover files from the older version
 can survive underneath. What you commit is exactly what runs.
 
-`scripts/migrate-immutable-storage.sh --adopt-code` also writes here, when it
-rescues code from an older deployment that can't be traced back to a published
-release. If you can later replace that rescued copy with a proper version in
-`_docker/extra-modules.txt`, it's usually worth doing — you get updates again.
+Prefer a pinned version in `_docker/extra-modules.txt` where one exists — vendored
+code here stops receiving updates, so keep it for the cases that genuinely need
+it: private modules, or a fix that has not been released upstream yet.
 
 ## Custom vocabularies
 
@@ -894,17 +892,21 @@ docker compose logs php            # and why
 The `php` service can take up to two minutes on a first start — it is installing
 Omeka, its modules, and the vocabularies. Watch the log rather than the status.
 
-### "Existing Omeka database detected without migrated media storage"
+### "Existing Omeka database detected, but the media volume carries no layout marker"
 
-Your site predates the current storage layout and the startup check stopped
-before it could serve a site with no media. Run the one-time migration:
+The database says a site is installed, but the mounted media volume is empty or
+is not the one holding that site's files. Starting anyway would serve a site
+whose media had silently vanished, so the container refuses.
+
+Usually the media volume was renamed, removed, or never mounted — check that
+`omeka_media` appears in `docker compose config` and still holds your files. If
+the data really is gone, restore it:
 
 ```bash
-bash scripts/migrate-immutable-storage.sh
+bash scripts/restore.sh <backup-directory>
 ```
 
-See [docs/IMMUTABLE_CODE.md](docs/IMMUTABLE_CODE.md) first — it takes a backup
-and needs a maintenance window.
+See [docs/BACKUP_RESTORE.md](docs/BACKUP_RESTORE.md).
 
 ### The search service exits immediately
 

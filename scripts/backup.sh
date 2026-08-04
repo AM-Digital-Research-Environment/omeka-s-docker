@@ -26,7 +26,6 @@
 #   - omeka_logs.tar.gz  Omeka logs (immutable layout, if present)
 #   - omeka_modules.tar.gz Admin-managed modules (default layout)
 #   - omeka_themes.tar.gz  Admin-managed themes (default layout)
-#   - omeka_files.tar.gz Legacy whole document root (pre-migration only)
 #   - typesense_data.tar.gz Typesense search index (only if the search profile is in use)
 #   - sideload.tar.gz    Sideload directory (if non-empty)
 #   - .env               Environment file copy
@@ -52,29 +51,25 @@ echo ""
 mkdir -p "$BACKUP_DIR"
 chmod 700 "$BACKUP_DIR"
 
-# Determine the storage generation before doing any work. A partially created
-# media volume without the marker must not hide a still-authoritative legacy
-# whole-root volume after an interrupted migration attempt.
+# Refuse to back up a media volume that isn't the one this database belongs to.
+# The marker is what distinguishes real media storage from a freshly created,
+# empty volume — without this check a backup could silently capture nothing.
 MEDIA_VOLUME="${COMPOSE_PROJECT}_omeka_media"
 LOGS_VOLUME="${COMPOSE_PROJECT}_omeka_logs"
-LEGACY_VOLUME="${COMPOSE_PROJECT}_omeka_files"
-LAYOUT=""
-if docker volume inspect "$MEDIA_VOLUME" >/dev/null 2>&1 \
-    && docker run --rm -v "$MEDIA_VOLUME":/data:ro "$HELPER_IMAGE" \
-        test -f /data/.immutable-layout-v1; then
-    LAYOUT="immutable"
-elif docker volume inspect "$LEGACY_VOLUME" >/dev/null 2>&1; then
-    LAYOUT="legacy"
-elif docker volume inspect "$MEDIA_VOLUME" >/dev/null 2>&1; then
-    echo "ERROR: $MEDIA_VOLUME exists without the immutable-layout marker." >&2
-    echo "       Complete or roll back the storage migration before backing up." >&2
-    exit 1
-else
-    echo "ERROR: No Omeka media or legacy document-root volume was found." >&2
+if ! docker volume inspect "$MEDIA_VOLUME" >/dev/null 2>&1; then
+    echo "ERROR: Media volume $MEDIA_VOLUME was not found." >&2
     exit 1
 fi
-printf 'omeka-docker-backup-v2\nlayout=%s\n' "$LAYOUT" > "$BACKUP_DIR/BACKUP_FORMAT"
-echo "    Layout:    $LAYOUT"
+if ! docker run --rm -v "$MEDIA_VOLUME":/data:ro "$HELPER_IMAGE" \
+    test -f /data/.immutable-layout-v1; then
+    echo "ERROR: $MEDIA_VOLUME carries no layout marker — it is empty, or it is" >&2
+    echo "       not the media volume this deployment uses. Refusing to write a" >&2
+    echo "       backup that would appear complete while holding no media." >&2
+    exit 1
+fi
+# restore.sh still reads layout=legacy archives written before August 2026.
+printf 'omeka-docker-backup-v2\nlayout=immutable\n' > "$BACKUP_DIR/BACKUP_FORMAT"
+echo "    Layout:    immutable"
 
 # --- 1. Make sure the database is up for the dump ---
 # We never stop it; just confirm it is running and reachable.
@@ -137,29 +132,19 @@ fi
 echo "    Database: $(du -h "$BACKUP_DIR/omeka_db.sql" | cut -f1)"
 
 # --- 3. Omeka persistent filesystem data (live) ---
-if [ "$LAYOUT" = "immutable" ]; then
-    echo "==> Backing up Omeka media volume (live)..."
-    docker run --rm \
-        -v "$MEDIA_VOLUME":/data:ro \
-        -v "$BACKUP_DIR":/backup \
-        "$HELPER_IMAGE" tar czf /backup/omeka_media.tar.gz -C /data .
-    echo "    Media:    $(du -h "$BACKUP_DIR/omeka_media.tar.gz" | cut -f1)"
+echo "==> Backing up Omeka media volume (live)..."
+docker run --rm \
+    -v "$MEDIA_VOLUME":/data:ro \
+    -v "$BACKUP_DIR":/backup \
+    "$HELPER_IMAGE" tar czf /backup/omeka_media.tar.gz -C /data .
+echo "    Media:    $(du -h "$BACKUP_DIR/omeka_media.tar.gz" | cut -f1)"
 
-    if docker volume inspect "$LOGS_VOLUME" >/dev/null 2>&1; then
-        echo "==> Backing up Omeka logs volume (live)..."
-        docker run --rm \
-            -v "$LOGS_VOLUME":/data:ro \
-            -v "$BACKUP_DIR":/backup \
-            "$HELPER_IMAGE" tar czf /backup/omeka_logs.tar.gz -C /data .
-    fi
-else
-    echo "==> Backing up legacy whole document-root volume (live)..."
-    echo "    WARNING: migrate this deployment with scripts/migrate-immutable-storage.sh"
+if docker volume inspect "$LOGS_VOLUME" >/dev/null 2>&1; then
+    echo "==> Backing up Omeka logs volume (live)..."
     docker run --rm \
-        -v "$LEGACY_VOLUME":/data:ro \
+        -v "$LOGS_VOLUME":/data:ro \
         -v "$BACKUP_DIR":/backup \
-        "$HELPER_IMAGE" tar czf /backup/omeka_files.tar.gz -C /data .
-    echo "    Legacy:   $(du -h "$BACKUP_DIR/omeka_files.tar.gz" | cut -f1)"
+        "$HELPER_IMAGE" tar czf /backup/omeka_logs.tar.gz -C /data .
 fi
 
 # --- 3b. Module/theme volumes (default layout, live) ---
@@ -210,9 +195,8 @@ if [ -f "$PROJECT_DIR/.env" ]; then
     echo "==> Copied .env"
 fi
 
-if [ "$LAYOUT" = "immutable" ]; then
-    LOCAL_CONFIG_SOURCE="$(cd "$PROJECT_DIR" && docker compose config --format json \
-        | python3 -c '
+LOCAL_CONFIG_SOURCE="$(cd "$PROJECT_DIR" && docker compose config --format json \
+    | python3 -c '
 import json, sys
 config = json.load(sys.stdin)
 for mount in config["services"]["php"].get("volumes", []):
@@ -220,14 +204,13 @@ for mount in config["services"]["php"].get("volumes", []):
         print(mount.get("source", ""))
         break
 ')"
-    if [ -z "$LOCAL_CONFIG_SOURCE" ] || [ ! -f "$LOCAL_CONFIG_SOURCE" ]; then
-        echo "ERROR: Cannot resolve the mounted Omeka local.config.php." >&2
-        exit 1
-    fi
-    cp "$LOCAL_CONFIG_SOURCE" "$BACKUP_DIR/local.config.php"
-    chmod 600 "$BACKUP_DIR/local.config.php"
-    echo "==> Copied local.config.php"
+if [ -z "$LOCAL_CONFIG_SOURCE" ] || [ ! -f "$LOCAL_CONFIG_SOURCE" ]; then
+    echo "ERROR: Cannot resolve the mounted Omeka local.config.php." >&2
+    exit 1
 fi
+cp "$LOCAL_CONFIG_SOURCE" "$BACKUP_DIR/local.config.php"
+chmod 600 "$BACKUP_DIR/local.config.php"
+echo "==> Copied local.config.php"
 
 # --- 7. Record image provenance when containers exist ---
 if (cd "$PROJECT_DIR" && docker compose images --format json) > "$BACKUP_DIR/images.json" 2>/dev/null \
@@ -241,7 +224,7 @@ fi
 # This detects interrupted transfers and accidental corruption. It is not an
 # authenticity signature: store the backup off-host and encrypt it separately.
 CHECKSUM_FILES=(BACKUP_FORMAT omeka_db.sql)
-for file in omeka_media.tar.gz omeka_logs.tar.gz omeka_modules.tar.gz omeka_themes.tar.gz omeka_files.tar.gz typesense_data.tar.gz sideload.tar.gz .env local.config.php images.json; do
+for file in omeka_media.tar.gz omeka_logs.tar.gz omeka_modules.tar.gz omeka_themes.tar.gz typesense_data.tar.gz sideload.tar.gz .env local.config.php images.json; do
     [ ! -f "$BACKUP_DIR/$file" ] || CHECKSUM_FILES+=("$file")
 done
 (cd "$BACKUP_DIR" && sha256sum "${CHECKSUM_FILES[@]}" > SHA256SUMS)

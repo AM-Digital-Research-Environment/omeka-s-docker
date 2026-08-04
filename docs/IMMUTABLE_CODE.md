@@ -1,10 +1,7 @@
 # How code and data are stored
 
-This explains the storage model the template uses, and — for deployments created
-before July 2026 — the one-time migration onto it.
-
-If you are setting up a new site, you only need the first section. The migration
-does not apply to you.
+This explains the storage model the template uses: what lives in the image, what
+lives on a volume, and why.
 
 ## The model
 
@@ -42,7 +39,7 @@ the helper scripts always rebuild both.
 The PHP container's filesystem is read-only apart from those paths.
 
 **A marker file guards against a subtle failure.** `files/.immutable-layout-v1`
-records that the media volume really is the migrated one. If Omeka's database
+records that the media volume really is this site's own. If Omeka's database
 says the site is installed but that marker is missing, the container refuses to
 start rather than quietly serve a site whose media has vanished.
 
@@ -107,49 +104,21 @@ module has already applied its database migration, going back to the old image
 will not undo it. So: back up, deploy and test the new code, and only then apply
 the database migration as a separate, deliberate step.
 
-## One-time migration for older deployments
+## The layout marker
 
-> This applies only to deployments that still have the old `omeka_files` volume
-> mounted over the whole application folder. New installations are already on the
-> current layout.
+`files/.immutable-layout-v1` records that the mounted media volume really is the
+one this database belongs to. A fresh install writes it before initializing the
+database; `scripts/restore.sh` writes it when it restores media.
 
-Schedule a maintenance window and update your copy of this repository first.
-Then:
+If the database says a site is installed but the marker is missing, the container
+refuses to start rather than serve a site whose media has silently vanished. In
+practice that means the media volume was renamed, removed, or never mounted —
+check `docker compose config`, or restore from a backup.
 
-```bash
-bash scripts/migrate-immutable-storage.sh
-```
-
-The script takes a backup and runs a read-only check *before* it touches
-anything. That check builds the new images and compares the modules and themes
-currently deployed — names and versions — against what the new image contains.
-Any mismatch stops the migration before the running site is affected.
-
-If something on the old site can't be reproduced from a published release, adopt
-the exact files instead:
-
-```bash
-bash scripts/migrate-immutable-storage.sh --adopt-code
-```
-
-This copies those modules and themes into `_docker/local-modules/` and
-`_docker/local-themes/`, then runs the same check again. Review what it copied
-and commit it. Later you can usually replace it with a proper fixed version in
-`_docker/extra-modules.txt` and get updates back.
-
-Once you confirm, the script:
-
-1. Keeps a mandatory backup under `backups/pre-immutable-*`.
-2. Preserves your existing `local.config.php` as a read-only host file.
-3. Stops the site and copies only `files/` and `logs/` to their new volumes.
-4. Checks the media file count matches, and writes the layout marker.
-5. Starts the new stack and verifies the database, PHP, the web server, and that
-   the code really is read-only.
-
-**The old `<project>_omeka_files` volume is never deleted.** Keep it until you
-have checked the public site, the admin interface, a representative sample of
-media, your modules and themes, IIIF if you use it — and have successfully
-restored a new-format backup somewhere else.
+> Deployments created before August 2026 used a single `omeka_files` volume
+> mounted over the whole application folder. The one-time migration onto the
+> current layout has been retired along with its script; `scripts/restore.sh`
+> still reads backups written in that older format.
 
 ## What the automated tests cover
 

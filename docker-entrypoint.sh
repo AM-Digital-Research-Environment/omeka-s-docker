@@ -168,13 +168,17 @@ fpm_pool_config
 omeka_create_db_config
 wait_for_db
 
-# A database from the legacy whole-document-root layout must never start with a
-# fresh empty media volume. The migration/restore scripts create this marker;
-# fresh installs create it before initializing the database.
+# An installed database must never start against a media volume that isn't the
+# one holding its files — an empty or wrongly-named volume would serve a site
+# whose media has silently vanished. restore.sh writes this marker; fresh
+# installs create it below, before initializing the database.
 if omeka-s-cli core:status --base-path "${OMEKA_ROOT}" --is-installed; then
     if [[ ! -f "${OMEKA_ROOT}/files/.immutable-layout-v1" ]]; then
-        log_error "Existing Omeka database detected without migrated media storage."
-        log_error "Run: bash scripts/migrate-immutable-storage.sh"
+        log_error "Existing Omeka database detected, but the media volume carries"
+        log_error "no layout marker — it is empty or is not the volume this"
+        log_error "database belongs to. Refusing to start and serve a site with"
+        log_error "no media. Check that omeka_media is mounted, or restore a"
+        log_error "backup with: bash scripts/restore.sh <backup-directory>"
         exit 1
     fi
 else
