@@ -91,7 +91,7 @@ services:
   # just returns 502 until amira-mcp is reachable again.
   amira-mcp:
     build:
-      context: https://github.com/AM-Digital-Research-Environment/amira-mcp-server.git#${AMIRA_MCP_VERSION:-v1.11.0}
+      context: https://github.com/AM-Digital-Research-Environment/amira-mcp-server.git#${AMIRA_MCP_VERSION:-v1.12.0}
     environment:
       - PORT=8787
       - HOST=0.0.0.0
@@ -121,6 +121,19 @@ services:
         reservations:
           cpus: '0.05'
           memory: 64M
+    # Same probe as the upstream image, with timings that fit the 0.25-CPU
+    # limit above. The probe starts a whole second Node process, and V8 startup
+    # alone overruns the upstream 3s timeout often enough that the container
+    # flaps between healthy and unhealthy while serving every request fine.
+    # A longer timeout costs nothing; the interval is stretched too, because
+    # each probe is a real slice of the CPU budget. start_period covers the
+    # snapshot crawl the server runs at boot, which saturates that budget.
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:'+(process.env.PORT||8787)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 60s
+      timeout: 20s
+      retries: 3
+      start_period: 180s
     logging:
       driver: "json-file"
       options:

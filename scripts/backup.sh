@@ -104,15 +104,34 @@ echo "==> Dumping MySQL database (live, --single-transaction)..."
 # --routines --triggers : include stored programs and triggers.
 # --no-tablespaces : the "omeka" user lacks the PROCESS privilege CREATE
 #   TABLESPACE statements would need on restore.
+# --skip-masking-policies : MySQL 9.2 added masking policies to the default
+#   dump, and reading them needs SELECT on the mysql schema, which the "omeka"
+#   user does not have. Without this, every dump prints a scary "SELECT command
+#   denied ... column_masking_policy" error. Omeka defines no masking policies,
+#   so there is nothing to lose. The option does not exist before 9.2, so ask
+#   this mysqldump whether it knows the flag rather than assuming a version.
+MYSQLDUMP_EXTRA_OPTS=""
+if (cd "$PROJECT_DIR" && docker compose exec -T db mysqldump --help 2>/dev/null) \
+    | grep -q -- '--skip-masking-policies\|--masking-policies'; then
+    MYSQLDUMP_EXTRA_OPTS="--skip-masking-policies"
+fi
 (cd "$PROJECT_DIR" && docker compose exec -T db sh -eu -c '
     exec mysqldump \
         -u"$MYSQL_USER" \
         -p"$MYSQL_PASSWORD" \
         --single-transaction --set-gtid-purged=OFF --routines --triggers --no-tablespaces \
+        $1 \
         "$MYSQL_DATABASE"
-') > "$BACKUP_DIR/omeka_db.sql"
+' sh "$MYSQLDUMP_EXTRA_OPTS") > "$BACKUP_DIR/omeka_db.sql"
 if [ ! -s "$BACKUP_DIR/omeka_db.sql" ]; then
     echo "ERROR: Database dump is empty." >&2
+    exit 1
+fi
+# mysqldump can report a per-object error, skip that object and still exit 0, so
+# a non-empty file is not proof of a whole dump. It writes this trailer only
+# after the last statement, which a truncated or aborted dump never reaches.
+if ! tail -c 200 "$BACKUP_DIR/omeka_db.sql" | grep -q '^-- Dump completed'; then
+    echo "ERROR: Database dump is truncated (no completion marker)." >&2
     exit 1
 fi
 echo "    Database: $(du -h "$BACKUP_DIR/omeka_db.sql" | cut -f1)"

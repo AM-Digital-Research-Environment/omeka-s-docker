@@ -74,9 +74,9 @@ instance from it.
 │   ├── BACKUP_RESTORE.md       # Backups, restores, moving to another server
 │   └── DB_TUNING.md            # What each database setting does
 ├── scripts/
-│   ├── rebuild-code.sh         # Rebuild and restart after changing modules or themes
-│   ├── install-module.sh       # Add a module, then rebuild
-│   ├── install-theme.sh        # Add a theme, then rebuild
+│   ├── rebuild-code.sh         # Rebuild and restart on new Omeka / PHP / web server code
+│   ├── install-module.sh       # Add a module to what a build starts with
+│   ├── install-theme.sh        # Add a theme to what a build starts with
 │   ├── update-module.sh        # Re-download modules that track a branch
 │   ├── update-omeka.sh         # Move to a new Omeka S version
 │   ├── backup.sh               # Back up database, files, and settings
@@ -90,22 +90,26 @@ instance from it.
 ## How this template works
 
 Please read this before your first build. It is the one way this setup differs
-from a normal Omeka S install, and it explains why a few familiar commands are
-refused.
+from a normal Omeka S install, and it explains why Omeka and its modules are
+updated in two quite different ways.
 
-**Omeka's code is part of the image, not something you edit later.** Omeka
-itself, every module, every theme, and all their supporting files are installed
-when the image is built. Once the site is running, that whole directory is
-read-only. You cannot download a module into a running site, and neither can
-anyone who breaks in.
+**Omeka itself is part of the image, not something you edit later.** Omeka's own
+code, its libraries, and its configuration are installed when the image is
+built. Once the site is running, none of it can be changed — not by you, and not
+by anyone who breaks in. Moving to a new Omeka version is therefore a deliberate
+rebuild:
 
-**To change the code, you rebuild.** The pattern is always the same:
+> `bash scripts/update-omeka.sh` → the site restarts on the new code
 
-> edit a list of modules or themes → run `bash scripts/rebuild-code.sh` → the
-> site restarts on the new code
+**Modules and themes are the opposite: the running site owns them.** The lists
+in `_docker/` fill the module and theme folders the first time a site starts.
+After that those folders belong to the site, so you add, update, and remove
+modules and themes from the admin panel exactly as the Omeka handbook describes
+— no terminal, no rebuild, no downtime. A later image rebuild leaves them alone.
 
-Your database, uploaded files, and settings are untouched by a rebuild. They
-live on separate storage.
+If you would rather nothing in the site's code folder ever be writable, you can
+[turn that off](#locking-modules-and-themes-down) and go back to a rebuild for
+every module and theme change.
 
 **The web server and PHP are built together.** They are two halves of one image,
 so the stylesheets nginx serves always match the PHP that produced the page
@@ -116,15 +120,20 @@ asking for them. This is why every helper script rebuilds both — never just on
 | What | Where it lives |
 |------|----------------|
 | Uploaded files and thumbnails | `omeka_media` volume |
+| Modules | `omeka_modules` volume |
+| Themes | `omeka_themes` volume |
 | Omeka's log files | `omeka_logs` volume |
 | Login sessions | `php_sessions` volume |
 | The database password file | Regenerated in memory on every start |
-| Your `local.config.php` | A file on the host, mounted read-only |
-| Everything else | Part of the image — read-only |
+| Your `local.config.php` | A file on the host, which the site can only read |
+| Everything else, Omeka included | Part of the image — read-only |
 
-The payoff is that a site is reproducible: the same repository at the same
-commit always builds the same site, you can tell exactly what is installed, and
-undoing a bad update is just going back to the previous image.
+Everything in that table lives outside the image, so a rebuild leaves your
+database, files, modules, themes, and settings exactly as they were.
+
+The payoff is that Omeka itself is reproducible: the same repository at the same
+commit always builds the same Omeka, you can tell exactly what version is
+running, and undoing a bad upgrade is just going back to the previous image.
 
 For the full details, and for the one-time migration if your deployment predates
 this layout, see [docs/IMMUTABLE_CODE.md](docs/IMMUTABLE_CODE.md).
@@ -275,6 +284,11 @@ bash scripts/install-theme.sh  gh:omeka-s-themes/CenterRow v1.8.0
 Each command adds a line to the list, rebuilds, and restarts the site. You can
 also edit the lists by hand and run `bash scripts/rebuild-code.sh` once at the
 end.
+
+These lists are what a site starts life with. Once it is running, modules and
+themes are managed from the admin panel instead — see
+[Modules and themes](#modules-and-themes). Keep the lists in step with what the
+site actually runs, so a fresh build reproduces it.
 
 Naming an exact version (a release tag or a commit) is worth the small effort:
 it means a rebuild six months from now installs the same code, not whatever the
@@ -506,14 +520,27 @@ the build fails it puts your old `.env` back and leaves the running site alone.
 Omeka's own database upgrade stays a separate, deliberate step — you confirm it
 in the admin interface once you're happy with the new code.
 
-### Update modules
+### Update modules and themes
+
+From the admin panel, through the Easy Admin module — it flags what has an
+update and applies it. Or from the command line:
 
 ```bash
-# After editing a version in _docker/extra-modules.txt
-bash scripts/rebuild-code.sh
+docker compose exec php omeka-s-cli module:list          # what's installed, what's outdated
+docker compose exec php omeka-s-cli module:update Cron   # fetch the newer code
+docker compose exec php omeka-s-cli module:upgrade Cron  # then apply its database changes
+```
 
-# Re-download any module that tracks a branch rather than a fixed version
-bash scripts/update-module.sh
+`module:upgrade` changes the database, so back up first — going back to older
+code does not undo it.
+
+The two commands below apply only to sites that have
+[locked modules and themes down](#locking-modules-and-themes-down); on a normal
+site they rebuild the image without changing what is running:
+
+```bash
+bash scripts/rebuild-code.sh    # after editing a version in _docker/extra-modules.txt
+bash scripts/update-module.sh   # re-download anything tracking a branch
 ```
 
 ## Modules
@@ -538,7 +565,7 @@ worth knowing:
 
 Omeka itself is different: the core, its libraries, and its configuration are
 fixed in the image and cannot be written to at runtime. Upgrading Omeka is
-always a deliberate rebuild ([Update Omeka](#update-omeka)).
+always a deliberate rebuild ([Update Omeka S itself](#update-omeka-s-itself)).
 
 #### Locking modules and themes down
 
@@ -601,6 +628,10 @@ first time the site starts — you just switch them on in the admin interface.
 
 ### Adding your own
 
+This is how you decide what a site is built *with*. To add something to a site
+that is already running, use the admin panel instead —
+[Modules and themes](#modules-and-themes).
+
 Put one module per line in `_docker/extra-modules.txt`, ideally with a fixed
 version after the `#`:
 
@@ -619,8 +650,9 @@ deployment folder — `compose.amira.yml` shows how.
 
 ## Themes
 
-Every image includes Omeka's `freedom` and `lively` themes. Add more the same way
-as modules:
+Every image includes Omeka's `freedom` and `lively` themes. On a running site,
+add more from the admin panel. To decide what a *new* build starts with, add
+them the same way as modules:
 
 ```bash
 bash scripts/install-theme.sh gh:omeka-s-themes/CenterRow v1.8.0
@@ -696,17 +728,29 @@ imported are left alone on later starts.
 ## IIIF support (optional)
 
 IIIF is the standard that lets other institutions display and cite your images —
-deep zoom, side-by-side comparison, shared annotations. To install the three
-modules that provide it:
+deep zoom, side-by-side comparison, shared annotations. Three modules provide
+it: IiifServer, ImageServer, and Mirador.
+
+**Setting up a new site**: switch them on before the first build, and they are
+there from the start.
 
 ```bash
 # In .env
 ENABLE_IIIF=true
 ```
 
+**On a site that is already running**, this setting no longer has any effect —
+the module folder belongs to the site by then. Install the three from the admin
+panel, or:
+
 ```bash
-bash scripts/rebuild-code.sh
+for m in IiifServer ImageServer Mirador; do
+  docker compose exec php omeka-s-cli module:download "$m"
+done
 ```
+
+Set `ENABLE_IIIF=true` anyway, so a rebuild from scratch matches the site you
+are running.
 
 Then switch them on in the admin interface **in this order**, since each depends
 on the one before:
@@ -741,8 +785,13 @@ template depends on it, and leaving it off costs you nothing.
 3. Install the search module. It picks up the connection settings automatically,
    so you can leave its admin configuration blank:
    ```bash
-   bash scripts/install-module.sh gh:AM-Digital-Research-Environment/DRESearch
+   docker compose exec php omeka-s-cli module:download gh:AM-Digital-Research-Environment/DRESearch
+   docker compose exec php omeka-s-cli module:install DRESearch
    ```
+   On a site that has [locked modules and themes
+   down](#locking-modules-and-themes-down), use
+   `bash scripts/install-module.sh gh:AM-Digital-Research-Environment/DRESearch`
+   instead.
 
 To make this permanent, add `COMPOSE_PROFILES=search` to `.env` — then a plain
 `docker compose up -d` includes it. To turn search off again, remove that line
@@ -811,15 +860,24 @@ browser:
 
 ## Troubleshooting
 
-### I added a module but nothing changed
+### I added a module to a list but it never appeared
 
-Adding a module to a list is not enough on its own — the code has to be built in:
+The lists in `_docker/` fill the module and theme folders only the *first* time a
+site starts. On a site that is already running, adding a line and rebuilding
+changes nothing — `rebuild-code.sh` tells you so when it runs. Install it from
+the admin panel instead, or from the command line:
 
 ```bash
-bash scripts/rebuild-code.sh
+docker compose exec php omeka-s-cli module:download CSVImport
+docker compose exec php omeka-s-cli module:install CSVImport
 ```
 
-`install-module.sh` does this for you; editing the list by hand does not.
+The lists still matter: they are what a fresh build starts from, so keep them in
+step with what your site actually runs.
+
+On a site using `compose.immutable.yml` it works the other way round — there the
+lists are the only source of modules and themes, and a rebuild is exactly how
+you apply an edit.
 
 ### My theme or module looks unstyled
 
@@ -890,7 +948,7 @@ docker compose up -d --force-recreate php web
 | **The database is unreachable** | It has no port open to the machine or the internet — only the site can talk to it |
 | **The site itself listens locally by default** | It expects an HTTPS proxy in front. See [Production SSL/TLS](#production-ssltls) |
 | **Nothing runs as root** | Omeka runs as an unprivileged user, and containers can't gain new privileges |
-| **The code can't be modified** | The application folder is read-only while running, so nothing can install a backdoor into it |
+| **Omeka's own code can't be modified** | Omeka, its libraries, and its configuration are read-only while running. The module and theme folders are writable, because the admin panel manages them — [lock those down too](#locking-modules-and-themes-down) if you'd rather they weren't |
 | **Only one PHP file can execute** | See [What the site serves](#what-the-site-serves) |
 | **Private files aren't served** | Configuration, logs, source code, and dependency lists all return 404 |
 | **Resource limits** | Each service has a CPU and memory cap, so one misbehaving part can't take the machine down |

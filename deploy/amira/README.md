@@ -123,10 +123,14 @@ the site easier to attack:
 ## The visualizations volume
 
 The DreVisualizations module precomputes its dashboards, knowledge graph, and
-photo galleries, and writes the results inside its own module folder. Because
-module code is read-only here, the overlay mounts a writable volume,
-`dre_visualizations_data`, over just that one sub-folder — for both `php` (which
-writes it) and `web` (which serves it to browsers, read-only).
+photo galleries, and writes the results inside its own module folder. The
+overlay gives that one sub-folder its own storage, `dre_visualizations_data`,
+mounted for both `php` (which writes it) and `web` (which serves it to browsers,
+read-only).
+
+It earns its keep two ways: the folder stays writable even on a site that has
+[locked modules and themes down](../../docs/IMMUTABLE_CODE.md#locking-modules-and-themes-down),
+and roughly a gigabyte of regenerable output stays out of every module backup.
 
 Two things to know:
 

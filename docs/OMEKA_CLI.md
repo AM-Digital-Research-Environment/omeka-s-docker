@@ -33,7 +33,7 @@ docker compose exec php omeka-s-cli module:update --help
 # List module code and database state
 docker compose exec php omeka-s-cli module:list
 
-# Activate code already baked into the image
+# Turn on a module whose code is already there
 docker compose exec php omeka-s-cli module:install CSVImport
 
 # Apply a pending module database migration after deploying new code

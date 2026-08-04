@@ -8,15 +8,21 @@ Quick reference for running an Omeka S site built from this template.
 |-----------|-----|
 | See if everything is working | `docker compose ps` |
 | See what went wrong | `docker compose logs -f php` |
-| Add a module or theme | `bash scripts/install-module.sh …` or `install-theme.sh …` |
-| Apply an edit to a module or theme list | `bash scripts/rebuild-code.sh` |
-| Move to a new Omeka S version | `bash scripts/update-omeka.sh` |
+| Add a module or theme to the running site | The admin panel (Easy Admin), or `docker compose exec php omeka-s-cli module:download …` |
 | Turn a module on, or apply its database changes | `docker compose exec php omeka-s-cli module:install …` |
+| Move to a new Omeka S version | `bash scripts/update-omeka.sh` |
+| Change what a *fresh* build starts with | `bash scripts/install-module.sh …` or `install-theme.sh …` |
 | Back up | `bash scripts/backup.sh` |
 | Restore, or move to a new server | `bash scripts/restore.sh <backup-dir>` |
 
-The rule of thumb: **anything that changes code is a script plus a rebuild;
-anything that changes the database is `omeka-s-cli`.**
+The rule of thumb: **Omeka itself changes by rebuilding; everything else —
+modules, themes, users, settings — changes on the running site.**
+
+The `scripts/` helpers deal with what a build produces. They do not change the
+modules and themes a running site has, because the site owns those (see
+[IMMUTABLE_CODE.md](IMMUTABLE_CODE.md)). The exception is a site using
+`compose.immutable.yml`, where the image is the only source of modules and
+themes and the scripts are the only way to change them.
 
 ## Starting & Stopping
 
@@ -59,11 +65,11 @@ docker compose ps
 docker inspect --format='{{json .State.Health}}' "$(docker compose ps -q php)"
 ```
 
-## Rebuilding after a code change
+## Rebuilding the image
 
-Omeka, modules, and themes are part of the image, so a change to any of them
-means a rebuild. This builds both the PHP and web images together and swaps the
-containers, keeping your database and files.
+Omeka itself, PHP, and the web server are part of the image, so changing any of
+them means a rebuild. This builds both the PHP and web images together and swaps
+the containers, keeping your database, files, modules, and themes.
 
 ```bash
 # The usual case
@@ -188,6 +194,11 @@ restart:
 bash scripts/rebuild-code.sh
 ```
 
+All but `OMEKA_VERSION` decide what a site starts life with, so on a site that
+is already running they change the image without changing the site. Only
+`OMEKA_VERSION` takes effect on an existing site — and `scripts/update-omeka.sh`
+is the way to change that one.
+
 ## Optional services and deployment folders
 
 ```bash
@@ -209,14 +220,35 @@ page picks them up automatically. Nothing else changes.
 
 ## Modules
 
+On the running site — the same thing the Easy Admin module does in the browser:
+
 ```bash
-# What have I added so far?
+# What is installed, and what has an update?
+docker compose exec php omeka-s-cli module:list
+
+# Find, fetch, and turn on a module
+docker compose exec php omeka-s-cli module:search facet
+docker compose exec php omeka-s-cli module:download CSVImport
+docker compose exec php omeka-s-cli module:install CSVImport
+
+# Update one, then apply its database changes
+docker compose exec php omeka-s-cli module:update CSVImport
+docker compose exec php omeka-s-cli module:upgrade CSVImport
+
+# Remove it
+docker compose exec php omeka-s-cli module:uninstall CSVImport
+docker compose exec php omeka-s-cli module:delete CSVImport
+```
+
+To change what a *fresh* build starts with — and on sites using
+`compose.immutable.yml`, where this is the only way:
+
+```bash
+# What is on the list so far?
 bash scripts/install-module.sh list
 
-# Add a module from Omeka's own registry
+# Add one from Omeka's registry, or from GitHub at a fixed version
 bash scripts/install-module.sh CSVImport
-
-# Add one from GitHub, at a fixed version
 bash scripts/install-module.sh gh:owner/repository v1.2.3
 
 # After editing a version in _docker/extra-modules.txt
@@ -224,13 +256,6 @@ bash scripts/rebuild-code.sh
 
 # Re-download modules that track a branch instead of a fixed version
 bash scripts/update-module.sh
-```
-
-Once the code is built in, these turn a module on and apply its database changes:
-
-```bash
-docker compose exec php omeka-s-cli module:install ModuleName
-docker compose exec php omeka-s-cli module:upgrade ModuleName
 ```
 
 Updating Omeka S itself:
@@ -242,6 +267,18 @@ bash scripts/update-omeka.sh 4.2.1       # a specific release
 ```
 
 ## Themes
+
+On the running site:
+
+```bash
+docker compose exec php omeka-s-cli theme:search CenterRow   # find it, and its latest version
+docker compose exec php omeka-s-cli theme:download centerrow
+docker compose exec php omeka-s-cli theme:list               # what the site has now
+```
+
+Then pick it for a site under **Sites > (your site) > Theme** in the admin panel.
+
+To change what a fresh build starts with:
 
 ```bash
 bash scripts/install-theme.sh list
@@ -282,13 +319,19 @@ docker compose exec db mysqladmin ping -u omeka -p
 Things that will *not* work, by design:
 
 ```bash
-docker compose exec php omeka-s-cli module:download SomeModule   # read-only code
-docker compose exec php nano /var/www/html/themes/...            # read-only code
+docker compose exec php nano /var/www/html/application/...   # Omeka's own code is read-only
+docker compose exec php composer update                      # so are its libraries
 ```
 
-Both fail because the application folder is read-only while the site runs. Add
-the module or theme to a list and rebuild instead — see the
-[README](../README.md#how-this-template-works).
+Omeka itself, its libraries, and its configuration cannot be written to while
+the site runs. Changing them is a rebuild — `bash scripts/update-omeka.sh`. The
+module and theme folders *are* writable, so `module:download` and friends work
+normally; see the [README](../README.md#how-this-template-works).
+
+On a site using `compose.immutable.yml`, nothing under the application folder is
+writable, so `module:download` and `theme:download` fail there too. That is the
+design working, not a permissions problem — add the module to a list and rebuild
+instead.
 
 For a longer list of specific symptoms and their causes, see
 [Troubleshooting in the README](../README.md#troubleshooting).
