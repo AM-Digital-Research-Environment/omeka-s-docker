@@ -7,6 +7,8 @@
 #   - omeka_db.sql       MySQL database dump (required)
 #   - omeka_media.tar.gz Omeka media volume (current format), or
 #   - omeka_files.tar.gz Legacy whole document root (pre-migration format)
+#   - omeka_modules.tar.gz Admin-managed modules (default layout, optional)
+#   - omeka_themes.tar.gz  Admin-managed themes (default layout, optional)
 #   - typesense_data.tar.gz Typesense search index (optional)
 #   - sideload.tar.gz    Sideload directory (optional)
 #   - .env               Environment file (optional, used if no .env exists)
@@ -91,14 +93,14 @@ if [ -f "$BACKUP_DIR/SHA256SUMS" ]; then
     # making sha256sum read paths outside the backup directory.
     if ! awk '
         NF != 2 || length($1) != 64 || $1 !~ /^[0-9A-Fa-f]+$/ ||
-        $2 !~ /^(BACKUP_FORMAT|omeka_db[.]sql|omeka_media[.]tar[.]gz|omeka_logs[.]tar[.]gz|omeka_files[.]tar[.]gz|typesense_data[.]tar[.]gz|sideload[.]tar[.]gz|local[.]config[.]php|images[.]json|[.]env)$/ ||
+        $2 !~ /^(BACKUP_FORMAT|omeka_db[.]sql|omeka_media[.]tar[.]gz|omeka_logs[.]tar[.]gz|omeka_modules[.]tar[.]gz|omeka_themes[.]tar[.]gz|omeka_files[.]tar[.]gz|typesense_data[.]tar[.]gz|sideload[.]tar[.]gz|local[.]config[.]php|images[.]json|[.]env)$/ ||
         seen[$2]++ { exit 1 }
         END { if (!seen["omeka_db.sql"]) exit 1 }
     ' "$BACKUP_DIR/SHA256SUMS"; then
         echo "ERROR: SHA256SUMS is malformed, incomplete, or contains unsafe paths." >&2
         exit 1
     fi
-    for artifact in BACKUP_FORMAT omeka_db.sql omeka_media.tar.gz omeka_logs.tar.gz omeka_files.tar.gz typesense_data.tar.gz sideload.tar.gz local.config.php images.json .env; do
+    for artifact in BACKUP_FORMAT omeka_db.sql omeka_media.tar.gz omeka_logs.tar.gz omeka_modules.tar.gz omeka_themes.tar.gz omeka_files.tar.gz typesense_data.tar.gz sideload.tar.gz local.config.php images.json .env; do
         if [ -f "$BACKUP_DIR/$artifact" ] \
             && ! awk -v name="$artifact" '$2 == name { found = 1 } END { exit !found }' "$BACKUP_DIR/SHA256SUMS"; then
             echo "ERROR: $artifact exists but is not covered by SHA256SUMS." >&2
@@ -235,6 +237,28 @@ elif [ "$LAYOUT" = "legacy" ]; then
             rm -rf /data/.legacy-root
         '
 fi
+
+# --- 3b. Restore module/theme volumes (default layout) ---
+# Absent from backups of deployments that use compose.immutable.yml. Restoring
+# them before services start means the php container never re-seeds the volumes
+# from the image, so the admin-managed extension state comes back exactly as
+# backed up.
+for name in omeka_modules omeka_themes; do
+    if [ -f "$BACKUP_DIR/${name}.tar.gz" ]; then
+        echo "==> Restoring ${name} volume..."
+        EXT_VOLUME="${COMPOSE_PROJECT}_${name}"
+        docker volume create "$EXT_VOLUME" > /dev/null 2>&1 || true
+        docker run --rm \
+            -e "ARCHIVE=${name}.tar.gz" \
+            -v "$EXT_VOLUME":/data \
+            -v "$BACKUP_DIR":/backup:ro \
+            "$HELPER_IMAGE" sh -eu -c '
+                rm -rf /data/* /data/..?* /data/.[!.]* 2>/dev/null || true
+                tar xzf "/backup/$ARCHIVE" -C /data
+            '
+        echo "    ${name} volume restored."
+    fi
+done
 
 # --- 4. Restore Typesense data volume (optional search backend) ---
 TYPESENSE_RESTORED=false

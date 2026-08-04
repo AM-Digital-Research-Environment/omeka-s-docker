@@ -43,19 +43,24 @@ def tmpfs_targets(service: dict[str, Any]) -> set[str]:
 
 
 variant = sys.argv[1] if len(sys.argv) > 1 else "base"
-if variant not in {"base", "amira"}:
-    raise SystemExit("usage: check-compose.py base|amira")
+if variant not in {"base", "amira", "immutable", "amira-immutable"}:
+    raise SystemExit("usage: check-compose.py base|amira|immutable|amira-immutable")
+
+# Modules/themes are admin-managed volumes by default; compose.immutable.yml
+# drops them back into the image layer.
+is_amira = variant in {"amira", "amira-immutable"}
+is_immutable = variant in {"immutable", "amira-immutable"}
 
 config = json.load(sys.stdin)
 services: dict[str, dict[str, Any]] = config.get("services", {})
 errors: list[str] = []
 
 expected_services = {"web", "php", "db", "typesense"}
-if variant == "amira":
+if is_amira:
     expected_services.add("amira-mcp")
 missing_services = expected_services - services.keys()
 require(not missing_services, f"required services are missing: {', '.join(sorted(missing_services))}")
-require(("amira-mcp" in services) == (variant == "amira"), "AMIRA overlay service mismatch")
+require(("amira-mcp" in services) == is_amira, "AMIRA overlay service mismatch")
 
 if missing_services:
     for error in errors:
@@ -102,7 +107,7 @@ for name, service in services.items():
 
 for name in ("web", "php", "typesense"):
     require(services[name].get("read_only") is True, f"{name} root filesystem must be read-only")
-if variant == "amira":
+if is_amira:
     require(
         services["amira-mcp"].get("read_only") is True,
         "amira-mcp root filesystem must be read-only",
@@ -131,7 +136,7 @@ require(php_build.get("target") == "runtime", "php must use the Dockerfile runti
 require(web_build.get("context") == php_build.get("context"), "web/php build contexts differ")
 require(web_build.get("dockerfile") == php_build.get("dockerfile"), "web/php Dockerfiles differ")
 require(web_build.get("args") == php_build.get("args"), "web/php immutable-code build args differ")
-expected_modules_file = "deploy/amira/modules.txt" if variant == "amira" else "_docker/empty-modules.txt"
+expected_modules_file = "deploy/amira/modules.txt" if is_amira else "_docker/empty-modules.txt"
 require(
     web_build.get("args", {}).get("EXTRA_MODULES_FILE") == expected_modules_file,
     f"{variant} module manifest is not wired into both image builds",
@@ -139,7 +144,7 @@ require(
 # Deployment-specific code must stay out of the generic base image so partner
 # deployments can build it unmodified.
 expected_themes_file = (
-    "deploy/amira/themes.txt" if variant == "amira" else "_docker/empty-themes.txt"
+    "deploy/amira/themes.txt" if is_amira else "_docker/empty-themes.txt"
 )
 require(
     web_build.get("args", {}).get("EXTRA_THEMES_FILE") == expected_themes_file,
@@ -173,11 +178,88 @@ if php_logs:
 if php_config:
     require(php_config[0].get("read_only") is True, "local.config.php must be read-only")
 
+# Modules and themes are admin-managed volumes by default so EasyAdmin can
+# install/update/remove them; compose.immutable.yml drops both volumes to make
+# the image authoritative again. Neither mode may widen write access beyond
+# these two directories.
+extension_mounts = {
+    "omeka_modules": "/var/www/html/modules",
+    "omeka_themes": "/var/www/html/themes",
+}
+for source, target in extension_mounts.items():
+    php_mounts = mounts_at(services["php"], target)
+    web_mounts = mounts_at(services["web"], target)
+    if is_immutable:
+        require(
+            not php_mounts and not web_mounts,
+            f"{target} must be image content in the {variant} variant",
+        )
+        continue
+    require(len(php_mounts) == 1, f"php must mount exactly one {source} volume")
+    require(len(web_mounts) == 1, f"web must mount exactly one {source} volume")
+    if php_mounts and web_mounts:
+        require(
+            php_mounts[0].get("source") == web_mounts[0].get("source") == source,
+            f"php/web {source} volume sources differ",
+        )
+        require(
+            php_mounts[0].get("read_only") is not True,
+            f"php {source} mount must be writable so EasyAdmin can manage it",
+        )
+        require(
+            web_mounts[0].get("read_only") is True,
+            f"web {source} mount must be read-only",
+        )
+        require(
+            (web_mounts[0].get("volume") or {}).get("nocopy") is True,
+            f"web {source} mount must set nocopy so only php seeds the volume",
+        )
+
+# compose.immutable.yml replaces the php/web volume lists wholesale (Compose
+# cannot delete a single mount during a merge). Listing it after a deployment
+# overlay would silently discard that overlay's mounts, so assert the mounts
+# every variant must keep regardless of ordering.
+for target in (
+    "/usr/local/etc/php/conf.d/uploads.ini",
+    "/var/www/html/sideload",
+    "/var/lib/php-sessions",
+):
+    require(
+        len(mounts_at(services["php"], target)) == 1,
+        f"php lost its {target} mount — check compose file ordering",
+    )
+for target in (
+    "/etc/nginx/templates/default.conf.template",
+    "/etc/nginx/templates/00-http-settings.conf.template",
+    "/etc/nginx/templates/snippets/security-headers.conf.template",
+):
+    require(
+        len(mounts_at(services["web"], target)) == 1,
+        f"web lost its {target} mount — check compose file ordering",
+    )
+if is_amira:
+    # The AMIRA overlay contributes these; they disappear if compose.immutable.yml
+    # is layered after it instead of directly after the base stack.
+    for target in (
+        "/usr/local/share/omeka-vocabs/dre.owl",
+        "/usr/local/share/omeka-vocabs/dre.json",
+    ):
+        require(
+            len(mounts_at(services["php"], target)) == 1,
+            f"AMIRA vocabulary mount {target} is missing — list compose.immutable.yml"
+            " directly after docker-compose.yml",
+        )
+    require(
+        len(mounts_at(services["web"], "/etc/nginx/templates/extra-locations/mcp.conf.template")) == 1,
+        "AMIRA /mcp nginx template is missing — list compose.immutable.yml"
+        " directly after docker-compose.yml",
+    )
+
 php_tmpfs = tmpfs_targets(services["php"])
 for target in ("/tmp", "/run/omeka", "/run/php-fpm", "/var/www/.cache"):
     require(target in php_tmpfs, f"php writable tmpfs is missing: {target}")
 
-expected_web_networks = {"frontend", "mcp"} if variant == "amira" else {"frontend"}
+expected_web_networks = {"frontend", "mcp"} if is_amira else {"frontend"}
 require(
     set(services["web"].get("networks", {})) == expected_web_networks,
     "web network exposure changed",
@@ -188,7 +270,7 @@ require(
 )
 require(set(services["db"].get("networks", {})) == {"backend"}, "db network exposure changed")
 require(set(services["typesense"].get("networks", {})) == {"backend"}, "typesense network exposure changed")
-if variant == "amira":
+if is_amira:
     require(
         set(services["amira-mcp"].get("networks", {})) == {"mcp"},
         "amira-mcp network exposure changed",

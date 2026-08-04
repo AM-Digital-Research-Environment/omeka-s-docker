@@ -55,6 +55,23 @@ jobs:
       - name: Validate Compose security contract (base + AMIRA overlay)
         run: docker compose --profile search -f docker-compose.yml -f compose.amira.yml config --format json | python3 .github/scripts/check-compose.py amira
 
+      - name: Validate Compose security contract (base + immutable overlay)
+        run: docker compose --profile search -f docker-compose.yml -f compose.immutable.yml config --format json | python3 .github/scripts/check-compose.py immutable
+
+      # compose.immutable.yml replaces the php/web volume lists, so it must be
+      # layered directly after the base stack. This asserts the supported
+      # ordering keeps the AMIRA overlay's own mounts.
+      - name: Validate Compose security contract (base + immutable + AMIRA)
+        run: docker compose --profile search -f docker-compose.yml -f compose.immutable.yml -f compose.amira.yml config --format json | python3 .github/scripts/check-compose.py amira-immutable
+
+      - name: Reject unsupported overlay ordering (immutable after AMIRA)
+        run: |
+          if docker compose --profile search -f docker-compose.yml -f compose.amira.yml -f compose.immutable.yml config --format json | python3 .github/scripts/check-compose.py amira-immutable; then
+            echo "ERROR: layering compose.immutable.yml after an overlay silently drops that overlay's mounts, but the contract accepted it." >&2
+            exit 1
+          fi
+          echo "Unsupported ordering correctly rejected."
+
   smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -62,15 +79,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [base, amira]
+        variant: [base, amira, immutable]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
-      # Base checks bootstrap, backup/restore, and an A/B image rebuild proving
-      # code changes while database/media volumes remain intact.
+      # Base checks bootstrap plus the default admin-managed extensions:
+      # EasyAdmin's writability condition, live module install via volume and
+      # omeka-s-cli, persistence across recreation, and backup/restore.
       # AMIRA checks its baked modules/vocabulary, Typesense profile, and /mcp
       # wiring (as a 502 because the remote amira-mcp image is not built in CI).
+      # Immutable checks the hardened overlay: nothing under the document root
+      # writable, backup/restore, and an A/B image rebuild proving code changes
+      # while database/media volumes remain intact.
       - name: Smoke test — ${{ matrix.variant }}
         run: bash .github/scripts/smoke.sh "${{ matrix.variant }}"

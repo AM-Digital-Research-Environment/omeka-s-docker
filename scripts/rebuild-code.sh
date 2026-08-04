@@ -34,6 +34,25 @@ cd "$script_dir/.."
 command -v docker >/dev/null 2>&1 || { echo "docker is required" >&2; exit 1; }
 docker compose version >/dev/null
 
+# By default modules/ and themes/ live on Docker volumes that shadow whatever
+# this rebuild bakes; compose.immutable.yml drops them back into the image.
+if docker compose config --format json 2>/dev/null | python3 -c '
+import json, sys
+config = json.load(sys.stdin)
+mounts = config["services"]["php"].get("volumes", [])
+sys.exit(0 if any(
+    isinstance(m, dict) and m.get("target") == "/var/www/html/modules"
+    for m in mounts
+) else 1)
+' 2>/dev/null; then
+    echo "NOTE: modules and themes are admin-managed on Docker volumes, which shadow"
+    echo "      the image content built here. This rebuild updates Omeka core, PHP,"
+    echo "      and nginx — but NOT modules/themes. Manage those in the admin UI"
+    echo "      (EasyAdmin), or live in the container:"
+    echo "        docker compose exec php omeka-s-cli module:download <module>"
+    echo "      To make them image content instead, layer compose.immutable.yml."
+fi
+
 if [[ "$refresh" == true ]]; then
     OMEKA_ASSET_REFRESH="$(date -u +%Y%m%dT%H%M%SZ)"
     export OMEKA_ASSET_REFRESH
