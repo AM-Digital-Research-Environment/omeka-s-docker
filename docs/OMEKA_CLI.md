@@ -48,12 +48,21 @@ docker compose exec php omeka-s-cli module:uninstall CSVImport
 docker compose exec php omeka-s-cli module:search facet
 ```
 
-`module:download` and `module:update` will not work here — the application folder
-is read-only while the site runs. Add the module to a list and run
-`bash scripts/rebuild-code.sh` instead.
+`module:download`, `module:update`, and `theme:download` work on a running site,
+because modules and themes are stored outside the image. This is the same thing
+the Easy Admin module does from the admin panel:
+
+```bash
+docker compose exec php omeka-s-cli module:download CSVImport
+docker compose exec php omeka-s-cli module:install CSVImport
+```
+
+If the site uses `compose.immutable.yml`, those two downloads will not work —
+the application folder is read-only while the site runs. Add the module to a
+list and run `bash scripts/rebuild-code.sh` instead.
 
 `module:upgrade` changes the database, so run it only after you have tested the
-new code and taken a backup. Going back to an older image restores the code but
+new code and taken a backup. Going back to older code restores the code but
 does not undo a database migration.
 
 ### Users
@@ -134,20 +143,22 @@ docker compose exec php omeka-s-cli config:set installation_title "My Archive"
 
 ## Scripts or CLI?
 
-The dividing line is simple: **scripts change code, the CLI changes the
-database.**
+The dividing line is simple: **scripts change Omeka itself, the CLI changes
+everything else.**
 
 | Task | Use | Why |
 |---|---|---|
-| Add a module or theme | `scripts/install-module.sh` / `install-theme.sh` | It's code, so it has to be built into the image |
-| Re-download modules that track a branch | `scripts/update-module.sh` | Same |
-| Move to a new Omeka S version | `scripts/update-omeka.sh` | Backs up, pins the version, rebuilds |
+| Add or update a module or theme | **Easy Admin, or omeka-s-cli** | They are stored outside the image, so a running site can change them |
+| Move to a new Omeka S version | `scripts/update-omeka.sh` | Omeka's own code is built in: backs up, pins the version, rebuilds |
 | Turn a module on or off | **omeka-s-cli** | Database state |
 | Apply a module or core database upgrade | **omeka-s-cli** | `module:upgrade`, `core:migrate` — deliberately manual |
 | Users, vocabularies, resource templates, settings | **omeka-s-cli** | The scripts don't cover these |
 
-If a download command fails inside the container, that is the design working, not
-a permissions problem to fix.
+On a site using `compose.immutable.yml`, the first row moves to
+`scripts/install-module.sh` / `install-theme.sh`, the lists in `_docker/`, and
+`scripts/update-module.sh` for anything tracking a branch. There, a download
+command failing inside the container is the design working, not a permissions
+problem to fix.
 
 ## Where to look when something breaks
 

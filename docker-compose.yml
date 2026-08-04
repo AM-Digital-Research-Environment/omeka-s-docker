@@ -34,6 +34,23 @@ services:
       # FRAME_ANCESTORS substitution applies to the snippet too.
       - ./nginx-security-headers.conf:/etc/nginx/templates/snippets/security-headers.conf.template:ro
       - omeka_media:/var/www/html/files:ro
+      # Modules and themes are admin-managed at runtime (see the php service).
+      # nginx serves their assets from the same volumes, read-only. nocopy: only
+      # php — which starts first and owns the content as www-data — may seed a
+      # fresh volume from its image; nginx must never populate it with
+      # nginx-owned copies.
+      - type: volume
+        source: omeka_modules
+        target: /var/www/html/modules
+        read_only: true
+        volume:
+          nocopy: true
+      - type: volume
+        source: omeka_themes
+        target: /var/www/html/themes
+        read_only: true
+        volume:
+          nocopy: true
     environment:
       # Substituted into the nginx templates at container start (see
       # /etc/nginx/templates/). Values come from .env (gitignored).
@@ -105,6 +122,17 @@ services:
     volumes:
       - omeka_media:/var/www/html/files:rw
       - omeka_logs:/var/www/html/logs:rw
+      # Modules and themes are managed by site admins at runtime — through the
+      # EasyAdmin module in the browser, or omeka-s-cli in this container —
+      # so they live on volumes rather than in the read-only image layer.
+      # The volumes are seeded from the image on first start, so the modules
+      # and themes baked by the Dockerfile appear exactly as before; from then
+      # on the volumes are authoritative and image rebuilds no longer change
+      # them (scripts/rebuild-code.sh says so when it runs). Omeka core,
+      # config, and vendor code stay immutable. To make modules and themes
+      # immutable image content again, layer compose.immutable.yml.
+      - omeka_modules:/var/www/html/modules:rw
+      - omeka_themes:/var/www/html/themes:rw
       - ${OMEKA_LOCAL_CONFIG:-./_docker/local.config.php}:/var/www/html/config/local.config.php:ro
       - ./uploads.ini:/usr/local/etc/php/conf.d/uploads.ini:ro
       - ./sideload:/var/www/html/sideload:rw
@@ -300,6 +328,10 @@ volumes:
   omeka_media:
     driver: local
   omeka_logs:
+    driver: local
+  omeka_modules:
+    driver: local
+  omeka_themes:
     driver: local
   typesense_data:
     driver: local

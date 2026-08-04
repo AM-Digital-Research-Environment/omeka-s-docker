@@ -16,11 +16,15 @@ instance from it.
   configured the first time the site starts
 - **One-command setup**: a [bootstrap script](https://github.com/AM-Digital-Research-Environment/am-omeka-s-docker-bootstrap)
   takes a blank Linux server to a working HTTPS site
-- **Modules and themes included**: a useful set is ready to switch on, and adding
-  your own is one command
-- **Code can't change underneath you**: Omeka, modules, and themes are fixed at
-  build time; only uploads, logs, and sessions are writable. Updates are
-  deliberate rebuilds, and rolling one back is easy
+- **Modules and themes included**: a useful set is ready to switch on, and you
+  can add more from the browser — no terminal needed
+- **Manageable from the admin panel**: installing, updating, and removing
+  modules and themes works the way Omeka documents it, through the Easy Admin
+  module (see [Modules and themes](#modules-and-themes))
+- **Omeka itself can't change underneath you**: the core, its libraries, and its
+  configuration are fixed at build time; updates are deliberate rebuilds, and
+  rolling one back is easy. Sites that want the same guarantee for modules and
+  themes can [switch it on](#locking-modules-and-themes-down)
 - **Tuned for real use**: PHP 8.5 with caching and image processing, MySQL
   settings sized for an Omeka workload, browser caching and compression
 - **Hardened by default**: the database is unreachable from outside, containers
@@ -42,6 +46,7 @@ instance from it.
 .
 ├── .env.example                # Copy to .env — all your settings live there
 ├── docker-compose.yml          # The services: web, php, database, optional search
+├── compose.immutable.yml       # Optional: lock modules and themes to the build
 ├── compose.amira.yml           # Example of adding your own services (see deploy/amira/)
 ├── Dockerfile                  # How the Omeka image is built
 ├── docker-entrypoint.sh        # Runs on startup: install Omeka, modules, vocabularies
@@ -206,24 +211,23 @@ in. Otherwise Omeka's setup wizard will walk you through creating one.
 #### 4. Add more modules (optional)
 
 A useful set of modules is already installed (see
-[Included modules](#included-modules)). To add another:
+[Included modules](#included-modules)). To add another, log in as an admin and
+use the **Easy Admin** module, which is installed and ready: it lists what is
+available, installs it, and tells you when an update exists. No terminal, no
+rebuild, no downtime.
+
+The same thing from the command line, if you prefer:
 
 ```bash
-bash scripts/install-module.sh CSVImport
-bash scripts/install-module.sh gh:owner/repository v1.2.3
+docker compose exec php omeka-s-cli module:download CSVImport
+docker compose exec php omeka-s-cli module:install CSVImport
 ```
 
-This adds the module to your list, rebuilds, and restarts the site. Your
-database and uploaded files are kept.
-
-Note that you cannot download a module into the running site — the code folder
-is read-only on purpose. Once a module's code is built in, these commands turn
-it on and apply its database changes:
-
-```bash
-docker compose exec php omeka-s-cli module:install ModuleName
-docker compose exec php omeka-s-cli module:upgrade ModuleName
-```
+Modules and themes you add this way are kept in their own storage, separate from
+the built image, so they survive restarts, rebuilds, and Omeka upgrades — and
+the backup script saves them with everything else. If you would rather fix them
+to the build, see [Locking modules and themes
+down](#locking-modules-and-themes-down).
 
 [docs/OMEKA_CLI.md](docs/OMEKA_CLI.md) covers the rest of what you can do from
 the command line: users, vocabularies, resource templates, and settings.
@@ -513,6 +517,62 @@ bash scripts/update-module.sh
 ```
 
 ## Modules
+
+### Modules and themes
+
+Modules and themes work the way the Omeka S handbook describes: you manage them
+from the admin panel, using the **Easy Admin** module that ships with this
+template. It lists what is available, installs and removes it, and flags
+updates. Nothing about that requires a terminal.
+
+They are stored separately from the built image, which has two consequences
+worth knowing:
+
+- What you install stays installed. Restarting, rebuilding the image, or
+  upgrading Omeka does not remove it, and `scripts/backup.sh` includes it.
+- Rebuilding the image no longer changes them. The modules and themes listed in
+  `_docker/` are used to set the site up the first time it starts; after that
+  the site's own copies are what counts. To change them later, use the admin
+  panel rather than a rebuild — the rebuild script reminds you of this when it
+  runs.
+
+Omeka itself is different: the core, its libraries, and its configuration are
+fixed in the image and cannot be written to at runtime. Upgrading Omeka is
+always a deliberate rebuild ([Update Omeka](#update-omeka)).
+
+#### Locking modules and themes down
+
+Sites run by someone comfortable at a terminal can extend that same guarantee
+to modules and themes, so that nothing in the site's code folder can ever be
+written to — even by Omeka itself. Add one line to `.env` and restart:
+
+```bash
+# In .env — directly after docker-compose.yml, before any other compose file
+COMPOSE_FILE=docker-compose.yml:compose.immutable.yml
+```
+
+```bash
+docker compose up -d
+```
+
+Easy Admin then reports that the module and theme folders are not writeable,
+which is expected: the image becomes the only source of both, and you add them
+with `scripts/install-module.sh` and `scripts/install-theme.sh` as described
+under [Building your own instance](#building-your-own-instance).
+
+Before switching, add anything you installed from the admin panel to
+`_docker/extra-modules.txt` and `_docker/extra-themes.txt` (or your deployment
+folder's lists) and run `bash scripts/rebuild-code.sh` — otherwise it disappears
+from the running site. Your storage is left alone, so removing the line again
+brings back exactly what was there.
+
+> **The order of the files matters.** Docker Compose cannot remove a single
+> setting when it merges files, so `compose.immutable.yml` replaces the whole
+> storage list for the web and PHP services. Put it directly after
+> `docker-compose.yml` and before your own deployment file, or that file's
+> settings are thrown away:
+> `COMPOSE_FILE=docker-compose.yml:compose.immutable.yml:compose.amira.yml`.
+> CI checks both that the right order works and that the wrong one is rejected.
 
 ### Included modules
 
@@ -978,6 +1038,8 @@ Everything that survives a rebuild is stored outside the image:
 | `mysql_data` | The database — items, users, settings, everything | Yes |
 | `omeka_media` | Uploaded files and the thumbnails made from them | Yes |
 | `omeka_logs` | Omeka's log files | Yes |
+| `omeka_modules` | Modules, set up from the image and managed from the admin panel | Yes |
+| `omeka_themes` | Themes, set up from the image and managed from the admin panel | Yes |
 | `php_sessions` | Who is currently logged in. Kept on disk so a restart doesn't log everyone out | No — nothing worth keeping |
 | `typesense_data` | The search index, if you use search | Yes, though it can always be rebuilt |
 

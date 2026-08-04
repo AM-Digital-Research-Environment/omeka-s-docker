@@ -1,20 +1,28 @@
 #!/usr/bin/env bash
 # CI smoke test: boots the stack, waits for health, probes HTTP behaviour,
-# and tears down (including volumes). Two variants:
+# and tears down (including volumes). Three variants:
 #
-#   smoke.sh base   — generic template only, no admin env vars (the same path
-#                     the one-click bootstrap produces).
-#   smoke.sh amira  — base + AMIRA overlay activated via COMPOSE_FILE in .env,
-#                     admin env vars set, search profile on. The amira-mcp
-#                     service itself is NOT built (external repo with a
-#                     build-time data fetch); /mcp answering 502 instead of
-#                     404 proves the overlay's nginx location is wired in.
+#   smoke.sh base      — generic template with its defaults, no admin env vars
+#                        (the same path the one-click bootstrap produces).
+#                        Modules/themes are admin-managed volumes here, so this
+#                        checks seeding from the image, EasyAdmin's writability
+#                        condition, live install, persistence across recreation,
+#                        and the backup/restore round trip.
+#   smoke.sh amira     — base + AMIRA overlay activated via COMPOSE_FILE in .env,
+#                        admin env vars set, search profile on. The amira-mcp
+#                        service itself is NOT built (external repo with a
+#                        build-time data fetch); /mcp answering 502 instead of
+#                        404 proves the overlay's nginx location is wired in.
+#   smoke.sh immutable — base + compose.immutable.yml: modules/themes back in
+#                        the image layer. Checks that nothing under the document
+#                        root is writable, plus the backup/restore round trip
+#                        and the A/B image rebuild on retained volumes.
 #
 # Honours SMOKE_HTTP_PORT (default 80) for hosts where 80 is taken.
 
 set -Eeuo pipefail
 
-variant="${1:?usage: smoke.sh base|amira}"
+variant="${1:?usage: smoke.sh base|amira|immutable}"
 port="${SMOKE_HTTP_PORT:-80}"
 url="http://127.0.0.1:${port}"
 created_env=false
@@ -64,6 +72,16 @@ MYSQL_DATABASE=omeka_ci
 MYSQL_USER=omeka_ci
 MYSQL_PASSWORD="ci-mysql-password-with-special-#=chars"
 NGINX_PORT=${port}
+EOF
+        ;;
+    immutable)
+        cat > .env <<EOF
+COMPOSE_PROJECT_NAME=omeka-smoke-immutable-${GITHUB_RUN_ID:-$$}
+MYSQL_DATABASE=omeka_ci
+MYSQL_USER=omeka_ci
+MYSQL_PASSWORD="ci-mysql-password-with-special-#=chars"
+NGINX_PORT=${port}
+COMPOSE_FILE=docker-compose.yml:compose.immutable.yml
 EOF
         ;;
     amira)
@@ -154,6 +172,13 @@ docker compose exec -T web sh -eu -c '
     test -f /var/www/html/files/.immutable-layout-v1
     ! touch /var/www/html/files/.ci-must-not-write
 '
+if [[ "$variant" == "immutable" ]]; then
+    docker compose exec -T php sh -eu -c '
+        ! touch /var/www/html/modules/.ci-must-not-write
+        ! touch /var/www/html/themes/.ci-must-not-write
+    '
+    echo "    modules/themes are immutable image content: OK"
+fi
 echo "    capabilities, users, immutable code, media permissions, and port exposure: OK"
 
 log "Checking PHP/Omeka runtime..."
@@ -284,6 +309,63 @@ else
 fi
 
 if [[ "$variant" == "base" ]]; then
+    log "Checking admin-managed modules and themes (the default)..."
+    # The exact condition EasyAdmin tests before enabling module/theme
+    # management from the admin UI.
+    docker compose exec -T php php -r 'exit(is_writable("/var/www/html/modules") && is_writable("/var/www/html/themes") ? 0 : 1);'
+    # First boot seeded the volumes from the php image: baked defaults appear.
+    docker compose exec -T php test -d /var/www/html/modules/EasyAdmin
+    docker compose exec -T php test -d /var/www/html/themes/Freedom
+    # nginx shares the same volumes read-only.
+    docker compose exec -T web test -d /var/www/html/modules/EasyAdmin
+    docker compose exec -T web sh -eu -c '! touch /var/www/html/modules/.ci-must-not-write'
+    docker compose exec -T web sh -eu -c '! touch /var/www/html/themes/.ci-must-not-write'
+    echo "    modules/themes writable for PHP, read-only for nginx, seeded from image: OK"
+
+    log "Installing a module live (no image rebuild)..."
+    tar -cf - -C .github/fixtures ImmutableProbe \
+        | docker compose exec -T php tar -xf - -C /var/www/html/modules
+    docker compose exec -T php test -f /var/www/html/modules/ImmutableProbe/Module.php
+    docker compose exec -T web test -f /var/www/html/modules/ImmutableProbe/Module.php
+    php_hash=$(docker compose exec -T php sha256sum /var/www/html/modules/ImmutableProbe/Module.php | awk '{print $1}')
+    web_hash=$(docker compose exec -T web sha256sum /var/www/html/modules/ImmutableProbe/Module.php | awk '{print $1}')
+    [[ "$php_hash" == "$web_hash" ]]
+    echo "    module visible in PHP and nginx immediately, byte-identical: OK"
+
+    log "Downloading a module live with omeka-s-cli..."
+    docker compose exec -T php omeka-s-cli module:download --base-path /var/www/html CSSEditor
+    docker compose exec -T php test -d /var/www/html/modules/CSSEditor
+    docker compose exec -T web test -d /var/www/html/modules/CSSEditor
+    echo "    omeka-s-cli writes into the live modules volume: OK"
+
+    log "Checking live modules survive container recreation..."
+    docker compose up -d --force-recreate php
+    wait_healthy php web
+    docker compose exec -T php test -f /var/www/html/modules/ImmutableProbe/Module.php
+    docker compose exec -T php test -d /var/www/html/modules/CSSEditor
+    code=$(probe "$url/")
+    [[ "$code" =~ ^(200|30[123])$ ]]
+    echo "    live-managed modules persisted across recreation: OK"
+
+    log "Testing backup and destructive restore of live-managed extensions..."
+    backup_dir=$(mktemp -d -t omeka-smoke-backup.XXXXXX)
+    bash scripts/backup.sh "$backup_dir"
+    [[ -f "$backup_dir/omeka_modules.tar.gz" ]]
+    [[ -f "$backup_dir/omeka_themes.tar.gz" ]]
+    (cd "$backup_dir" && sha256sum --check SHA256SUMS)
+
+    docker compose exec -T php rm -rf /var/www/html/modules/ImmutableProbe /var/www/html/modules/CSSEditor
+    docker compose exec -T php test ! -d /var/www/html/modules/ImmutableProbe
+    bash scripts/restore.sh --force "$backup_dir"
+    wait_healthy db php web
+    docker compose exec -T php test -f /var/www/html/modules/ImmutableProbe/Module.php
+    docker compose exec -T php test -d /var/www/html/modules/CSSEditor
+    code=$(probe "$url/")
+    [[ "$code" =~ ^(200|30[123])$ ]]
+    echo "    backup includes module/theme volumes; restore brought them back: OK"
+fi
+
+if [[ "$variant" == "immutable" ]]; then
     log "Testing backup and destructive restore round trip..."
     backup_dir=$(mktemp -d -t omeka-smoke-backup.XXXXXX)
     docker compose exec -T php sh -eu -c \

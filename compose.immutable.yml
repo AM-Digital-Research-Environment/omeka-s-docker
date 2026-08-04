@@ -1,0 +1,54 @@
+# Immutable-extensions overlay — makes modules and themes image content again.
+#
+# The base stack keeps modules/ and themes/ on Docker volumes so site admins
+# can install, update, and remove them from the browser with the EasyAdmin
+# module (or live with omeka-s-cli). That is the right default for most
+# deployments, and it matches how a stock Omeka S install behaves.
+#
+# This overlay is the opposite trade: it drops those two volumes so the PHP
+# and nginx images are the only source of modules and themes. Nothing under
+# /var/www/html is then writable by PHP except media, logs, and sessions, so a
+# compromised PHP process cannot persist executable code anywhere. The cost is
+# that EasyAdmin's install/update/remove features stay disabled ("The
+# directory modules/ is not writeable") and every extension change becomes a
+# reviewed, pinned image rebuild:
+#
+#   bash scripts/install-module.sh gh:owner/repository v1.2.3
+#   bash scripts/rebuild-code.sh
+#
+# Use it for deployments whose operators work from a terminal and want the
+# strongest supply-chain posture. See docs/IMMUTABLE_CODE.md.
+#
+# Activate it in .env — IMMEDIATELY AFTER docker-compose.yml, before any
+# deployment overlay:
+#
+#   COMPOSE_FILE=docker-compose.yml:compose.immutable.yml
+#   COMPOSE_FILE=docker-compose.yml:compose.immutable.yml:compose.amira.yml
+#
+# ORDER MATTERS. Compose cannot delete a single mount during a merge, so this
+# file replaces the whole volume list of php and web with `!override`. Listing
+# it after another overlay would discard that overlay's volumes too (the AMIRA
+# vocabulary mounts and its /mcp nginx template, for example). CI asserts the
+# supported orderings; keep this file directly after the base stack.
+#
+# Because the lists below are replacements, they must mirror docker-compose.yml
+# minus the two extension volumes. The Compose security contract in
+# .github/scripts/check-compose.py verifies every entry, so drift fails CI
+# rather than silently unmounting something in production.
+
+services:
+  php:
+    volumes: !override
+      - omeka_media:/var/www/html/files:rw
+      - omeka_logs:/var/www/html/logs:rw
+      - ${OMEKA_LOCAL_CONFIG:-./_docker/local.config.php}:/var/www/html/config/local.config.php:ro
+      - ./uploads.ini:/usr/local/etc/php/conf.d/uploads.ini:ro
+      - ./sideload:/var/www/html/sideload:rw
+      - php_sessions:/var/lib/php-sessions:rw
+
+  web:
+    volumes: !override
+      - ./nginx.conf:/etc/nginx/templates/default.conf.template:ro
+      - ./nginx-http-settings.conf:/etc/nginx/templates/00-http-settings.conf.template:ro
+      - ./nginx-security-headers.conf:/etc/nginx/templates/snippets/security-headers.conf.template:ro
+      - omeka_media:/var/www/html/files:ro

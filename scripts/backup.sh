@@ -24,6 +24,8 @@
 #   - BACKUP_FORMAT      Version/layout marker
 #   - omeka_media.tar.gz Omeka uploaded media (immutable layout)
 #   - omeka_logs.tar.gz  Omeka logs (immutable layout, if present)
+#   - omeka_modules.tar.gz Admin-managed modules (default layout)
+#   - omeka_themes.tar.gz  Admin-managed themes (default layout)
 #   - omeka_files.tar.gz Legacy whole document root (pre-migration only)
 #   - typesense_data.tar.gz Typesense search index (only if the search profile is in use)
 #   - sideload.tar.gz    Sideload directory (if non-empty)
@@ -141,6 +143,23 @@ else
     echo "    Legacy:   $(du -h "$BACKUP_DIR/omeka_files.tar.gz" | cut -f1)"
 fi
 
+# --- 3b. Module/theme volumes (default layout, live) ---
+# These volumes hold the admin-managed modules and themes. Deployments using
+# compose.immutable.yml keep both in the image instead, so this is skipped.
+# The caveat above applies doubly here: do not install/update modules or
+# themes while the backup runs.
+for name in omeka_modules omeka_themes; do
+    VOLUME="${COMPOSE_PROJECT}_${name}"
+    if docker volume inspect "$VOLUME" > /dev/null 2>&1; then
+        echo "==> Backing up ${name} volume (live)..."
+        docker run --rm \
+            -v "$VOLUME":/data:ro \
+            -v "$BACKUP_DIR":/backup \
+            "$HELPER_IMAGE" tar czf "/backup/${name}.tar.gz" -C /data .
+        echo "    ${name}: $(du -h "$BACKUP_DIR/${name}.tar.gz" | cut -f1)"
+    fi
+done
+
 # --- 4. Typesense data volume (optional search backend, live) ---
 # The Typesense index is fully rebuildable from MySQL (re-index), so a live tar
 # is acceptable here even if not perfectly atomic.
@@ -203,7 +222,7 @@ fi
 # This detects interrupted transfers and accidental corruption. It is not an
 # authenticity signature: store the backup off-host and encrypt it separately.
 CHECKSUM_FILES=(BACKUP_FORMAT omeka_db.sql)
-for file in omeka_media.tar.gz omeka_logs.tar.gz omeka_files.tar.gz typesense_data.tar.gz sideload.tar.gz .env local.config.php images.json; do
+for file in omeka_media.tar.gz omeka_logs.tar.gz omeka_modules.tar.gz omeka_themes.tar.gz omeka_files.tar.gz typesense_data.tar.gz sideload.tar.gz .env local.config.php images.json; do
     [ ! -f "$BACKUP_DIR/$file" ] || CHECKSUM_FILES+=("$file")
 done
 (cd "$BACKUP_DIR" && sha256sum "${CHECKSUM_FILES[@]}" > SHA256SUMS)
