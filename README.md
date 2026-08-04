@@ -1082,4 +1082,4 @@ migration described in [docs/IMMUTABLE_CODE.md](docs/IMMUTABLE_CODE.md).
 
 ## License
 
-MIT License
+MIT — see [LICENSE](LICENSE).
