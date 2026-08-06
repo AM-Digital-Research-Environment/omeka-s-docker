@@ -11,12 +11,10 @@
 # scripts/update-module.sh rewrites the tag in these URLs to the newest release.
 https://github.com/AM-Digital-Research-Environment/DRESearch/releases/download/v1.19.1/DRESearch.zip
 https://github.com/AM-Digital-Research-Environment/DRE-SEO/releases/download/v0.9.0/DRESeo.zip
-
-# ResourceVisualizations builds a DreVisualizations.zip release archive on every
-# v* tag, but its newest tag is v1.25.1 while main is at 2.26.1, so no archive
-# exists for the version deployed here. Move this line to a release URL once a
-# matching tag is pushed.
-gh:AM-Digital-Research-Environment/ResourceVisualizations#main
+# The repository is DRE-Visualizations; the archive it publishes, and so the
+# module folder it unpacks to, is DreVisualizations — the name compose.amira.yml
+# mounts the precomputed-artifact volume at.
+https://github.com/AM-Digital-Research-Environment/DRE-Visualizations/releases/download/v2.26.1/DreVisualizations.zip
 
 # Third-party modules this deployment runs. BulkEdit and Reference depend on
 # Common, which _docker/default-modules.txt already provides. Their latest
