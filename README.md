@@ -273,9 +273,11 @@ and the backup script always saves whichever copy is actually in use.
 
 ### 2. Modules and themes
 
-Add each one with its exact version:
+Add each one with its exact version — a published release archive if the project
+offers one, otherwise a tag:
 
 ```bash
+bash scripts/install-module.sh https://github.com/owner/repo/releases/download/v1.2.3/Module.zip
 bash scripts/install-module.sh gh:owner/repository v1.2.3
 bash scripts/install-theme.sh  gh:omeka-s-themes/CenterRow v1.8.0
 ```
@@ -631,8 +633,16 @@ This is how you decide what a site is built *with*. To add something to a site
 that is already running, use the admin panel instead —
 [Modules and themes](#modules-and-themes).
 
-Put one module per line in `_docker/extra-modules.txt`, ideally with a fixed
-version after the `#`:
+Put one module per line in `_docker/extra-modules.txt`. A release archive URL is
+the best line to write, because it installs the module exactly as its authors
+packaged it — no development tree, no git history:
+
+```
+https://github.com/owner/repository/releases/download/v1.2.3/Module.zip
+```
+
+Where a project publishes no releases, name a fixed version after the `#`
+instead; that clones the repository at that point:
 
 ```
 gh:owner/repository#v1.2.3
@@ -640,7 +650,8 @@ gh:owner/repository#v1.2.3
 
 Plain names work too for modules in Omeka's own registry (`CSVImport`), as do
 full GitHub references. `bash scripts/install-module.sh` writes these lines for
-you and rebuilds in one step.
+you and rebuilds in one step, and `bash scripts/update-module.sh` moves every
+pinned release archive to that project's newest release before rebuilding.
 
 Only add to `_docker/default-modules.txt` if a module genuinely belongs in
 *every* site built from this template. For anything specific to your own
@@ -665,7 +676,11 @@ installed into:
 ```bash
 gh:owner/SomeTheme#v2.0.0                  # usual case: nothing extra needed
 gh:owner/SomeTheme#v2.0.0 my-theme-folder  # install it under this folder name
+https://github.com/owner/SomeTheme/releases/download/v2.0.0/SomeTheme.zip my-theme-folder
 ```
+
+The folder name is read from the theme's own `theme.ini` either way, so a
+release archive needs the second field just as often as a `gh:` line does.
 
 You need the second form only occasionally. The download tool names the folder
 after the theme's display name, but Omeka's database remembers which theme a site
@@ -783,13 +798,14 @@ template depends on it, and leaving it off costs you nothing.
 3. Install the search module. It picks up the connection settings automatically,
    so you can leave its admin configuration blank:
    ```bash
-   docker compose exec php omeka-s-cli module:download gh:AM-Digital-Research-Environment/DRESearch
+   docker compose exec php omeka-s-cli module:download https://github.com/AM-Digital-Research-Environment/DRESearch/releases/download/v1.19.1/DRESearch.zip
    docker compose exec php omeka-s-cli module:install DRESearch
    ```
-   On a site that has [locked modules and themes
-   down](#locking-modules-and-themes-down), use
-   `bash scripts/install-module.sh gh:AM-Digital-Research-Environment/DRESearch`
-   instead.
+   Check the project's
+   [releases](https://github.com/AM-Digital-Research-Environment/DRESearch/releases)
+   for the current version. On a site that has [locked modules and themes
+   down](#locking-modules-and-themes-down), pass the same URL to
+   `bash scripts/install-module.sh` instead.
 
 To make this permanent, add `COMPOSE_PROFILES=search` to `.env` — then a plain
 `docker compose up -d` includes it. To turn search off again, remove that line

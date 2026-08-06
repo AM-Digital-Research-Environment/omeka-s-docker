@@ -4,11 +4,18 @@
 #
 # Everything AMIRA-specific belongs here rather than in _docker/extra-modules.txt
 # so the generic base stack partners build from stays free of it.
+#
+# A plain .zip URL makes omeka-s-cli unpack that published release archive; a
+# gh: line makes it clone the repository at a branch or tag, development tree
+# and git history included. Prefer the release archive where one exists.
+# scripts/update-module.sh rewrites the tag in these URLs to the newest release.
+https://github.com/AM-Digital-Research-Environment/DRESearch/releases/download/v1.19.1/DRESearch.zip
+https://github.com/AM-Digital-Research-Environment/DRE-SEO/releases/download/v0.9.0/DRESeo.zip
 
-# These repos have no releases (and ResourceVisualizations' latest release lags
-# behind main), so pin to #main to match install-/update-module.sh.
-gh:AM-Digital-Research-Environment/DRESearch#main
-gh:AM-Digital-Research-Environment/DRE-SEO#main
+# ResourceVisualizations builds a DreVisualizations.zip release archive on every
+# v* tag, but its newest tag is v1.25.1 while main is at 2.26.1, so no archive
+# exists for the version deployed here. Move this line to a release URL once a
+# matching tag is pushed.
 gh:AM-Digital-Research-Environment/ResourceVisualizations#main
 
 # Third-party modules this deployment runs. BulkEdit and Reference depend on
@@ -17,6 +24,3 @@ gh:AM-Digital-Research-Environment/ResourceVisualizations#main
 gh:Daniel-KM/Omeka-S-module-BulkEdit
 gh:Daniel-KM/Omeka-S-module-Reference
 LocalContexts
-
-# No releases published, so track the default branch.
-gh:fmadore/IframeEmbed#main

@@ -292,7 +292,7 @@ else
     # modules and no AMIRA theme, however they were declared.
     docker compose exec -T php test ! -d /var/www/html/themes/DRE-theme
     docker compose exec -T web test ! -d /var/www/html/themes/DRE-theme
-    for amira_module in DRESeo DreVisualizations BulkEdit Reference LocalContexts IframeEmbed; do
+    for amira_module in DRESeo DreVisualizations BulkEdit Reference LocalContexts; do
         docker compose exec -T php test ! -d "/var/www/html/modules/$amira_module"
     done
     echo "    DRESearch, DRE modules and DRE-theme absent (base image is generic)"

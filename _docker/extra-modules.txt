@@ -1,6 +1,12 @@
 # Operator-managed modules baked into both PHP and nginx images.
-# One Omeka S CLI module URI per line. Prefer a release tag or commit, e.g.:
+# One Omeka S CLI module URI per line. A published release archive is the best
+# pin — it installs the packaged module, without its development tree or git
+# history — otherwise name a release tag or commit:
+# https://github.com/owner/repository/releases/download/v1.2.3/Module.zip
 # gh:owner/repository#v1.2.3
+#
+# scripts/update-module.sh rewrites the tag in release archive URLs to the
+# newest release; branch refs are simply re-downloaded on rebuild.
 #
 # This file feeds EVERY build, including the generic base stack that partner
 # deployments start from. Keep it empty unless a module genuinely belongs in

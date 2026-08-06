@@ -6,6 +6,9 @@
 #
 # Syntax: <omeka-s-cli URI> [target-directory]
 #
+# As with modules, a published release archive URL is the best pin:
+# https://github.com/owner/SomeTheme/releases/download/v2.0.0/SomeTheme.zip
+#
 # The optional target directory matters because omeka-s-cli names the directory
 # after theme.ini's "name" field, while Omeka's site rows select a theme by
 # directory name — so a theme whose display name does not sanitise back to the

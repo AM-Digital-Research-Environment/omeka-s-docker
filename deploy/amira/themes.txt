@@ -4,11 +4,12 @@
 #
 # Syntax: <omeka-s-cli URI> [target-directory]
 #
-# DRE-theme needs the explicit target: omeka-s-cli names the directory after
-# theme.ini's "name" field ("Africa Multiple — DRE" -> Africa_Multiple_____DRE),
-# but the site rows in the database select the theme by directory name, so the
-# build renames it back to DRE-theme.
+# The URI is the published release archive, so the image gets the packaged theme
+# rather than a clone of its development tree. scripts/update-module.sh rewrites
+# the tag to the newest release.
 #
-# Tracks master because the theme's releases lag far behind it (latest tag
-# v2.7.1 vs 2.23.0 in master).
-gh:AM-Digital-Research-Environment/DRE-theme#master DRE-theme
+# DRE-theme needs the explicit target whichever way it is fetched: omeka-s-cli
+# names the directory after theme.ini's "name" field ("Africa Multiple — DRE" ->
+# Africa_Multiple_____DRE), but the site rows in the database select the theme by
+# directory name, so the build renames it back to DRE-theme.
+https://github.com/AM-Digital-Research-Environment/DRE-theme/releases/download/v2.29.0/DRE-theme.zip DRE-theme

@@ -247,14 +247,17 @@ To change what a *fresh* build starts with — and on sites using
 # What is on the list so far?
 bash scripts/install-module.sh list
 
-# Add one from Omeka's registry, or from GitHub at a fixed version
+# Add one from Omeka's registry, from a release archive, or from GitHub at a tag
 bash scripts/install-module.sh CSVImport
+bash scripts/install-module.sh https://github.com/owner/repo/releases/download/v1.2.3/Module.zip
 bash scripts/install-module.sh gh:owner/repository v1.2.3
 
 # After editing a version in _docker/extra-modules.txt
 bash scripts/rebuild-code.sh
 
-# Re-download modules that track a branch instead of a fixed version
+# Move pinned release archives to the newest release, and re-download anything
+# tracking a branch
+bash scripts/update-module.sh --dry-run   # see what would move
 bash scripts/update-module.sh
 ```
 

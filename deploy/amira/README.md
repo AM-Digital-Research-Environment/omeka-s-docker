@@ -24,9 +24,14 @@ deployment-specific services — copy the pattern, not the content.
 | MCP version | `.env` | `AMIRA_MCP_VERSION`; leave unset to use the release pinned in [`compose.amira.yml`](../../compose.amira.yml) |
 
 The modules installed for AMIRA are DRESearch, DRE-SEO, ResourceVisualizations
-(which provides the `DreVisualizations` module), BulkEdit, Reference,
-LocalContexts, and IframeEmbed. [`modules.txt`](modules.txt) is the authoritative
-list and explains why each one is pinned the way it is.
+(which provides the `DreVisualizations` module), BulkEdit, Reference, and
+LocalContexts. [`modules.txt`](modules.txt) is the authoritative list and
+explains why each one is pinned the way it is.
+
+DRESearch, DRE-SEO and DRE-theme are installed from their published release
+archives, so the images carry the packaged module or theme rather than a clone
+of its development tree. `bash scripts/update-module.sh` moves those pins to the
+newest release.
 
 ## Activating the overlay
 

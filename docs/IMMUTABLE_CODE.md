@@ -73,14 +73,16 @@ The admin panel then reports that the folders are not writeable, and modules and
 themes are added the same way Omeka itself is updated:
 
 ```bash
-# Add something new, at a fixed version
+# Add something new, at a fixed version — a release archive where there is one
+bash scripts/install-module.sh https://github.com/owner/repo/releases/download/v1.2.3/Module.zip
 bash scripts/install-module.sh gh:owner/repository v1.2.3
 bash scripts/install-theme.sh gh:owner/theme 0123456789abcdef
 
 # Apply your own edits to the module or theme lists
 bash scripts/rebuild-code.sh
 
-# Re-download anything tracking a branch rather than a fixed version
+# Move pinned release archives to the newest release, and re-download anything
+# tracking a branch rather than a fixed version
 bash scripts/update-module.sh
 ```
 
