@@ -9,7 +9,7 @@
 # gh: line makes it clone the repository at a branch or tag, development tree
 # and git history included. Prefer the release archive where one exists.
 # scripts/update-module.sh rewrites the tag in these URLs to the newest release.
-https://github.com/AM-Digital-Research-Environment/DRESearch/releases/download/v1.19.1/DRESearch.zip
+https://github.com/AM-Digital-Research-Environment/DRESearch/releases/download/v1.19.2/DRESearch.zip
 https://github.com/AM-Digital-Research-Environment/DRE-SEO/releases/download/v0.9.0/DRESeo.zip
 # The repository is DRE-Visualizations; the archive it publishes, and so the
 # module folder it unpacks to, is DreVisualizations — the name compose.amira.yml
