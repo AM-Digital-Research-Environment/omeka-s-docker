@@ -11,7 +11,7 @@ RUN apk add --no-cache curl \
         --output /omeka-s-cli.phar \
     && echo "${SHA} /omeka-s-cli.phar" | sha256sum -c -
 
-FROM php:8.5.9-fpm-trixie@sha256:f56f4a81de6cd33ddfd6e99352889a53c94c3ffccce89e494563845a1c8ba75a AS runtime
+FROM php:8.5.9-fpm-trixie@sha256:32ef9f35b567a741f24c5d2c3312f803fe6c9e34b7db46212f95fce675e1d13f AS runtime
 
 ARG OMEKA_ROOT=/var/www/html
 ARG OMEKA_VERSION=4.2.1
