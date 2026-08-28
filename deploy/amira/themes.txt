@@ -12,4 +12,4 @@
 # names the directory after theme.ini's "name" field ("Africa Multiple — DRE" ->
 # Africa_Multiple_____DRE), but the site rows in the database select the theme by
 # directory name, so the build renames it back to DRE-theme.
-https://github.com/AM-Digital-Research-Environment/DRE-theme/releases/download/v2.29.0/DRE-theme.zip DRE-theme
+https://github.com/AM-Digital-Research-Environment/DRE-theme/releases/download/v2.30.1/DRE-theme.zip DRE-theme

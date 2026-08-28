@@ -10,6 +10,7 @@ Quick reference for running an Omeka S site built from this template.
 | See what went wrong | `docker compose logs -f php` |
 | Add a module or theme to the running site | The admin panel (Easy Admin), or `docker compose exec php omeka-s-cli module:download …` |
 | Turn a module on, or apply its database changes | `docker compose exec php omeka-s-cli module:install …` |
+| Update all configured modules and themes | `bash scripts/update-extensions.sh` |
 | Move to a new Omeka S version | `bash scripts/update-omeka.sh` |
 | Change what a *fresh* build starts with | `bash scripts/install-module.sh …` or `install-theme.sh …` |
 | Back up | `bash scripts/backup.sh` |
@@ -18,11 +19,13 @@ Quick reference for running an Omeka S site built from this template.
 The rule of thumb: **Omeka itself changes by rebuilding; everything else —
 modules, themes, users, settings — changes on the running site.**
 
-The `scripts/` helpers deal with what a build produces. They do not change the
+The low-level `install-module.sh`, `install-theme.sh`, and `rebuild-code.sh`
+helpers deal with what a build produces. They do not change the
 modules and themes a running site has, because the site owns those (see
 [IMMUTABLE_CODE.md](IMMUTABLE_CODE.md)). The exception is a site using
 `compose.immutable.yml`, where the image is the only source of modules and
-themes and the scripts are the only way to change them.
+themes and the scripts are the only way to change them. Use
+`update-extensions.sh` when you want one command to keep both layouts in sync.
 
 ## Starting & Stopping
 
@@ -260,6 +263,20 @@ bash scripts/rebuild-code.sh
 bash scripts/update-module.sh --dry-run   # see what would move
 bash scripts/update-module.sh
 ```
+
+To update everything configured for either storage layout in one pass:
+
+```bash
+# Check release pins only
+bash scripts/update-extensions.sh --dry-run
+
+# Back up, update pins, rebuild, refresh live volumes when present, and apply
+# pending module migrations
+bash scripts/update-extensions.sh
+```
+
+The backup is the safe default because module migrations change the database.
+Use `--no-backup` only when you already have a current verified backup.
 
 Updating Omeka S itself:
 
