@@ -136,6 +136,24 @@ esac
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertNotIn("unselected", self.log.read_text())
 
+    def test_extension_commands_cannot_consume_manifest_or_migration_input(self):
+        self.config["services"]["php"]["volumes"] = [{"target": "/var/www/html/modules"}]
+        (self.root / "_docker/default-modules.txt").write_text(
+            "https://example.org/First.zip\nhttps://example.org/Second.zip\n")
+        docker = self.root / "bin/docker"
+        fake = docker.read_text().replace(
+            "case \"$*\" in", "case \"$*\" in\n  *'module:download'*|*'module:upgrade'*) cat >/dev/null; exit 0 ;;", 1)
+        fake = fake.replace("echo '| Probe | 1.0 | needs_upgrade |'",
+                            "printf '%s\\n' '| Probe | 1.0 | needs_upgrade |' '| SecondProbe | 1.0 | needs_upgrade |'")
+        docker.write_text(fake)
+        result = self.run_script("update-extensions.sh", "--no-backup")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        log = self.log.read_text()
+        for name in ("First", "Second"):
+            self.assertIn("https://example.org/" + name + ".zip", log)
+        for name in ("Probe", "SecondProbe"):
+            self.assertIn("module:upgrade --base-path /var/www/html " + name, log)
+
     def test_failed_module_inventory_is_not_success(self):
         self.env["TEST_LIST_FAIL"] = "1"
         result = self.run_script("update-extensions.sh", "--no-backup")

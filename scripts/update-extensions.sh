@@ -85,7 +85,7 @@ read_module_manifest() {
             gh:*|http://*|https://*|git://*)
                 echo "Refreshing live module: $uri"
                 docker compose exec -T php omeka-s-cli module:download \
-                    --force --upgrade --base-path /var/www/html "$uri"
+                    --force --upgrade --base-path /var/www/html "$uri" </dev/null
                 ;;
         esac
     done < "$manifest"
@@ -103,13 +103,13 @@ read_theme_manifest() {
         [[ -n "$line" && "$line" != \#* ]] || continue
         read -r uri target _ <<< "$line"
         before="$(docker compose exec -T php sh -c \
-            'find /var/www/html/themes -mindepth 1 -maxdepth 1 -type d -printf "%f\n" | sort')"
+            'find /var/www/html/themes -mindepth 1 -maxdepth 1 -type d -printf "%f\n" | sort' </dev/null)"
         echo "Refreshing live theme: $uri${target:+ -> $target}"
         docker compose exec -T php omeka-s-cli theme:download \
-            --force --base-path /var/www/html "$uri"
+            --force --base-path /var/www/html "$uri" </dev/null
         [[ -n "${target:-}" ]] || continue
         after="$(docker compose exec -T php sh -c \
-            'find /var/www/html/themes -mindepth 1 -maxdepth 1 -type d -printf "%f\n" | sort')"
+            'find /var/www/html/themes -mindepth 1 -maxdepth 1 -type d -printf "%f\n" | sort' </dev/null)"
         created="$(comm -13 <(printf '%s\n' "$before") <(printf '%s\n' "$after"))"
         # Some themes already download into their requested target directory.
         if [[ -z "$created" ]] && printf '%s\n' "$after" | grep -Fxq "$target"; then
@@ -131,7 +131,7 @@ read_theme_manifest() {
             fi
             mv "/var/www/html/themes/$source" "/var/www/html/themes/$target"
             rm -rf -- "$old"
-        ' sh "$created" "$target" "$old"
+        ' sh "$created" "$target" "$old" </dev/null
     done < "$manifest"
 }
 
@@ -147,7 +147,7 @@ while IFS= read -r module_id; do
     [[ -n "$module_id" ]] || continue
     echo "Applying pending module migration: $module_id"
     docker compose exec -T php omeka-s-cli module:upgrade \
-        --base-path /var/www/html "$module_id"
+        --base-path /var/www/html "$module_id" </dev/null
 done < <(printf '%s\n' "$module_list" | awk -F '|' '$4 ~ /needs_upgrade/ {
         gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2
     }')
