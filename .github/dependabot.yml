@@ -14,8 +14,6 @@ updates:
     labels:
       - "dependencies"
       - "docker"
-    assignees:
-      - "fmadore"
     open-pull-requests-limit: 5
     # Stay on the nginx stable line. nginx ships two concurrent branches and
     # encodes them in the minor: even = stable (1.30, 1.32...), odd = mainline
@@ -43,8 +41,6 @@ updates:
     labels:
       - "dependencies"
       - "docker"
-    assignees:
-      - "fmadore"
     open-pull-requests-limit: 5
     # MySQL ships two concurrent lines: 9.x LTS (the `lts` tag) and the
     # calendar-versioned Innovation line (26.x = `innovation` = `latest`).
@@ -68,6 +64,4 @@ updates:
     labels:
       - "dependencies"
       - "github-actions"
-    assignees:
-      - "fmadore"
     open-pull-requests-limit: 5

@@ -12,7 +12,7 @@ The `db` service in `docker-compose.yml` passes InnoDB and server parameters via
 | `innodb-write-io-threads` | 4 | Background threads for writing dirty pages to disk. Four threads is a reasonable default for SSD-backed storage. |
 | `innodb-read-io-threads` | 4 | Background threads for read-ahead operations. Matches write threads for balanced I/O. |
 | `innodb-flush-method` | O_DIRECT | Bypasses the OS page cache for data files, avoiding double-buffering (InnoDB has its own buffer pool). Reduces memory pressure on the host. |
-| `innodb-flush-log-at-trx-commit` | 2 | Flushes the log buffer to the OS once per second rather than on every commit. Provides a significant write performance boost at the cost of losing up to one second of transactions on OS crash (container crash is safe because the log buffer is still written). Set to `1` if you need strict ACID guarantees. |
+| `innodb-flush-log-at-trx-commit` | 1 | Writes and flushes redo on each commit to protect committed catalog edits against host failure, assuming storage honors flush requests. Value `2` writes on commit but flushes periodically; it can lose recent committed changes on host failure. Measure before trading durability for throughput. |
 | `innodb-file-per-table` | 1 | Stores each table in its own `.ibd` file. Makes it possible to reclaim disk space after dropping tables or running `OPTIMIZE TABLE`. |
 
 > `innodb-buffer-pool-instances` is intentionally **not set**. MySQL recommends at least ~1 GiB of buffer pool per instance; splitting a 512M pool into multiple instances just shrinks each below that threshold for no lock-contention benefit at this scale. MySQL therefore uses a single instance automatically. Set it explicitly only if you first raise `innodb-buffer-pool-size` to 1G+ (see *When to Adjust*).
@@ -33,5 +33,5 @@ The `db` service in `docker-compose.yml` passes InnoDB and server parameters via
 
 - **Large collections (100k+ items):** Increase `innodb-buffer-pool-size` to 1G or more; only then add `innodb-buffer-pool-instances` (roughly one per GiB of pool).
 - **Heavy concurrent usage:** Increase `max-connections` and corresponding PHP-FPM `pm.max_children`.
-- **Bulk imports:** Temporarily set `innodb-flush-log-at-trx-commit=0` for maximum import speed, then restore to `2` afterward.
+- **Bulk imports:** Keep durability enabled; measure transaction batching and I/O before relaxing crash guarantees.
 - **Limited host memory:** Reduce `innodb-buffer-pool-size` and `apc.shm_size` proportionally. Keep the buffer pool at roughly 50-70% of available container memory.

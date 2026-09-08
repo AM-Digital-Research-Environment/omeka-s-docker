@@ -16,8 +16,8 @@ as well.
 
 Any other option is passed to scripts/rebuild-code.sh (--pull, --no-start).
 
-Manifests read: _docker/extra-modules.txt, _docker/extra-themes.txt, and every
-deploy/*/modules.txt and deploy/*/themes.txt.
+Manifests read: generic manifests and the extra manifest files selected by the
+active Compose configuration. Other institutions' deployment files are ignored.
 
 Set GH_TOKEN or GITHUB_TOKEN to lift GitHub's anonymous API rate limit.
 EOF
@@ -61,10 +61,10 @@ asset_exists() {
 #   https://github.com/<owner>/<repo>/releases/download/<tag>/<asset>.zip
 release_line='^(https://github\.com/([^/[:space:]]+/[^/[:space:]]+)/releases/download/)([^/[:space:]]+)/([^[:space:]]+\.zip)([[:space:]]+.*)?$'
 
-manifests=()
-for candidate in _docker/extra-modules.txt _docker/extra-themes.txt \
-    deploy/*/modules.txt deploy/*/themes.txt; do
-    [[ -f "$candidate" ]] && manifests+=("$candidate")
+manifest_list="$(docker compose config --format json | python3 scripts/compose-settings.py manifests)"
+mapfile -t manifests <<< "$manifest_list"
+for manifest in "${manifests[@]}"; do
+    [[ -f "$manifest" ]] || { echo "Manifest not found: $manifest" >&2; exit 1; }
 done
 
 tmp=""
@@ -129,6 +129,7 @@ done
 
 if ((failed)); then
     echo "${failed} pinned archive(s) could not be checked; see the messages above." >&2
+    exit 1
 fi
 
 if [[ "$dry_run" == true ]]; then

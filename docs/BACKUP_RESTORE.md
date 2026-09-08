@@ -14,7 +14,6 @@ storage layout the site was on when it was taken.
 | `omeka_logs.tar.gz` | Omeka's log files |
 | `local.config.php` | Your copy of Omeka's own configuration file |
 | `images.json` | Which images the site was running, for the record |
-| `typesense_data.tar.gz` | The search index, if you use search |
 | `sideload.tar.gz` | The sideload folder, if it has anything in it |
 | `.env` | All your settings — **including passwords** |
 | `SHA256SUMS` | A checksum for every file above |
@@ -29,7 +28,8 @@ those two archives are simply absent from its backups.
 
 | Not backed up | Why |
 |---|---|
-| Omeka itself, its libraries and configuration | It comes from the image. The repository, at the revision you built from, is the record of it |
+| Omeka itself and its libraries | They come from the image. The repository, at the revision you built from, is the record of them; deployment configuration is backed up separately |
+| Typesense search index | Derived from Omeka; a live filesystem copy is not a supported database snapshot |
 | Login sessions | Nothing worth keeping; people simply log in again |
 | `dre_visualizations_data` (AMIRA only) | Rebuilt from the database by the admin "Regenerate" action |
 
@@ -58,17 +58,38 @@ bash scripts/backup.sh
 bash scripts/backup.sh /path/to/backup-dir
 ```
 
-**The site stays up throughout.** The database is captured as one consistent
+**By default, the site stays up throughout.** The database is captured as one consistent
 snapshot without blocking anyone, and the files are read without being locked.
 
 **One thing to avoid**: don't install or upgrade a module, or apply an Omeka
 upgrade, while a backup is running. Those change the shape of the database, and
 that kind of change is the one thing the snapshot cannot protect against.
-Ordinary editing and browsing are always safe.
+Browsing is safe. Avoid uploads, file replacement, and deletion during a backup
+if you need the media to match the database snapshot exactly: a file deleted
+after the SQL snapshot may disappear before the archive reads it. For a strict
+point-in-time backup, pause editing/import jobs for the entire backup window.
 
 The database and the files are also captured a few minutes apart, not at the
 same instant, which is another reason to keep several backups rather than
 relying on the newest one.
+
+Use an empty destination directory. Relative paths are resolved before Docker
+mounts them. `BACKUP_INCOMPLETE` remains present if any step fails; restore
+refuses such a directory. Successful completion writes `SHA256SUMS` and removes
+that marker. Do not remove it manually to make an interrupted backup restorable.
+
+For a matched SQL/media backup, run `bash scripts/backup.sh --quiesce`. This
+stops running web/PHP services, including their jobs, and restarts those same
+services on exit even if archiving fails. Pause external writers separately.
+
+New backups omit Typesense. Rebuild its index from the restored Omeka database
+before enabling search for users. Older `typesense_data.tar.gz` archives remain
+readable with `scripts/restore.sh --restore-search`, but are skipped by default:
+they are best-effort live copies, not supported database snapshots.
+
+Volume names are resolved from active Compose mounts, including custom names.
+Old, unmounted extension volumes are ignored. Bind mounts for media, logs or
+the database are not supported by these helpers and fail before data operations.
 
 The backup folder is readable only by the user who made it, and `.env` and
 `local.config.php` more tightly still. The checksums tell you whether a copy

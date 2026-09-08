@@ -39,6 +39,12 @@ fpm_pool_config() {
             exit 1
         fi
     done
+    local maximum="${PHP_PM_MAX_CHILDREN:-5}" start="${PHP_PM_START_SERVERS:-2}"
+    local minimum_spare="${PHP_PM_MIN_SPARE_SERVERS:-1}" maximum_spare="${PHP_PM_MAX_SPARE_SERVERS:-3}"
+    if (( minimum_spare > start || start > maximum_spare || maximum_spare > maximum )); then
+        log_error "PHP-FPM requires min_spare <= start_servers <= max_spare <= max_children."
+        exit 1
+    fi
     if [[ "${OMEKA_TZ:-UTC}" =~ [^A-Za-z0-9_+/:.-] ]]; then
         log_error "OMEKA_TZ contains invalid characters."
         exit 1

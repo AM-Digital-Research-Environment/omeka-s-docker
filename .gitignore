@@ -1,5 +1,7 @@
 # Environment files with secrets
 .env
+.env.*
+!.env.example
 
 # Docker volumes (managed by Docker)
 mysql_data/

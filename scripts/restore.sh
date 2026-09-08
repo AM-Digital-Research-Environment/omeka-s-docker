@@ -20,6 +20,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 BACKUP_DIR=""
 FORCE=false
+RESTORE_SEARCH=false
 HELPER_IMAGE="alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b"
 
 for arg in "$@"; do
@@ -27,9 +28,13 @@ for arg in "$@"; do
         --force)
             FORCE=true
             ;;
+        --restore-search)
+            RESTORE_SEARCH=true
+            ;;
         -h|--help)
             echo "Usage: bash scripts/restore.sh [--force] <backup-directory>"
             echo "  --force  overwrite existing volumes without an interactive prompt"
+            echo "  --restore-search  also restore a legacy Typesense archive (best-effort)"
             exit 0
             ;;
         -*)
@@ -58,6 +63,10 @@ if [[ "$BACKUP_DIR" != /* ]]; then
 fi
 
 # Detect the backup generation and validate its required data artifact.
+if [ -e "$BACKUP_DIR/BACKUP_INCOMPLETE" ]; then
+    echo "ERROR: This backup did not finish; refusing to restore it." >&2
+    exit 1
+fi
 LAYOUT="legacy"
 if [ -f "$BACKUP_DIR/BACKUP_FORMAT" ]; then
     if [ "$(sed -n '1p' "$BACKUP_DIR/BACKUP_FORMAT")" != "omeka-docker-backup-v2" ]; then
@@ -129,6 +138,50 @@ if [ ! -f "$PROJECT_DIR/.env" ]; then
     fi
 fi
 
+# Resolve compose project name for volume prefix
+compose_args=()
+[[ "$RESTORE_SEARCH" != true ]] || compose_args+=(--profile search)
+COMPOSE_CONFIG="$(cd "$PROJECT_DIR" && docker compose "${compose_args[@]}" config --format json)"
+volume_for() { python3 "$SCRIPT_DIR/compose-settings.py" volume "$@" <<< "$COMPOSE_CONFIG"; }
+MEDIA_VOLUME="$(volume_for php /var/www/html/files)"
+LOGS_VOLUME="$(volume_for php /var/www/html/logs)"
+MYSQL_VOLUME="$(volume_for db /var/lib/mysql)"
+MODULES_VOLUME="$(volume_for php /var/www/html/modules)"
+THEMES_VOLUME="$(volume_for php /var/www/html/themes)"
+TYPESENSE_VOLUME=""
+if [[ "$RESTORE_SEARCH" == true && -f "$BACKUP_DIR/typesense_data.tar.gz" ]]; then
+    TYPESENSE_VOLUME="$(volume_for typesense /data)"
+    [[ -n "$TYPESENSE_VOLUME" ]] || { echo "No Typesense volume configured." >&2; exit 1; }
+fi
+[[ -n "$MEDIA_VOLUME" && -n "$LOGS_VOLUME" && -n "$MYSQL_VOLUME" ]] || {
+    echo "Media, logs and database mounts must be configured named volumes." >&2; exit 1;
+}
+
+# --- 1. Confirm any destructive overwrite and stop running services ---
+RUNNING="$(cd "$PROJECT_DIR" && docker compose ps --status running --format '{{.Service}}' 2>/dev/null | wc -l)"
+DATA_EXISTS=false
+for volume in "$MEDIA_VOLUME" "$LOGS_VOLUME" "$MYSQL_VOLUME" "$MODULES_VOLUME" "$THEMES_VOLUME" "$TYPESENSE_VOLUME"; do
+    if [[ -n "$volume" ]] && docker volume inspect "$volume" >/dev/null 2>&1; then
+        DATA_EXISTS=true
+    elif [[ -n "$volume" ]] && [[ "$(python3 "$SCRIPT_DIR/compose-settings.py" external "$volume" <<< "$COMPOSE_CONFIG")" == 1 ]]; then
+        echo "ERROR: External volume $volume must be provisioned before restoring." >&2
+        exit 1
+    fi
+done
+
+if [ "$DATA_EXISTS" = true ] && [ "$FORCE" != true ]; then
+    echo "WARNING: Existing Omeka/MySQL volumes will be overwritten."
+    read -rp "Proceed with restore? This will OVERWRITE existing data. [y/N] " confirm
+    if [[ "$confirm" != [yY] ]]; then
+        echo "Aborted."
+        exit 0
+    fi
+fi
+if [ "$RUNNING" -gt 0 ]; then
+    echo "==> Stopping $RUNNING running service(s)..."
+    (cd "$PROJECT_DIR" && docker compose down)
+fi
+
 # Restore the exact read-only deployment config separately from the image. The
 # database secret remains ephemeral under /run and is never written here.
 RESTORED_CONFIG="$PROJECT_DIR/_docker/restored-local.config.php"
@@ -153,35 +206,6 @@ if [ -f "$RESTORED_CONFIG" ]; then
         printf '\nOMEKA_LOCAL_CONFIG=./_docker/restored-local.config.php\n' >> "$PROJECT_DIR/.env"
     fi
     echo "==> Restored local.config.php as a read-only deployment config"
-fi
-
-# Resolve compose project name for volume prefix
-COMPOSE_PROJECT="$(cd "$PROJECT_DIR" && docker compose config --format json 2>/dev/null | python3 -c 'import sys,json; print(json.load(sys.stdin).get("name",""))' 2>/dev/null || basename "$PROJECT_DIR" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_-]//g')"
-
-# --- 1. Confirm any destructive overwrite and stop running services ---
-RUNNING="$(cd "$PROJECT_DIR" && docker compose ps --status running --format '{{.Service}}' 2>/dev/null | wc -l)"
-MEDIA_VOLUME="${COMPOSE_PROJECT}_omeka_media"
-LOGS_VOLUME="${COMPOSE_PROJECT}_omeka_logs"
-LEGACY_VOLUME="${COMPOSE_PROJECT}_omeka_files"
-MYSQL_VOLUME="${COMPOSE_PROJECT}_mysql_data"
-DATA_EXISTS=false
-if docker volume inspect "$MEDIA_VOLUME" >/dev/null 2>&1 \
-    || docker volume inspect "$LEGACY_VOLUME" >/dev/null 2>&1 \
-    || docker volume inspect "$MYSQL_VOLUME" >/dev/null 2>&1; then
-    DATA_EXISTS=true
-fi
-
-if [ "$DATA_EXISTS" = true ] && [ "$FORCE" != true ]; then
-    echo "WARNING: Existing Omeka/MySQL volumes will be overwritten."
-    read -rp "Proceed with restore? This will OVERWRITE existing data. [y/N] " confirm
-    if [[ "$confirm" != [yY] ]]; then
-        echo "Aborted."
-        exit 0
-    fi
-fi
-if [ "$RUNNING" -gt 0 ]; then
-    echo "==> Stopping $RUNNING running service(s)..."
-    (cd "$PROJECT_DIR" && docker compose down)
 fi
 
 # --- 2. Restore media into the immutable storage layout ---
@@ -245,8 +269,12 @@ fi
 # backed up.
 for name in omeka_modules omeka_themes; do
     if [ -f "$BACKUP_DIR/${name}.tar.gz" ]; then
+        if [[ "$name" == omeka_modules ]]; then EXT_VOLUME="$MODULES_VOLUME"; else EXT_VOLUME="$THEMES_VOLUME"; fi
+        if [[ -z "$EXT_VOLUME" ]]; then
+            echo "==> Skipping $name archive: extensions are image-managed."
+            continue
+        fi
         echo "==> Restoring ${name} volume..."
-        EXT_VOLUME="${COMPOSE_PROJECT}_${name}"
         docker volume create "$EXT_VOLUME" > /dev/null 2>&1 || true
         docker run --rm \
             -e "ARCHIVE=${name}.tar.gz" \
@@ -262,9 +290,8 @@ done
 
 # --- 4. Restore Typesense data volume (optional search backend) ---
 TYPESENSE_RESTORED=false
-if [ -f "$BACKUP_DIR/typesense_data.tar.gz" ]; then
+if [[ -f "$BACKUP_DIR/typesense_data.tar.gz" && "$RESTORE_SEARCH" == true ]]; then
     echo "==> Restoring Typesense data volume..."
-    TYPESENSE_VOLUME="${COMPOSE_PROJECT}_typesense_data"
     docker volume create "$TYPESENSE_VOLUME" > /dev/null 2>&1 || true
     docker run --rm \
         -v "$TYPESENSE_VOLUME":/data \
@@ -272,6 +299,8 @@ if [ -f "$BACKUP_DIR/typesense_data.tar.gz" ]; then
         "$HELPER_IMAGE" sh -c "rm -rf /data/* /data/..?* /data/.[!.]* 2>/dev/null; cd /data && tar xzf /backup/typesense_data.tar.gz"
     TYPESENSE_RESTORED=true
     echo "    Typesense volume restored."
+elif [[ -f "$BACKUP_DIR/typesense_data.tar.gz" ]]; then
+    echo "==> Legacy search archive skipped; use --restore-search only if you need this best-effort copy."
 fi
 
 # --- 5. Restore sideload ---
@@ -289,7 +318,7 @@ echo "    Waiting for database to be healthy..."
 TRIES=0
 MAX_TRIES=30
 until (cd "$PROJECT_DIR" && docker compose exec -T db sh -eu -c \
-    'exec mysqladmin ping -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --silent' 2>/dev/null); do
+    'exec mysql -h 127.0.0.1 -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" -e "SELECT 1"' >/dev/null 2>&1); do
     TRIES=$((TRIES + 1))
     if [ "$TRIES" -ge "$MAX_TRIES" ]; then
         echo "ERROR: Database did not become ready after ${MAX_TRIES} attempts."
@@ -317,6 +346,9 @@ echo "==> Importing database dump..."
     'exec mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"') \
     < "$BACKUP_DIR/omeka_db.sql"
 echo "    Database imported."
+if [[ "$TYPESENSE_RESTORED" != true ]]; then
+    echo "==> Rebuild the search index from the restored Omeka database before enabling search for users."
+fi
 
 # --- 8. Start all services ---
 echo "==> Starting all services..."

@@ -68,7 +68,7 @@ mv "$new_env" .env
 
 if ! bash scripts/rebuild-code.sh; then
     cp "$original_env" .env
-    echo "Build/deploy failed; restored the previous .env. Existing containers were retained." >&2
+    echo "Build/deploy failed; restored the previous .env. Containers may already have been replaced; inspect docker compose ps before retrying." >&2
     exit 1
 fi
 

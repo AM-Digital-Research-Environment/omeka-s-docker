@@ -31,10 +31,16 @@ jobs:
           persist-credentials: false
 
       - name: Shell script syntax
-        run: bash -n docker-entrypoint.sh scripts/*.sh deploy/amira/*.sh .github/scripts/*.sh
+        run: |
+          for script in docker-entrypoint.sh scripts/*.sh deploy/amira/*.sh .github/scripts/*.sh; do
+            bash -n "$script"
+          done
 
       - name: ShellCheck
         run: shellcheck --severity=warning docker-entrypoint.sh scripts/*.sh deploy/amira/*.sh .github/scripts/*.sh
+
+      - name: Operation failure paths (no containers)
+        run: python3 .github/scripts/test-operations.py
 
       - name: PHP and JSON syntax
         run: |

@@ -13,5 +13,7 @@ README.md
 .env.*
 !.env.example
 secrets/
+_docker/restored-local.config.php
+_docker/migrated-local.config.php
 *.key
 *.pem

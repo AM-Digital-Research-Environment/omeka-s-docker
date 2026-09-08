@@ -60,7 +60,8 @@ services:
       # CSP frame-ancestors: origins allowed to embed this site in an iframe.
       # Space-separated, keep the quotes around 'self' (see .env.example).
       - FRAME_ANCESTORS=${FRAME_ANCESTORS:-'self'}
-      - NGINX_ENVSUBST_FILTER=^(SERVER_NAME|FRAME_ANCESTORS)$$
+      - NGINX_TRUSTED_PROXY_CIDR=${NGINX_TRUSTED_PROXY_CIDR:-172.16.0.0/12}
+      - NGINX_ENVSUBST_FILTER=^(SERVER_NAME|FRAME_ANCESTORS|NGINX_TRUSTED_PROXY_CIDR)$$
     depends_on:
       php:
         condition: service_healthy
@@ -87,8 +88,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.25'
-          memory: 256M
+          cpus: '${WEB_CPU_LIMIT:-0.25}'
+          memory: ${WEB_MEMORY_LIMIT:-256M}
         reservations:
           cpus: '0.05'
           memory: 64M
@@ -152,9 +153,9 @@ services:
       - OMEKA_LOCALE=${OMEKA_LOCALE:-}
       - OMEKA_TITLE=${OMEKA_TITLE:-}
       # PHP-FPM pool tuning (defaults in entrypoint if unset).
-      # Sized for the ~1.5 GiB php container: with memory_limit=512M and
-      # ~512M of shared OPcache+APCu, 5 workers keep worst-case RSS under the
-      # limit. Raise PHP_PM_MAX_CHILDREN in .env on a larger host.
+      # Five workers fit typical traffic, NOT five simultaneous 512M requests.
+      # OPcache/APCu and tmpfs also count toward the 1536M container limit.
+      # Measure peak usage during imports before increasing concurrency.
       - PHP_PM_MAX_CHILDREN=${PHP_PM_MAX_CHILDREN:-5}
       - PHP_PM_START_SERVERS=${PHP_PM_START_SERVERS:-2}
       - PHP_PM_MIN_SPARE_SERVERS=${PHP_PM_MIN_SPARE_SERVERS:-1}
@@ -188,8 +189,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1.0'
-          memory: 1536M
+          cpus: '${PHP_CPU_LIMIT:-1.0}'
+          memory: ${PHP_CONTAINER_MEMORY:-1536M}
         reservations:
           cpus: '0.25'
           memory: 512M
@@ -215,7 +216,7 @@ services:
       --innodb-write-io-threads=4
       --innodb-read-io-threads=4
       --innodb-flush-method=O_DIRECT
-      --innodb-flush-log-at-trx-commit=2
+      --innodb-flush-log-at-trx-commit=1
       --innodb-file-per-table=1
       --max-connections=250
       --table-open-cache=400
@@ -247,8 +248,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.5'
-          memory: 1G
+          cpus: '${DB_CPU_LIMIT:-0.5}'
+          memory: ${DB_MEMORY_LIMIT:-1G}
         reservations:
           cpus: '0.1'
           memory: 256M
@@ -259,7 +260,7 @@ services:
       # succeeds against that temp server, marking db healthy before the real
       # server listens on 3306 — and php then races ahead into "connection
       # refused" during its install.
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$$MYSQL_USER -p$$MYSQL_PASSWORD --silent"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u\"$$MYSQL_USER\" -p\"$$MYSQL_PASSWORD\" --silent"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -304,8 +305,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.5'
-          memory: 512M
+          cpus: '${SEARCH_CPU_LIMIT:-0.5}'
+          memory: ${SEARCH_MEMORY_LIMIT:-512M}
         reservations:
           cpus: '0.1'
           memory: 128M

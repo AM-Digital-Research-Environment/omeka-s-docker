@@ -21,6 +21,8 @@ concurrency:
 
 jobs:
   check:
+    # Forks and new institutions do not use AMIRA unless they opt in.
+    if: github.repository == 'AM-Digital-Research-Environment/omeka-s-docker' || vars.ENABLE_AMIRA_RELEASE_CHECK == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

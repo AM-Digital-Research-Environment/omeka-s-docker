@@ -11,7 +11,7 @@ RUN apk add --no-cache curl \
         --output /omeka-s-cli.phar \
     && echo "${SHA} /omeka-s-cli.phar" | sha256sum -c -
 
-FROM php:8.5.9-fpm-trixie@sha256:f56f4a81de6cd33ddfd6e99352889a53c94c3ffccce89e494563845a1c8ba75a AS runtime
+FROM php:8.5.10-fpm-trixie@sha256:70076c1cae0cd0ba6761832417e3a1df3e5560f0544eb0fe40357373e54420fe AS runtime
 
 ARG OMEKA_ROOT=/var/www/html
 ARG OMEKA_VERSION=4.2.1
@@ -76,11 +76,11 @@ COPY <<EOF /usr/local/etc/php/conf.d/90-opcache.ini
 opcache.memory_consumption=256
 opcache.interned_strings_buffer=16
 opcache.max_accelerated_files=10000
-opcache.revalidate_freq=60
-opcache.fast_shutdown=1
+; Extensions can change on persistent volumes through EasyAdmin or the CLI.
+opcache.revalidate_freq=2
 opcache.enable_cli=1
 opcache.enable_file_override=1
-opcache.validate_timestamps=0
+opcache.validate_timestamps=1
 opcache.jit=1255
 opcache.jit_buffer_size=50M
 EOF
@@ -298,6 +298,6 @@ CMD ["php-fpm"]
 # nginx serves the exact static assets baked into the PHP image. Keeping both
 # targets in one Dockerfile guarantees core/module/theme assets change together
 # while media remains a separately mounted read-only volume.
-FROM nginx:1.30.4-alpine@sha256:97d490c12ba55b4946b01546d1c3ed324e8d41ab1c9fcb2a616aa470620e5b46 AS web
+FROM nginx:1.30.4-alpine@sha256:dc5069ad14f19660b141b21236140b91656bf89bbc3e2417c70ae650cd66104c AS web
 
 COPY --from=runtime --chown=nginx:nginx /var/www/html /var/www/html

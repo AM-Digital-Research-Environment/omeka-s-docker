@@ -54,6 +54,12 @@ HTTP. Setting it to `0.0.0.0` is only for the case where you deliberately want t
 serve HTTP directly with no proxy at all — and it also weakens the rate limiting,
 since a client on a private network could then claim any IP address it likes.
 
+Set `NGINX_TRUSTED_PROXY_CIDR` to the proxy or Docker gateway address as seen by
+the web container. The default covers ordinary Docker bridge addresses; custom
+10.x/192.168.x bridges need an explicit setting. For direct HTTP with no proxy,
+use `192.0.2.1/32` so no real client's forwarded IP/HTTPS headers are trusted.
+See [institution setup](INSTITUTION_SETUP.md) for examples and resource sizing.
+
 ## 3. Install and configure the host nginx
 
 ```bash
@@ -187,7 +193,7 @@ Set up a daily backup as soon as the site has real content:
 ```bash
 # /etc/cron.d/omeka-backup  (replace <user> and the path)
 0 3 * * * <user> cd /path/to/omeka-s-docker && bash scripts/backup.sh \
-    && find backups/ -maxdepth 1 -type d -mtime +7 -exec rm -rf {} +
+    && find backups/ -mindepth 1 -maxdepth 1 -type d -name '20??????-??????' -mtime +7 -exec rm -rf -- {} +
 ```
 
 See [BACKUP_RESTORE.md](BACKUP_RESTORE.md) for full backup/restore procedures and [OMEKA_CLI.md](OMEKA_CLI.md) for routine site management via `omeka-s-cli`.

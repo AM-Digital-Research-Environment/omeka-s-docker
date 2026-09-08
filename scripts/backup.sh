@@ -1,12 +1,12 @@
 #!/bin/bash
 # Backup Omeka S Docker instance (database + persistent data + sideload)
-# Usage: bash scripts/backup.sh [backup-directory]
+# Usage: bash scripts/backup.sh [--quiesce] [backup-directory]
 # Example: bash scripts/backup.sh
 # Example: bash scripts/backup.sh /tmp/omeka-backup
 #
-# ZERO-DOWNTIME: this script keeps every container running. It does NOT stop
-# web/php/db. Database consistency is guaranteed by mysqldump's
-# --single-transaction: every table in this schema is InnoDB, so mysqldump opens
+# By default containers stay running; --quiesce stops web/PHP temporarily.
+# Database snapshot consistency relies on InnoDB tables and mysqldump's
+# --single-transaction: with InnoDB, mysqldump opens
 # one transaction with a consistent snapshot (START TRANSACTION WITH CONSISTENT
 # SNAPSHOT) and dumps a single point-in-time view via MVCC while the live site
 # keeps reading and writing. No global lock is taken, so writers are never
@@ -17,7 +17,8 @@
 # it. Omeka issues DDL only when modules are installed/upgraded (or during a
 # core upgrade), never during normal browsing/editing. So: do not run a module
 # install/update or an Omeka upgrade while this backup runs. Routine traffic is
-# always safe.
+# safe for the SQL snapshot. File uploads/replacements/deletions can race the
+# later media archive; pause editing and jobs for a strictly matched backup.
 #
 # Creates a timestamped directory with:
 #   - omeka_db.sql       MySQL database dump
@@ -26,7 +27,7 @@
 #   - omeka_logs.tar.gz  Omeka logs (immutable layout, if present)
 #   - omeka_modules.tar.gz Admin-managed modules (default layout)
 #   - omeka_themes.tar.gz  Admin-managed themes (default layout)
-#   - typesense_data.tar.gz Typesense search index (only if the search profile is in use)
+#   Search indexes are derived state and must be regenerated after recovery.
 #   - sideload.tar.gz    Sideload directory (if non-empty)
 #   - .env               Environment file copy
 #   - local.config.php   Read-only Omeka deployment configuration
@@ -37,25 +38,48 @@ umask 077
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
-BACKUP_DIR="${1:-$PROJECT_DIR/backups/$TIMESTAMP}"
+BACKUP_DIR=""
+QUIESCE=false
+for arg in "$@"; do
+    case "$arg" in
+        --quiesce) QUIESCE=true ;;
+        -h|--help) echo "Usage: scripts/backup.sh [--quiesce] [backup-directory]"; exit 0 ;;
+        -*) echo "Unknown option: $arg" >&2; exit 2 ;;
+        *) [[ -z "$BACKUP_DIR" ]] || { echo "Only one backup directory is allowed." >&2; exit 2; }; BACKUP_DIR="$arg" ;;
+    esac
+done
+BACKUP_DIR="${BACKUP_DIR:-$PROJECT_DIR/backups/$TIMESTAMP}"
 HELPER_IMAGE="alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b"
 
 # Resolve compose project name and volume prefix
-COMPOSE_PROJECT="$(cd "$PROJECT_DIR" && docker compose config --format json 2>/dev/null | python3 -c 'import sys,json; print(json.load(sys.stdin).get("name",""))' 2>/dev/null || basename "$PROJECT_DIR" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_-]//g')"
+COMPOSE_CONFIG="$(cd "$PROJECT_DIR" && docker compose config --format json)"
+COMPOSE_PROJECT="$(python3 "$SCRIPT_DIR/compose-settings.py" project <<< "$COMPOSE_CONFIG")"
+volume_for() { python3 "$SCRIPT_DIR/compose-settings.py" volume "$@" <<< "$COMPOSE_CONFIG"; }
+MEDIA_VOLUME="$(volume_for php /var/www/html/files)"
+LOGS_VOLUME="$(volume_for php /var/www/html/logs)"
+MODULES_VOLUME="$(volume_for php /var/www/html/modules)"
+THEMES_VOLUME="$(volume_for php /var/www/html/themes)"
+[[ -n "$MEDIA_VOLUME" && -n "$LOGS_VOLUME" ]] || { echo "Media/logs mounts are required." >&2; exit 1; }
 
-echo "==> Omeka S Backup (zero-downtime — containers stay up)"
+echo "==> Omeka S Backup (quiesce=$QUIESCE)"
 echo "    Project:   $PROJECT_DIR"
+echo "    Compose:   $COMPOSE_PROJECT"
 echo "    Backup to: $BACKUP_DIR"
 echo ""
 
 mkdir -p "$BACKUP_DIR"
+BACKUP_DIR="$(cd "$BACKUP_DIR" && pwd)"
+if [ -n "$(ls -A "$BACKUP_DIR")" ]; then
+    echo "ERROR: Backup directory must be empty: $BACKUP_DIR" >&2
+    exit 1
+fi
 chmod 700 "$BACKUP_DIR"
+# An interrupted backup must never be mistaken for an old, unchecked archive.
+touch "$BACKUP_DIR/BACKUP_INCOMPLETE"
 
 # Refuse to back up a media volume that isn't the one this database belongs to.
 # The marker is what distinguishes real media storage from a freshly created,
 # empty volume — without this check a backup could silently capture nothing.
-MEDIA_VOLUME="${COMPOSE_PROJECT}_omeka_media"
-LOGS_VOLUME="${COMPOSE_PROJECT}_omeka_logs"
 if ! docker volume inspect "$MEDIA_VOLUME" >/dev/null 2>&1; then
     echo "ERROR: Media volume $MEDIA_VOLUME was not found." >&2
     exit 1
@@ -71,6 +95,31 @@ fi
 printf 'omeka-docker-backup-v2\nlayout=immutable\n' > "$BACKUP_DIR/BACKUP_FORMAT"
 echo "    Layout:    immutable"
 
+# Opt-in maintenance window: only restart services this script actually stops.
+# This also stops background jobs inside PHP. External writers must be paused
+# by the operator. No Docker pause is used: in-flight writes finish on shutdown.
+STOPPED_SERVICES=()
+resume_services() {
+    local status=$?
+    trap - EXIT
+    if ((${#STOPPED_SERVICES[@]})); then
+        (cd "$PROJECT_DIR" && docker compose start "${STOPPED_SERVICES[@]}") || status=1
+    fi
+    exit "$status"
+}
+trap resume_services EXIT
+if [[ "$QUIESCE" == true ]]; then
+    running="$(cd "$PROJECT_DIR" && docker compose ps --status running --format '{{.Service}}')"
+    for service in web php; do
+        if grep -Fxq "$service" <<< "$running"; then
+            STOPPED_SERVICES+=("$service")
+        fi
+    done
+    if ((${#STOPPED_SERVICES[@]})); then
+        (cd "$PROJECT_DIR" && docker compose stop "${STOPPED_SERVICES[@]}")
+    fi
+fi
+
 # --- 1. Make sure the database is up for the dump ---
 # We never stop it; just confirm it is running and reachable.
 if ! (cd "$PROJECT_DIR" && docker compose ps --status running --format '{{.Service}}' 2>/dev/null | grep -qx 'db'); then
@@ -80,7 +129,7 @@ fi
 echo "==> Waiting for database to be reachable..."
 TRIES=0
 until (cd "$PROJECT_DIR" && docker compose exec -T db sh -eu -c \
-    'exec mysqladmin ping -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --silent' 2>/dev/null); do
+    'exec mysql -h 127.0.0.1 -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" -e "SELECT 1"' >/dev/null 2>&1); do
     TRIES=$((TRIES + 1))
     if [ "$TRIES" -ge 30 ]; then
         echo "ERROR: Database did not become ready."
@@ -107,7 +156,7 @@ echo "==> Dumping MySQL database (live, --single-transaction)..."
 #   this mysqldump whether it knows the flag rather than assuming a version.
 MYSQLDUMP_EXTRA_OPTS=""
 if (cd "$PROJECT_DIR" && docker compose exec -T db mysqldump --help 2>/dev/null) \
-    | grep -q -- '--skip-masking-policies\|--masking-policies'; then
+    | grep -- '--skip-masking-policies\|--masking-policies' >/dev/null; then
     MYSQLDUMP_EXTRA_OPTS="--skip-masking-policies"
 fi
 (cd "$PROJECT_DIR" && docker compose exec -T db sh -eu -c '
@@ -153,8 +202,8 @@ fi
 # The caveat above applies doubly here: do not install/update modules or
 # themes while the backup runs.
 for name in omeka_modules omeka_themes; do
-    VOLUME="${COMPOSE_PROJECT}_${name}"
-    if docker volume inspect "$VOLUME" > /dev/null 2>&1; then
+    if [[ "$name" == omeka_modules ]]; then VOLUME="$MODULES_VOLUME"; else VOLUME="$THEMES_VOLUME"; fi
+    if [[ -n "$VOLUME" ]] && docker volume inspect "$VOLUME" > /dev/null 2>&1; then
         echo "==> Backing up ${name} volume (live)..."
         docker run --rm \
             -v "$VOLUME":/data:ro \
@@ -164,20 +213,10 @@ for name in omeka_modules omeka_themes; do
     fi
 done
 
-# --- 4. Typesense data volume (optional search backend, live) ---
-# The Typesense index is fully rebuildable from MySQL (re-index), so a live tar
-# is acceptable here even if not perfectly atomic.
-TYPESENSE_VOLUME="${COMPOSE_PROJECT}_typesense_data"
-if docker volume inspect "$TYPESENSE_VOLUME" > /dev/null 2>&1; then
-    echo "==> Backing up Typesense data volume (live)..."
-    docker run --rm \
-        -v "$TYPESENSE_VOLUME":/data:ro \
-        -v "$BACKUP_DIR":/backup \
-        "$HELPER_IMAGE" tar czf /backup/typesense_data.tar.gz -C /data .
-    echo "    Typesense: $(du -h "$BACKUP_DIR/typesense_data.tar.gz" | cut -f1)"
-else
-    echo "==> Typesense not in use (no $TYPESENSE_VOLUME volume), skipping."
-fi
+# --- 4. Search is derived state ---
+# A live tar of Typesense's database is not a supported snapshot. Re-index from
+# Omeka after disaster recovery instead of presenting it as a reliable backup.
+echo "==> Search index omitted; regenerate it from Omeka after recovery."
 
 # --- 5. Sideload directory ---
 if [ -d "$PROJECT_DIR/sideload" ] && [ "$(ls -A "$PROJECT_DIR/sideload" 2>/dev/null)" ]; then
@@ -228,6 +267,7 @@ for file in omeka_media.tar.gz omeka_logs.tar.gz omeka_modules.tar.gz omeka_them
     [ ! -f "$BACKUP_DIR/$file" ] || CHECKSUM_FILES+=("$file")
 done
 (cd "$BACKUP_DIR" && sha256sum "${CHECKSUM_FILES[@]}" > SHA256SUMS)
+rm "$BACKUP_DIR/BACKUP_INCOMPLETE"
 echo "==> Wrote SHA256SUMS"
 
 echo ""

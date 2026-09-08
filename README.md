@@ -144,7 +144,7 @@ The site is made of a few small services that talk to each other:
 | Service | What it is | Reachable from | Job |
 |---------|-----------|----------------|-----|
 | **web** | nginx 1.30.4 | The outside world (port 80) | Serves pages and files, hands page requests to `php` |
-| **php** | PHP 8.5.9 | `web` only | Runs Omeka S |
+| **php** | PHP 8.5.10 | `web` only | Runs Omeka S |
 | **db** | MySQL 9.7.2 | `php` only | Stores everything |
 | **typesense** _(optional)_ | Typesense 30.2 | `php` only | Search index, if you use a search module |
 
@@ -412,6 +412,10 @@ All five must be whole numbers greater than zero, or the site refuses to start.
 
 ## What's tuned out of the box
 
+For another institution, start with [institution setup](docs/INSTITUTION_SETUP.md):
+it covers your own overlay, proxy trust, resource limits, volume names and fork
+settings without changing the shared application image.
+
 You should not need to change any of this, but it is worth knowing what you have.
 
 ### PHP
@@ -426,7 +430,7 @@ You should not need to change any of this, but it is worth knowing what you have
 
 ### Web server
 - Compression for text, CSS, JavaScript, and JSON
-- Images, fonts, and scripts cached in the browser for a year
+- Images, fonts, and scripts cached with revalidation, so updates at stable URLs appear
 - Security headers, including control over who may embed your site in a frame
 - The admin login page is limited to 5 attempts per minute, slowing down
   password guessing
@@ -1001,9 +1005,8 @@ bash scripts/rebuild-code.sh --pull   # newer PHP and web server base images
 `docker scout cves omeka-s-docker-php:latest`, and shipping logs somewhere you
 actually read them.
 
-**One trade-off to be aware of**: the database is configured to favour speed over
-absolute durability, which means an abrupt power loss could lose about one second
-of the very latest changes. If that matters for your content, see
+**Database durability**: committed transactions are flushed to disk by default.
+For the performance trade-off and storage assumptions, see
 `innodb-flush-log-at-trx-commit` in [docs/DB_TUNING.md](docs/DB_TUNING.md).
 
 ## Production SSL/TLS
@@ -1117,7 +1120,7 @@ Everything that survives a rebuild is stored outside the image:
 | `omeka_modules` | Modules, set up from the image and managed from the admin panel | Yes |
 | `omeka_themes` | Themes, set up from the image and managed from the admin panel | Yes |
 | `php_sessions` | Who is currently logged in. Kept on disk so a restart doesn't log everyone out | No — nothing worth keeping |
-| `typesense_data` | The search index, if you use search | Yes, though it can always be rebuilt |
+| `typesense_data` | The search index, if you use search | No — rebuild it from Omeka after recovery |
 
 Your `.env` and your copy of `local.config.php` are ordinary files in this
 repository folder, and the backup script copies them too.
@@ -1132,10 +1135,12 @@ bash scripts/backup.sh
 bash scripts/restore.sh backups/20260330-120000
 ```
 
-**The site stays up during a backup.** The database is captured as a single
+**By default, the site stays up during a backup.** The database is captured as a single
 consistent snapshot without blocking anyone, and files are read without being
-locked. The one thing to avoid is installing or upgrading a module while a backup
-runs, because that changes the database's structure mid-snapshot.
+locked. Avoid module/core upgrades during the snapshot. For a matched database
+and media copy, use `bash scripts/backup.sh --quiesce`: it stops web/PHP briefly
+and restarts them on exit. Pause external writers too. Search indexes are
+regenerated after recovery rather than copied while their database is running.
 
 Each backup records checksums of everything it contains, so you can tell if a
 copy was corrupted in transit. Those checksums are not encryption: a backup

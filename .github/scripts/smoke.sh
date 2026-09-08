@@ -56,13 +56,13 @@ cleanup() {
     fi
     exit "$status"
 }
-trap cleanup EXIT
-
-# Never clobber a developer's real .env.
-if [[ -f .env && "${CI:-}" != "true" ]]; then
-    echo "Refusing to overwrite an existing .env outside CI." >&2
+# Guard before installing cleanup: even a refused run must not delete a real
+# restored configuration or a developer's module. Use a disposable checkout.
+if [[ -e .env || -e "$probe_module_dir" || -e _docker/restored-local.config.php ]]; then
+    echo "Refusing to run smoke tests over existing environment/configuration/fixtures. Use a clean, disposable checkout." >&2
     exit 1
 fi
+trap cleanup EXIT
 
 case "$variant" in
     base)
@@ -220,6 +220,10 @@ private_paths=(
     /application/src/Module.php
     /vendor/autoload.php
     /uploads.ini
+    /files/probe.PHP
+    /files/probe.phtml
+    /files/probe.phar
+    /files/probe.php/photo.jpg
     /index.php/../config/database.ini
     # Modules and themes ship their whole source tree into the document root.
     # Only asset/ is public: their dependency manifests otherwise enumerate
@@ -242,6 +246,7 @@ done
 code=$(probe "$url/application/asset/css/style.css")
 echo "    GET /application/asset/css/style.css -> $code"
 [[ "$code" == "200" ]]
+curl -fsSI "$url/application/asset/css/style.css" | grep -Fi 'max-age=0, must-revalidate'
 # ...and so must module/theme assets plus the theme thumbnail Omeka's admin
 # theme picker loads from /themes/<id>/theme.jpg (the one allow-listed file
 # outside asset/).

@@ -49,7 +49,8 @@ bash scripts/update-module.sh "${rebuild_args[@]}"
 
 # In the default layout, persistent volumes shadow modules/themes in the rebuilt
 # image. Detect that layout and update the live copies as part of the same job.
-if ! docker compose config --format json 2>/dev/null | python3 -c '
+compose_config="$(docker compose config --format json)"
+if ! python3 -c '
 import json, sys
 config = json.load(sys.stdin)
 mounts = config["services"]["php"].get("volumes", [])
@@ -57,10 +58,18 @@ sys.exit(0 if any(
     isinstance(m, dict) and m.get("target") == "/var/www/html/modules"
     for m in mounts
 ) else 1)
-'; then
+' <<< "$compose_config"; then
     echo "Extension code is image-managed; no live volume sync is needed."
-    exit 0
-fi
+else
+
+# Use only manifests selected by the active Compose stack. Reading deploy/*
+# here would install AMIRA extensions on an unrelated, generic deployment.
+mapfile -t deployment_manifests < <(python3 -c '
+import json, sys
+args = json.load(sys.stdin)["services"]["php"]["build"].get("args", {})
+print(args.get("EXTRA_MODULES_FILE") or "_docker/empty-modules.txt")
+print(args.get("EXTRA_THEMES_FILE") or "_docker/empty-themes.txt")
+' <<< "$compose_config")
 
 echo "Updating registry-backed live modules..."
 docker compose exec -T php omeka-s-cli module:update \
@@ -83,7 +92,7 @@ read_module_manifest() {
 }
 
 for manifest in _docker/default-modules.txt _docker/extra-modules.txt \
-    deploy/*/modules.txt; do
+    "${deployment_manifests[0]}"; do
     [[ -f "$manifest" ]] && read_module_manifest "$manifest"
 done
 
@@ -102,6 +111,10 @@ read_theme_manifest() {
         after="$(docker compose exec -T php sh -c \
             'find /var/www/html/themes -mindepth 1 -maxdepth 1 -type d -printf "%f\n" | sort')"
         created="$(comm -13 <(printf '%s\n' "$before") <(printf '%s\n' "$after"))"
+        # Some themes already download into their requested target directory.
+        if [[ -z "$created" ]] && printf '%s\n' "$after" | grep -Fxq "$target"; then
+            continue
+        fi
         [[ -n "$created" && "$created" != *$'\n'* ]] || {
             echo "Could not identify the downloaded directory for $uri" >&2
             return 1
@@ -117,23 +130,25 @@ read_theme_manifest() {
                 mv "/var/www/html/themes/$target" "$old"
             fi
             mv "/var/www/html/themes/$source" "/var/www/html/themes/$target"
+            rm -rf -- "$old"
         ' sh "$created" "$target" "$old"
     done < "$manifest"
 }
 
-for manifest in _docker/extra-themes.txt deploy/*/themes.txt; do
+for manifest in _docker/extra-themes.txt "${deployment_manifests[1]}"; do
     [[ -f "$manifest" ]] && read_theme_manifest "$manifest"
 done
+fi
 
 # A module can already contain newer code before this command starts (for
 # example after an interrupted prior run), so apply every remaining migration.
+module_list="$(docker compose exec -T php omeka-s-cli module:list --base-path /var/www/html)"
 while IFS= read -r module_id; do
     [[ -n "$module_id" ]] || continue
     echo "Applying pending module migration: $module_id"
     docker compose exec -T php omeka-s-cli module:upgrade \
         --base-path /var/www/html "$module_id"
-done < <(docker compose exec -T php omeka-s-cli module:list \
-    --base-path /var/www/html | awk -F '|' '$4 ~ /needs_upgrade/ {
+done < <(printf '%s\n' "$module_list" | awk -F '|' '$4 ~ /needs_upgrade/ {
         gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2
     }')
 

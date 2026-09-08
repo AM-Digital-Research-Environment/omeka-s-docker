@@ -153,8 +153,12 @@ bash scripts/rebuild-code.sh --pull
 
 ```bash
 # Everything: database, files, sideload folder, settings.
-# The site stays up. Just don't install or upgrade a module while it runs.
+# The site stays up; avoid module/core upgrades and media edits while it runs.
 bash scripts/backup.sh
+
+# Matched database/media backup: stop web/PHP briefly, restart them on exit.
+# Pause external writers separately. Search indexes are regenerated on recovery.
+bash scripts/backup.sh --quiesce
 
 # Somewhere other than backups/
 bash scripts/backup.sh /tmp/omeka-backup
