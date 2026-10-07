@@ -276,11 +276,23 @@ RUN shopt -s nullglob \
 # wipe everyone's login session and CSRF tokens. The directory is created here
 # owned by www-data so the fresh named volume inherits that ownership on first
 # mount — the running container drops CAP_CHOWN and cannot fix it afterwards.
+# /var/lib/omeka is the same pattern for deployment data that must live OUTSIDE
+# the document root. A module whose generated state is served through Omeka
+# rather than by nginx mounts a private volume under it — see
+# DRE_VISUALIZATIONS_DATA_DIR in compose.amira.yml.
+#
+# The LEAF directory of every such mount must exist here, www-data-owned.
+# Docker seeds a fresh named volume's ownership from the image path it is
+# mounted at; where that path does not exist it creates the mountpoint
+# root-owned 0755 instead, and the container cannot repair it afterwards
+# because it runs as www-data with CAP_CHOWN dropped. Creating only the parent
+# is not enough — that was the actual failure when this volume was introduced.
 USER root
-RUN mkdir -p /var/lib/php-sessions /run/omeka /run/php-fpm \
-    && chown www-data:www-data /var/lib/php-sessions \
+RUN mkdir -p /var/lib/php-sessions /var/lib/omeka/dre-visualizations /run/omeka /run/php-fpm \
+    && chown -R www-data:www-data /var/lib/php-sessions /var/lib/omeka \
     && chown www-data:www-data /run/omeka /run/php-fpm \
-    && chmod 700 /var/lib/php-sessions /run/omeka /run/php-fpm
+    && chmod 700 /var/lib/php-sessions /var/lib/omeka /var/lib/omeka/dre-visualizations \
+    && chmod 700 /run/omeka /run/php-fpm
 COPY <<EOF /usr/local/etc/php/conf.d/92-sessions.ini
 session.save_path = "/var/lib/php-sessions"
 EOF

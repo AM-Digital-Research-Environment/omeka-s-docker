@@ -121,11 +121,13 @@ the site easier to attack:
   `AMIRA_TRUST_PROXY=true` — set in [`compose.amira.yml`](../../compose.amira.yml) — because
   every request reaches the server from the web container, so without it all visitors would
   share one bucket and a single busy client could lock out everyone else. That setting makes
-  the server read the client address from `X-Forwarded-For`, and it trusts the **leftmost**
-  entry, so [`nginx-mcp-location.conf`](nginx-mcp-location.conf) *overwrites* that header
-  with the address this stack resolved itself rather than appending to the caller's chain.
-  Appending would let a caller forge a fresh IP per request and skip the limit altogether;
-  CI asserts the pair stays consistent.
+  the server take the client address from `X-Forwarded-For`, so that header becomes the
+  rate-limit key — which is why [`nginx-mcp-location.conf`](nginx-mcp-location.conf)
+  *overwrites* it with the single address this stack resolved itself rather than appending
+  to the caller's chain. Appending would let a caller forge a fresh IP per request and skip
+  the limit altogether. Sending one entry is also robust to upstream changing which end of
+  the chain it counts from (leftmost in v1.17.0, `AMIRA_PROXY_HOPS` from the right in
+  v1.19.0). CI asserts the pair stays consistent.
 - **Locked down like everything else:** no special privileges, a read-only filesystem, and a
   cap of a quarter CPU and 256 MB so it can't crowd out the site.
 - **Nothing to back up.** Its copy of the data is rebuilt from the public API, so it keeps

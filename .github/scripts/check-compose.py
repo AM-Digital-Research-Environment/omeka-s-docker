@@ -282,13 +282,15 @@ if is_amira:
     )
 
     # amira-mcp keys its per-minute rate limit on the TCP peer unless
-    # AMIRA_TRUST_PROXY is set, which makes it read the LEFTMOST
-    # X-Forwarded-For entry instead. That entry is client-controlled in an
-    # appended chain, so the two settings are one security decision: trusting
-    # the header is only sound while the /mcp location overwrites it with an
-    # address this stack resolved itself. Assert them together — enabling one
-    # without the other either shares a single bucket across all visitors or
-    # hands out a forgeable limit.
+    # AMIRA_TRUST_PROXY is set, which makes it take the key from
+    # X-Forwarded-For instead. The header then *is* the rate-limit key, so the
+    # two settings are one security decision: trusting it is only sound while
+    # the /mcp location overwrites it with the single address this stack
+    # resolved itself. Assert them together — enabling one without the other
+    # either shares a single bucket across all visitors or hands out a
+    # forgeable limit. (Which end of the chain upstream counts from has already
+    # changed once — leftmost in v1.17.0, AMIRA_PROXY_HOPS from the right in
+    # v1.19.0 — which is exactly why we send one entry rather than a chain.)
     mcp_env = environment(services["amira-mcp"])
     # Mirrors the upstream parseBool (src/config.ts): anything else is false.
     trusts_proxy = mcp_env.get("AMIRA_TRUST_PROXY", "").strip().lower() in {
@@ -326,9 +328,9 @@ if is_amira:
         require(
             not (trusts_proxy and not overwrites),
             "the /mcp location appends to X-Forwarded-For while amira-mcp trusts"
-            " it; amira-mcp reads the leftmost entry, so the rate-limit key would"
-            " be client-forgeable. Use `proxy_set_header X-Forwarded-For"
-            " $remote_addr`",
+            " it; the header is the rate-limit key, so a caller-supplied entry"
+            " would make the limit forgeable. Use `proxy_set_header"
+            " X-Forwarded-For $remote_addr`",
         )
 
 if errors:

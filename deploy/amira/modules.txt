@@ -9,12 +9,35 @@
 # gh: line makes it clone the repository at a branch or tag, development tree
 # and git history included. Prefer the release archive where one exists.
 # scripts/update-module.sh rewrites the tag in these URLs to the newest release.
+# HELD at v1.21.3. v1.22.0 cannot upgrade from it: Module::upgrade() calls
+# $services->get(Indexer\RebuildStateStore::class) and
+# $services->get(Settings\ProfileRegistry::class), but Omeka does not merge a
+# module's config while that module is in the needs_upgrade state — so the
+# service is unregistered ("Unable to resolve service ... to a factory") and,
+# even once resolved, ProfileRegistryFactory would read an empty
+# dre_search.profiles and markDirty() nothing. Verified on 2026-10-07: the
+# module goes needs_upgrade, stops loading, and search disappears from the site
+# until it is rolled back.
+#
+# upgrade() must not depend on the merged config. It already has $connection in
+# scope, so construct the store directly and read the profile names from the
+# module's own config file:
+#   $config = require __DIR__ . '/config/module.config.php';
+#   $names  = array_keys($config['dre_search']['profiles'] ?? []);
+#   (new Indexer\RebuildStateStore($connection))->markDirty($names, '...');
+#
+# Tracked upstream: https://github.com/AM-Digital-Research-Environment/DRESearch/issues/33
+#
+# NOTE: scripts/update-module.sh rewrites pinned tags to the newest release, so
+# it will try to move this line to v1.22.0 again. Re-revert until a fixed
+# release is published, then drop this block.
 https://github.com/AM-Digital-Research-Environment/DRESearch/releases/download/v1.21.3/DRESearch.zip
-https://github.com/AM-Digital-Research-Environment/DRE-SEO/releases/download/v0.9.0/DRESeo.zip
+https://github.com/AM-Digital-Research-Environment/DRE-SEO/releases/download/v0.10.0/DRESeo.zip
 # The repository is DRE-Visualizations; the archive it publishes, and so the
-# module folder it unpacks to, is DreVisualizations — the name compose.amira.yml
-# mounts the precomputed-artifact volume at.
-https://github.com/AM-Digital-Research-Environment/DRE-Visualizations/releases/download/v2.28.5/DreVisualizations.zip
+# module folder it unpacks to, is DreVisualizations. Since v2.29.0 its generated
+# artifacts live on a private volume outside the document root
+# (DRE_VISUALIZATIONS_DATA_DIR in compose.amira.yml), not under this folder.
+https://github.com/AM-Digital-Research-Environment/DRE-Visualizations/releases/download/v2.29.0/DreVisualizations.zip
 
 # Third-party modules this deployment runs. BulkEdit and Reference depend on
 # Common, which _docker/default-modules.txt already provides. Their latest

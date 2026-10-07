@@ -30,10 +30,12 @@ services:
       # /etc/nginx/conf.d/extra-locations/mcp.conf, which the base nginx.conf
       # includes by glob (see the extension point in nginx.conf).
       - ./deploy/amira/nginx-mcp-location.conf:/etc/nginx/templates/extra-locations/mcp.conf.template:ro
-      # nginx serves the precomputed dashboard JSON straight to the browser, so
-      # it needs the same volume PHP writes — read-only, exactly like the media
-      # volume. See the php service below for why this exists.
-      - dre_visualizations_data:/var/www/html/modules/DreVisualizations/asset/data:ro
+      # No DreVisualizations mount here any more. Up to v2.28.x nginx served the
+      # precomputed dashboard JSON straight from the module's asset/data tree;
+      # v2.29.0 moved generated data to private storage served through a
+      # no-store Omeka endpoint, so nginx has nothing to read. What remains
+      # under asset/ is the module's shipped static geography, which comes from
+      # the omeka_modules volume like any other extension asset.
     networks:
       - frontend
       - mcp
@@ -54,30 +56,34 @@ services:
       # baked into the image at build.
       - ./deploy/amira/vocabularies/dre.owl:/usr/local/share/omeka-vocabs/dre.owl:ro
       - ./deploy/amira/vocabularies/dre.json:/usr/local/share/omeka-vocabs/dre.json:ro
-      # DreVisualizations keeps runtime state inside its own code directory:
-      # the "Regenerate" job writes a generation of precomputed dashboard,
-      # knowledge-graph and photo-gallery JSON to asset/data/generations/ and
-      # flips asset/data/current.json to point at it. With Omeka code immutable
-      # that tree is read-only, so the job fails with "Unable to create
-      # directory". This volume is the writable carve-out — it is generated
-      # state, not code, and belongs on a volume by the same rule as media.
+      # DreVisualizations generated state (v2.29.0+). The "Regenerate" job
+      # writes precomputed dashboard, knowledge-graph and photo-gallery
+      # artifacts here, and Omeka serves the current generation through a
+      # no-store endpoint. It is deliberately OUTSIDE the document root: the
+      # module rejects web-root paths and directory symlinks outright, and
+      # nothing here should ever be reachable as a static file.
       #
-      # The contents are disposable and deliberately NOT backed up:
-      # scripts/backup.sh ignores this volume, and everything here is rebuilt by
-      # the admin "Regenerate" action from MySQL. Disaster recovery is restore
-      # the database and media, start the stack, then regenerate.
+      # Up to v2.28.x this was a volume mounted over the module's own
+      # asset/data tree, which nginx then served directly. That had two
+      # standing problems this replaces: the mount shadowed the module's
+      # shipped static inputs so a release could not update them without the
+      # volume being deleted by hand, and an in-container module update
+      # detached the mount, forcing a php+web recreate afterwards. Neither
+      # applies now — asset/ is ordinary extension content on omeka_modules.
       #
-      # The mount also shadows the module's shipped static inputs
-      # (asset/data/geo and asset/data/wordclouds), which Docker seeds from the
-      # image the first time an empty volume is mounted. It will not re-seed
-      # afterwards, so if a DreVisualizations release changes those inputs,
-      # delete the volume and regenerate rather than rebuilding alone:
-      #   docker compose down && docker volume rm omeka-dre-dev_dre_visualizations_data
+      # If DRE_VISUALIZATIONS_DATA_DIR were left unset the module would fall
+      # back to an OS temporary directory, which a host cleanup can delete,
+      # silently costing the published visualizations until someone regenerates.
       #
-      # The proper fix is upstream: have the module write under Omeka's files/
-      # directory instead of its own asset/ tree. Until then, this mount keeps
-      # the precompute working without patching the module.
-      - dre_visualizations_data:/var/www/html/modules/DreVisualizations/asset/data:rw
+      # Contents are disposable and deliberately NOT backed up: scripts/backup.sh
+      # ignores this volume and everything in it is rebuilt from MySQL by the
+      # admin "Regenerate" action. Disaster recovery is restore the database and
+      # media, start the stack, then regenerate.
+      - dre_visualizations_private:/var/lib/omeka/dre-visualizations:rw
+    environment:
+      # Durable private storage for the generated artifacts above. Must match
+      # the mount, and must stay outside /var/www/html.
+      - DRE_VISUALIZATIONS_DATA_DIR=/var/lib/omeka/dre-visualizations
 
   # AMIRA MCP server — exposes the public, read-only AMIRA dataset over
   # Streamable-HTTP/SSE at POST /mcp (health: GET /healthz) on port 8787.
@@ -91,7 +97,7 @@ services:
   # just returns 502 until amira-mcp is reachable again.
   amira-mcp:
     build:
-      context: https://github.com/AM-Digital-Research-Environment/amira-mcp-server.git#${AMIRA_MCP_VERSION:-v1.17.0}
+      context: https://github.com/AM-Digital-Research-Environment/amira-mcp-server.git#${AMIRA_MCP_VERSION:-v1.19.0}
     environment:
       - PORT=8787
       - HOST=0.0.0.0
@@ -105,12 +111,13 @@ services:
       # With it the key comes from X-Forwarded-For, so each visitor gets their
       # own budget.
       #
-      # SAFE ONLY BECAUSE the /mcp location OVERWRITES that header with the
-      # client address this stack resolved itself — amira-mcp trusts the
-      # leftmost entry, which in an appended chain is client-controlled. Do not
-      # enable this without the matching `proxy_set_header X-Forwarded-For
-      # $remote_addr` in deploy/amira/nginx-mcp-location.conf; the Compose
-      # contract check (.github/scripts/check-compose.py) ties the two together.
+      # SAFE ONLY BECAUSE the /mcp location OVERWRITES that header with the one
+      # client address this stack resolved itself. The header is the rate-limit
+      # key once this is on, so any entry a caller can write is a fresh budget
+      # they can mint per request. Do not enable this without the matching
+      # `proxy_set_header X-Forwarded-For $remote_addr` in
+      # deploy/amira/nginx-mcp-location.conf; the Compose contract check
+      # (.github/scripts/check-compose.py) ties the two together.
       - AMIRA_TRUST_PROXY=true
       # Citation URLs and live-refresh target our own public domain.
       - AMIRA_SITE_BASE=https://${SERVER_NAME:?You must set SERVER_NAME when using compose.amira.yml}
@@ -169,6 +176,11 @@ networks:
   mcp: {}
 
 volumes:
-  # Precomputed DreVisualizations artifacts (see the php service above).
-  dre_visualizations_data:
+  # Precomputed DreVisualizations artifacts, private storage outside the
+  # document root (see the php service above). Replaces the pre-2.29
+  # dre_visualizations_data volume, which was mounted over the module's
+  # asset/data tree; that old volume is now unused and can be removed once a
+  # successful regeneration confirms this one works:
+  #   docker volume rm omeka-s-docker_dre_visualizations_data
+  dre_visualizations_private:
     driver: local

@@ -157,6 +157,14 @@ services:
       - OMEKA_TZ=${OMEKA_TZ:-}
       - OMEKA_LOCALE=${OMEKA_LOCALE:-}
       - OMEKA_TITLE=${OMEKA_TITLE:-}
+      # Encrypts secrets at rest (module API keys and similar). Normally Omeka
+      # generates config/secret_key.php on first boot, but config/ is immutable
+      # image content here, so that write always fails and every admin page
+      # carries a warning instead. This env var is the documented alternative
+      # for exactly that case ("containers or managed hosting"). Generate once
+      # with `openssl rand -base64 32` and then NEVER change it — anything
+      # already encrypted with the old value becomes unreadable.
+      - OMEKA_SECRET_KEY=${OMEKA_SECRET_KEY:-}
       # PHP-FPM pool tuning (defaults in entrypoint if unset).
       # Five workers fit typical traffic, NOT five simultaneous 512M requests.
       # OPcache/APCu and tmpfs also count toward the 1536M container limit.
