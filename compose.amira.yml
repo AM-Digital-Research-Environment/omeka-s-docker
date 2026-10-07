@@ -91,13 +91,27 @@ services:
   # just returns 502 until amira-mcp is reachable again.
   amira-mcp:
     build:
-      context: https://github.com/AM-Digital-Research-Environment/amira-mcp-server.git#${AMIRA_MCP_VERSION:-v1.12.0}
+      context: https://github.com/AM-Digital-Research-Environment/amira-mcp-server.git#${AMIRA_MCP_VERSION:-v1.17.0}
     environment:
       - PORT=8787
       - HOST=0.0.0.0
       # Periodically refreshes the bundled snapshot from AMIRA_SITE_BASE.
       - AMIRA_LIVE_REFRESH=true
       - AMIRA_CACHE_DIR=/tmp/amira-cache
+      # The server's rate limit (AMIRA_RATE_LIMIT, default 120 requests/minute)
+      # is keyed on the TCP peer address unless this is set. Every request
+      # arrives from the web nginx container, so without it all visitors share
+      # one 120/min bucket and a single busy client locks out everyone else.
+      # With it the key comes from X-Forwarded-For, so each visitor gets their
+      # own budget.
+      #
+      # SAFE ONLY BECAUSE the /mcp location OVERWRITES that header with the
+      # client address this stack resolved itself — amira-mcp trusts the
+      # leftmost entry, which in an appended chain is client-controlled. Do not
+      # enable this without the matching `proxy_set_header X-Forwarded-For
+      # $remote_addr` in deploy/amira/nginx-mcp-location.conf; the Compose
+      # contract check (.github/scripts/check-compose.py) ties the two together.
+      - AMIRA_TRUST_PROXY=true
       # Citation URLs and live-refresh target our own public domain.
       - AMIRA_SITE_BASE=https://${SERVER_NAME:?You must set SERVER_NAME when using compose.amira.yml}
       - AMIRA_SITE_SLUG=amira
@@ -117,7 +131,18 @@ services:
       resources:
         limits:
           cpus: '0.25'
-          memory: 256M
+          # 384M, not 256M: measured at 155M of 256M (60%) and growing with the
+          # bundled snapshot that AMIRA_LIVE_REFRESH re-crawls, and a Node heap
+          # that reaches its limit is OOM-killed rather than slowed. At 384M it
+          # settles around 33%.
+          #
+          # This does add 128M to the stack's ceiling total, which on a small
+          # host is already more than the host has — see the oversubscription
+          # note in docs/PRODUCTION.md. Measure before trimming something else
+          # to compensate: `docker stats` right after a recreate reads much
+          # higher than a long-running container (page cache), so a figure taken
+          # from an idle container will mislead you.
+          memory: 384M
         reservations:
           cpus: '0.05'
           memory: 64M

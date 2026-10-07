@@ -8,8 +8,14 @@ version-controlled here. The **host** nginx that terminates TLS is **not** — i
 
 Why a dedicated block: the host `location /` proxies to the compose nginx on `:8080` with
 default `proxy_buffering on`, which would break Streamable-HTTP/SSE. We add a `/mcp` block
-with buffering off and a long read timeout, and a per-client rate limit (the host sees the
-real `$remote_addr`, unlike the compose nginx behind Docker's bridge).
+with buffering off and a long read timeout, and a per-client rate limit.
+
+Keep `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for` in the block below. The
+host nginx is the hop that sees the real client, so the address it *appends* is the only
+trustworthy entry in the chain — and the compose nginx picks exactly that one out
+(`real_ip_recursive`, see `nginx-http-settings.conf`) before overwriting the header for
+`amira-mcp`, which rate-limits per visitor. Replacing the header here instead of appending
+would discard the real client address and collapse that per-visitor limit.
 
 ## 1. Rate-limit zone (http context)
 

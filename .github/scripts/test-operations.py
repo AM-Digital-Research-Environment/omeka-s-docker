@@ -3,6 +3,7 @@
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -209,6 +210,78 @@ esac
         self.assertFalse((backup / "omeka_modules.tar.gz").exists())
         self.assertFalse((backup / "typesense_data.tar.gz").exists())
 
+    def test_retention_keeps_newest_and_spares_unfinished(self):
+        # Pruning deletes real backups, so pin down exactly which directories it
+        # selects: the N newest complete ones survive, older ones go, and an
+        # unfinished directory is neither deleted nor counted against the
+        # window (otherwise an abandoned run would evict a good backup).
+        backups = self.root / "backups"
+        backups.mkdir()
+        for name in ("20260101-010101", "20260102-010101", "20260103-010101"):
+            (backups / name).mkdir()
+            (backups / name / "SHA256SUMS").write_text("old fixture")
+        (backups / "20260104-010101").mkdir()
+        (backups / "20260104-010101" / "BACKUP_INCOMPLETE").touch()
+        # A differently-named directory is not this script's and must be ignored.
+        (backups / "pre-omeka-4.2.1-keepme").mkdir()
+        self.env["TEST_ARCHIVE_SUCCESS"] = "1"
+        result = self.run_script("backup.sh", "--keep", "2")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        remaining = sorted(p.name for p in backups.iterdir())
+        fresh = [n for n in remaining if n.startswith("2026") and n not in {
+            "20260101-010101", "20260102-010101", "20260103-010101", "20260104-010101"}]
+        self.assertEqual(len(fresh), 1, f"expected one new snapshot, got {remaining}")
+        self.assertIn("20260104-010101", remaining, "unfinished backup must be spared")
+        self.assertIn("pre-omeka-4.2.1-keepme", remaining, "foreign directory must be spared")
+        # Keep 2 complete: the new one plus the newest pre-existing complete one.
+        self.assertIn("20260103-010101", remaining)
+        self.assertNotIn("20260102-010101", remaining)
+        self.assertNotIn("20260101-010101", remaining)
+
+    def test_retention_reads_keep_from_dotenv(self):
+        # .env is where operators configure this deployment, but Compose does
+        # not pass it to a plain script — assert the script reads it itself.
+        backups = self.root / "backups"
+        backups.mkdir()
+        for name in ("20260101-010101", "20260102-010101"):
+            (backups / name).mkdir()
+            (backups / name / "SHA256SUMS").write_text("old fixture")
+        (self.root / ".env").write_text("MYSQL_PASSWORD=test-only\nBACKUP_KEEP=1\n")
+        self.env["TEST_ARCHIVE_SUCCESS"] = "1"
+        self.env.pop("BACKUP_KEEP", None)
+        result = self.run_script("backup.sh")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        remaining = sorted(p.name for p in backups.iterdir())
+        self.assertNotIn("20260101-010101", remaining)
+        self.assertNotIn("20260102-010101", remaining)
+        self.assertEqual(len(remaining), 1, f"only the new snapshot should remain: {remaining}")
+
+    def test_retention_rejects_an_explicit_destination(self):
+        result = self.run_script("backup.sh", "--keep", "2", "somewhere-else")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("default backups/ location", result.stderr)
+        self.assertFalse(self.log.exists())
+
+    def test_retention_rejects_a_non_numeric_value(self):
+        result = self.run_script("backup.sh", "--keep", "all")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("non-negative integer", result.stderr)
+        self.assertFalse(self.log.exists())
+
+    def test_retention_accepts_a_zero_padded_value(self):
+        # Bash arithmetic reads a leading zero as octal, so "08" must not abort
+        # the run part-way through with "value too great for base".
+        backups = self.root / "backups"
+        backups.mkdir()
+        for name in ("20260101-010101", "20260102-010101"):
+            (backups / name).mkdir()
+            (backups / name / "SHA256SUMS").write_text("old fixture")
+        self.env["TEST_ARCHIVE_SUCCESS"] = "1"
+        result = self.run_script("backup.sh", "--keep", "08")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        # 8 is more than exists, so nothing is pruned.
+        self.assertIn("20260101-010101", [p.name for p in backups.iterdir()])
+
     def test_missing_external_volume_is_not_created_locally(self):
         self.archive()
         self.config["volumes"]["media"]["external"] = True
@@ -237,6 +310,56 @@ esac
         self.assertEqual((self.root / "_docker/restored-local.config.php").read_text(), "original config")
         self.assertTrue((self.root / ".env").exists())
         self.assertFalse(self.log.exists())
+
+
+class PinnedImages(unittest.TestCase):
+    """The alpine pin is repeated outside any Dependabot ecosystem."""
+
+    def test_helper_image_matches_the_dockerfile_alpine_pin(self):
+        # backup.sh and restore.sh run their tar/test work in a throwaway alpine
+        # container. That pin is plain shell, so no Dependabot ecosystem offers
+        # it an update and a Dockerfile bump would leave it behind on an image
+        # that stops receiving security patches. Assert the three agree, so a
+        # Dependabot PR that touches only the Dockerfile fails here and the
+        # scripts get updated in the same commit.
+        dockerfile = (REPO / "Dockerfile").read_text(encoding="utf-8")
+        pins = re.findall(r"^FROM\s+(alpine:\S+)", dockerfile, re.MULTILINE)
+        self.assertEqual(
+            len(pins), 1, f"expected exactly one alpine FROM in the Dockerfile, got {pins}"
+        )
+        expected = pins[0]
+        self.assertIn("@sha256:", expected, "the Dockerfile alpine pin must carry a digest")
+        for script in ("scripts/backup.sh", "scripts/restore.sh"):
+            found = re.findall(
+                r'^HELPER_IMAGE="([^"]+)"',
+                (REPO / script).read_text(encoding="utf-8"),
+                re.MULTILINE,
+            )
+            self.assertEqual(found, [expected], f"{script} HELPER_IMAGE must be {expected}")
+
+    def test_omeka_version_defaults_agree(self):
+        # The fallback after `:-` is the version a deployment gets when .env
+        # does not pin OMEKA_VERSION, which is the common case. It is spelled
+        # out in the Dockerfile ARG, in three Compose entries, and once more as
+        # update-omeka.sh's idea of the current version — so a partial bump
+        # makes update-omeka.sh report an upgrade that is already built, or
+        # rebuild php and web from different cores.
+        sources = {
+            "Dockerfile": r"^ARG OMEKA_VERSION=(\S+)",
+            "docker-compose.yml": r"\$\{OMEKA_VERSION:-([^}]+)\}",
+            "scripts/update-omeka.sh": r'^current="\$\{current:-([^}]+)\}"',
+        }
+        found = {}
+        for name, pattern in sources.items():
+            matches = re.findall(pattern, (REPO / name).read_text(encoding="utf-8"), re.MULTILINE)
+            self.assertTrue(matches, f"no OMEKA_VERSION default found in {name}")
+            self.assertEqual(
+                len(set(matches)), 1, f"{name} disagrees with itself about OMEKA_VERSION: {matches}"
+            )
+            found[name] = matches[0]
+        self.assertEqual(
+            len(set(found.values())), 1, f"OMEKA_VERSION defaults disagree: {found}"
+        )
 
 
 if __name__ == "__main__":

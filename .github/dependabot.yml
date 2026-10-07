@@ -3,7 +3,19 @@
 
 version: 2
 updates:
-  # Monitor Docker base images for updates
+  # Monitor the Dockerfile's images: alpine (toolfetcher), php-fpm (runtime),
+  # nginx (web target), plus the php-extension-installer and composer tool
+  # stages. Those two are declared as named `FROM ... AS` stages specifically so
+  # this ecosystem sees them — Dependabot reads `FROM` lines only, so an image
+  # named inline in `COPY --from=` or `RUN --mount=from=` gets no updates. Keep
+  # them as stages.
+  #
+  # Not covered anywhere, by design or by limitation:
+  #   - the alpine HELPER_IMAGE pinned in scripts/backup.sh and
+  #     scripts/restore.sh (plain shell, no ecosystem). CI asserts it matches
+  #     the Dockerfile's alpine pin so the three cannot drift.
+  #   - amira-mcp, pinned inside a build-context git URL; the weekly
+  #     .github/workflows/amira-mcp-release.yml opens a tracking issue instead.
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
@@ -30,7 +42,11 @@ updates:
           - "version-update:semver-minor"
           - "version-update:semver-major"
 
-  # Monitor image tags pinned in docker-compose.yml (nginx, mysql, typesense)
+  # Monitor the image tags pinned in docker-compose.yml: mysql and typesense.
+  # (nginx is built from the Dockerfile's web target, so the ecosystem above
+  # owns it.) This ecosystem only matches conventional Compose filenames, so
+  # the compose.<name>.yml overlays are NOT scanned — neither pins an `image:`
+  # today, and one added there would need its own tracking.
   - package-ecosystem: "docker-compose"
     directory: "/"
     schedule:
@@ -53,7 +69,9 @@ updates:
         update-types:
           - "version-update:semver-major"
 
-  # Monitor GitHub Actions for updates (if you add any workflows)
+  # Monitor the actions used by .github/workflows/. They are pinned to commit
+  # SHAs with the human-readable version in a trailing comment; Dependabot
+  # updates both together.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

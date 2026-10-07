@@ -281,6 +281,56 @@ if is_amira:
         "amira-mcp must build from a release tag, not a floating branch",
     )
 
+    # amira-mcp keys its per-minute rate limit on the TCP peer unless
+    # AMIRA_TRUST_PROXY is set, which makes it read the LEFTMOST
+    # X-Forwarded-For entry instead. That entry is client-controlled in an
+    # appended chain, so the two settings are one security decision: trusting
+    # the header is only sound while the /mcp location overwrites it with an
+    # address this stack resolved itself. Assert them together — enabling one
+    # without the other either shares a single bucket across all visitors or
+    # hands out a forgeable limit.
+    mcp_env = environment(services["amira-mcp"])
+    # Mirrors the upstream parseBool (src/config.ts): anything else is false.
+    trusts_proxy = mcp_env.get("AMIRA_TRUST_PROXY", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    mcp_templates = mounts_at(
+        services["web"], "/etc/nginx/templates/extra-locations/mcp.conf.template"
+    )
+    location_conf: str | None = None
+    if mcp_templates:
+        try:
+            with open(str(mcp_templates[0].get("source", "")), encoding="utf-8") as handle:
+                location_conf = handle.read()
+        except OSError as error:
+            fail(f"cannot read the /mcp location template: {error}")
+    if location_conf is not None:
+        forwarded_for = [
+            line.strip()
+            for line in location_conf.splitlines()
+            if re.match(r"\s*proxy_set_header\s+X-Forwarded-For\b", line, re.IGNORECASE)
+        ]
+        require(
+            len(forwarded_for) == 1,
+            "the /mcp location must set X-Forwarded-For exactly once",
+        )
+        overwrites = bool(forwarded_for) and "$proxy_add_x_forwarded_for" not in forwarded_for[0]
+        require(
+            trusts_proxy,
+            "amira-mcp must set AMIRA_TRUST_PROXY so its rate limit is per visitor"
+            " rather than one bucket shared by everyone behind the proxy",
+        )
+        require(
+            not (trusts_proxy and not overwrites),
+            "the /mcp location appends to X-Forwarded-For while amira-mcp trusts"
+            " it; amira-mcp reads the leftmost entry, so the rate-limit key would"
+            " be client-forgeable. Use `proxy_set_header X-Forwarded-For"
+            " $remote_addr`",
+        )
+
 if errors:
     for error in errors:
         print(f"ERROR: {error}", file=sys.stderr)

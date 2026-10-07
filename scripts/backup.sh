@@ -1,10 +1,19 @@
 #!/bin/bash
 # Backup Omeka S Docker instance (database + persistent data + sideload)
-# Usage: bash scripts/backup.sh [--quiesce] [backup-directory]
+# Usage: bash scripts/backup.sh [--quiesce] [--keep N] [backup-directory]
 # Example: bash scripts/backup.sh
+# Example: bash scripts/backup.sh --keep 7
 # Example: bash scripts/backup.sh /tmp/omeka-backup
 #
 # By default containers stay running; --quiesce stops web/PHP temporarily.
+#
+# --keep N (or BACKUP_KEEP=N, in the environment or in .env) prunes older
+# snapshots after a successful run, keeping the N newest. Default 0 = keep
+# everything. Each
+# snapshot is a FULL copy of the database and media, so an unpruned backups/
+# directory grows without limit; prefer this over an `rm -rf` in cron. Where a
+# deduplicating archiver (borg, restic) already holds the history off-host,
+# --keep 1 keeps just the latest staging copy.
 # Database snapshot consistency relies on InnoDB tables and mysqldump's
 # --single-transaction: with InnoDB, mysqldump opens
 # one transaction with a consistent snapshot (START TRANSACTION WITH CONSISTENT
@@ -40,16 +49,54 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 BACKUP_DIR=""
 QUIESCE=false
+# Retention comes from --keep, else BACKUP_KEEP in the environment, else
+# BACKUP_KEEP in .env. The .env fallback is here because that file is where
+# operators expect to configure this deployment; Compose does not pass it to a
+# plain script, so read it the same way scripts/update-omeka.sh reads
+# OMEKA_VERSION. Default 0 = keep everything.
+KEEP="${BACKUP_KEEP:-}"
+if [[ -z "$KEEP" && -f "$PROJECT_DIR/.env" ]]; then
+    KEEP="$(sed -nE 's/^[[:space:]]*BACKUP_KEEP=[[:space:]]*"?([^"#[:space:]]*)"?.*$/\1/p' \
+        "$PROJECT_DIR/.env" | tail -n 1)"
+fi
+KEEP="${KEEP:-0}"
+expect_keep=false
 for arg in "$@"; do
+    if [[ "$expect_keep" == true ]]; then
+        KEEP="$arg"
+        expect_keep=false
+        continue
+    fi
     case "$arg" in
         --quiesce) QUIESCE=true ;;
-        -h|--help) echo "Usage: scripts/backup.sh [--quiesce] [backup-directory]"; exit 0 ;;
+        --keep) expect_keep=true ;;
+        --keep=*) KEEP="${arg#--keep=}" ;;
+        -h|--help) echo "Usage: scripts/backup.sh [--quiesce] [--keep N] [backup-directory]"; exit 0 ;;
         -*) echo "Unknown option: $arg" >&2; exit 2 ;;
         *) [[ -z "$BACKUP_DIR" ]] || { echo "Only one backup directory is allowed." >&2; exit 2; }; BACKUP_DIR="$arg" ;;
     esac
 done
+[[ "$expect_keep" != true ]] || { echo "--keep requires a number." >&2; exit 2; }
+# Validate before doing any work: a typo here decides what gets deleted.
+[[ "$KEEP" =~ ^[0-9]+$ ]] || { echo "--keep must be a non-negative integer, got: $KEEP" >&2; exit 2; }
+# Normalise to base 10: bash arithmetic reads a leading zero as octal, so an
+# innocent-looking "--keep 08" would otherwise abort with "value too great for
+# base" part-way through the run.
+KEEP=$((10#$KEEP))
+
+# Pruning only ever applies to this script's own default location and naming.
+# An explicit destination (scripts/update-omeka.sh passes backups/pre-omeka-*,
+# an operator may pass /tmp or an external mount) is never pruned, and never
+# counts toward the retention total.
+DEFAULT_LAYOUT=false
+[[ -n "$BACKUP_DIR" ]] || DEFAULT_LAYOUT=true
 BACKUP_DIR="${BACKUP_DIR:-$PROJECT_DIR/backups/$TIMESTAMP}"
-HELPER_IMAGE="alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b"
+if [[ "$KEEP" != 0 && "$DEFAULT_LAYOUT" != true ]]; then
+    echo "ERROR: --keep applies only to the default backups/ location; refusing" >&2
+    echo "       to prune alongside an explicit backup directory." >&2
+    exit 2
+fi
+HELPER_IMAGE="alpine:3.24.2@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6"
 
 # Resolve compose project name and volume prefix
 COMPOSE_CONFIG="$(cd "$PROJECT_DIR" && docker compose config --format json)"
@@ -267,8 +314,51 @@ for file in omeka_media.tar.gz omeka_logs.tar.gz omeka_modules.tar.gz omeka_them
     [ ! -f "$BACKUP_DIR/$file" ] || CHECKSUM_FILES+=("$file")
 done
 (cd "$BACKUP_DIR" && sha256sum "${CHECKSUM_FILES[@]}" > SHA256SUMS)
+
 rm "$BACKUP_DIR/BACKUP_INCOMPLETE"
 echo "==> Wrote SHA256SUMS"
+
+# --- 9. Retention ---
+# Deliberately last: nothing is deleted until the snapshot above is complete
+# and checksummed, so a failed run can never cost us an older good copy.
+# Where an incremental archiver (borg/restic) holds the real history off-host,
+# --keep 1 leaves just the newest staging copy here.
+if [[ "$KEEP" != 0 ]]; then
+    echo ""
+    echo "==> Pruning old backups (keeping the $KEEP newest)..."
+    # Match only this script's own timestamp naming, never the parent and never
+    # an operator's differently-named directory. Timestamps sort
+    # lexicographically in chronological order, so a reverse name sort is a
+    # newest-first list.
+    mapfile -t SNAPSHOTS < <(
+        find "$PROJECT_DIR/backups" -mindepth 1 -maxdepth 1 -type d \
+            -name '20[0-9][0-9][0-1][0-9][0-3][0-9]-[0-2][0-9][0-5][0-9][0-5][0-9]' \
+            -printf '%f\n' 2>/dev/null | sort -r
+    )
+    pruned=0
+    complete_kept=0
+    for name in "${SNAPSHOTS[@]}"; do
+        candidate="$PROJECT_DIR/backups/$name"
+        # Leave unfinished directories alone: one may belong to a concurrent
+        # run, and a stale one is evidence worth keeping for inspection. They
+        # do not count toward the retention total either — an abandoned
+        # directory must not push a good backup out of the window.
+        if [[ -e "$candidate/BACKUP_INCOMPLETE" ]]; then
+            echo "    kept   $name (unfinished — remove it by hand)"
+            continue
+        fi
+        if (( complete_kept < KEEP )); then
+            complete_kept=$((complete_kept + 1))
+            continue
+        fi
+        # Never touch the snapshot just written, whatever the arithmetic says.
+        [[ "$candidate" != "$BACKUP_DIR" ]] || continue
+        rm -rf -- "$candidate"
+        echo "    pruned $name"
+        pruned=$((pruned + 1))
+    done
+    (( pruned )) || echo "    nothing to prune"
+fi
 
 echo ""
 echo "==> Backup complete: $BACKUP_DIR"

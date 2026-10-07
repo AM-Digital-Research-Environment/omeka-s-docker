@@ -1131,9 +1131,17 @@ repository folder, and the backup script copies them too.
 # Back up everything
 bash scripts/backup.sh
 
+# Back up and keep only the 7 newest snapshots
+bash scripts/backup.sh --keep 7
+
 # Restore — on this server or a new one
 bash scripts/restore.sh backups/20260330-120000
 ```
+
+Every backup is a **full** copy of the database and media, so `backups/` grows
+by a few gigabytes each run. Give `--keep N` a number in your scheduled backup
+(see [BACKUP_RESTORE.md](docs/BACKUP_RESTORE.md)) rather than deleting old
+directories by hand.
 
 **By default, the site stays up during a backup.** The database is captured as a single
 consistent snapshot without blocking anyone, and files are read without being

@@ -114,9 +114,18 @@ the site easier to attack:
   the hardened `web` nginx at `/mcp`. It cannot reach the database or the search index at
   all.
 - **Read-only and public by design.** The underlying data is the same public collection
-  already served by the site, so the endpoint needs no credentials. Abuse is bounded by an
-  optional per-client rate limit at the host nginx (real client IPs are visible there,
-  unlike behind Docker's bridge).
+  already served by the site, so the endpoint needs no credentials. Abuse is bounded by the
+  server's own per-visitor rate limit (`AMIRA_RATE_LIMIT`, 120 requests/minute by default),
+  plus the optional coarser limit at the host nginx in
+  [`MCP_HOST_NGINX.md`](MCP_HOST_NGINX.md). The per-visitor part needs
+  `AMIRA_TRUST_PROXY=true` — set in [`compose.amira.yml`](../../compose.amira.yml) — because
+  every request reaches the server from the web container, so without it all visitors would
+  share one bucket and a single busy client could lock out everyone else. That setting makes
+  the server read the client address from `X-Forwarded-For`, and it trusts the **leftmost**
+  entry, so [`nginx-mcp-location.conf`](nginx-mcp-location.conf) *overwrites* that header
+  with the address this stack resolved itself rather than appending to the caller's chain.
+  Appending would let a caller forge a fresh IP per request and skip the limit altogether;
+  CI asserts the pair stays consistent.
 - **Locked down like everything else:** no special privileges, a read-only filesystem, and a
   cap of a quarter CPU and 256 MB so it can't crowd out the site.
 - **Nothing to back up.** Its copy of the data is rebuilt from the public API, so it keeps

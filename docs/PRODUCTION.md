@@ -192,9 +192,12 @@ Set up a daily backup as soon as the site has real content:
 
 ```bash
 # /etc/cron.d/omeka-backup  (replace <user> and the path)
-0 3 * * * <user> cd /path/to/omeka-s-docker && bash scripts/backup.sh \
-    && find backups/ -mindepth 1 -maxdepth 1 -type d -name '20??????-??????' -mtime +7 -exec rm -rf -- {} +
+0 3 * * * <user> cd /path/to/omeka-s-docker && bash scripts/backup.sh --keep 7
 ```
+
+Each snapshot is a full database + media copy, so set `--keep` from day one.
+It prunes only after the new snapshot is complete and checksummed. Use
+`--keep 1` when an off-host incremental archiver holds the real history.
 
 See [BACKUP_RESTORE.md](BACKUP_RESTORE.md) for full backup/restore procedures and [OMEKA_CLI.md](OMEKA_CLI.md) for routine site management via `omeka-s-cli`.
 
@@ -224,3 +227,113 @@ You should see:
 - Only `https://` URLs in the rendered HTML.
 
 If any of these fail, the [Troubleshooting section of COMMANDS.md](COMMANDS.md#troubleshooting) has the usual culprits.
+
+## 9. Applying changes to a live installation
+
+Working order for any change that rebuilds images or touches the database:
+
+1. Run the CI smoke suite in an **independent, disposable** checkout — never
+   against production data (it ends with `docker compose down -v`).
+2. Re-read [institution setup](INSTITUTION_SETUP.md), especially proxy trust,
+   resource limits and custom volume names.
+3. Take a backup. Use `--quiesce` when SQL/media consistency matters, and pause
+   external writers as well.
+4. Rebuild matching PHP and web images: `bash scripts/rebuild-code.sh --pull`.
+5. If the change is to the `db` service's `command`, apply it with
+   `docker compose up -d db` inside the maintenance window — the application
+   rebuild helper does not necessarily recreate an already-running database.
+6. Run `bash scripts/health-report.sh`, then check public and admin pages, a
+   media upload, thumbnail generation, background jobs and search. Measure
+   memory during a real import.
+7. Verify off-host backups by an independent restore, plus TLS renewal and the
+   externally exposed ports.
+
+## 10. Operational cautions
+
+These are the limits of what this stack guarantees. None of them is a defect to
+fix; they are the things to know before trusting an assumption.
+
+- **`docker compose down -v` destroys the database, media and sessions.** There
+  is no undo. It appears in [COMMANDS.md](COMMANDS.md) only as a deliberate
+  "start over" step and in the CI smoke tests, which is why those refuse to run
+  in a checkout that already has an `.env`.
+- **Docker does not restart a container merely because it is unhealthy.** The
+  `unless-stopped` policy reacts to a container *exiting*. A wedged-but-running
+  service stays wedged until someone looks, so wire
+  `bash scripts/health-report.sh` into whatever monitoring you already run.
+- **Backups are not atomic unless every writer is stopped.** The SQL dump is a
+  consistent InnoDB snapshot, but the media archive is taken afterwards, so an
+  upload that lands between the two is in one and not the other. `--quiesce`
+  closes the window for web and PHP; external writers are yours to pause.
+- **Extension replacement and database migrations are not transactional.** An
+  interrupted module update can leave code and schema out of step. Re-running
+  `scripts/update-extensions.sh` applies whatever migrations remain pending.
+- **PHP's container cap is not a per-request cap.** Five concurrent 512M
+  requests can exceed the default 1536M before OPcache, APCu and tmpfs are
+  counted. The `OOMKilled` flag also does not catch every worker-level OOM —
+  check host and kernel logs when diagnosing a mysterious 502.
+- **Pinned base images do not make a rebuild reproducible on their own.** Some
+  upstream extension references track a branch by design, so two builds of the
+  same commit can contain different module code. Use reviewed release-archive
+  URLs in your own manifests where reproducibility matters —
+  `scripts/update-module.sh` keeps those pins moving deliberately and leaves a
+  reviewable diff; a branch ref leaves no such record.
+- **The media layout marker detects uninitialized storage, not a matched pair.**
+  `.immutable-layout-v1` stops the stack booting an installed database against
+  an empty media volume. It is not a cryptographic association between a
+  specific database and a specific media volume.
+- **AMIRA only:** the visualizations volume masks the module's shipped static
+  inputs after its first population. If a DreVisualizations release changes
+  those inputs, delete the volume and regenerate rather than rebuilding alone —
+  see [deploy/amira/README.md](../deploy/amira/README.md).
+
+### Memory ceilings are oversubscribed on purpose
+
+On a small host the per-service `memory` limits deliberately sum to more than
+the host has. They are ceilings for a bad moment, not allocations. On the
+reference 3.8 GiB deployment:
+
+Measured on the reference 3.8 GiB deployment. `anon` is the figure that
+matters — anonymous pages cannot be reclaimed, so that is what actually has to
+fit:
+
+| service | ceiling | `anon` (real) | note |
+|---|---|---|---|
+| php | 1536M | ~21M idle | far higher during imports and thumbnailing |
+| db | 1024M | ~563M | 512M InnoDB buffer pool plus overhead |
+| typesense | 512M | ~363M | in-memory index for a ~10k-item corpus |
+| amira-mcp | 384M | ~83M | grows as the snapshot is re-crawled |
+| web | 256M | ~10M | but its tmpfs can occupy ~130M of the same limit |
+
+Total ceilings ~3.7 GiB against ~1.0 GiB of anonymous use. Nothing is wrong
+with that — but **raising one service's ceiling meaningfully requires lowering
+another's**, and several services peaking together can reach the OOM killer.
+
+Measure with the cgroup counters, not `docker stats`:
+
+```bash
+cid=$(docker compose ps -q typesense)
+docker exec "$cid" sh -c 'grep -E "^(anon|file) " /sys/fs/cgroup/memory.stat; \
+    cat /sys/fs/cgroup/memory.peak'
+```
+
+Three traps:
+
+- **`docker stats` MEM USAGE includes page cache.** A container read just after
+  a recreate can report several times what the same container reports after
+  days of uptime, because cache has since been reclaimed. Sizing a limit from
+  that number gets it wrong in both directions — we briefly cut typesense to
+  384M on a 69M reading, when its real `anon` is ~363M and the cut would have
+  risked an OOM kill.
+- **`memory.peak` often equals the ceiling exactly** for `db` and `typesense`.
+  That is the startup page-cache spike filling the cgroup and then being
+  reclaimed, not evidence of anonymous pressure. Compare `anon` before
+  reacting.
+- **A container's `tmpfs` mounts count against its own limit.** `web` looks
+  idle at ~10M, but `/var/cache/nginx` and `/tmp` can legitimately grow to
+  ~130M inside its 256M.
+
+Typesense is the tightest service here (~363M anon in 512M). If the collection
+grows substantially, raise `SEARCH_MEMORY_LIMIT` and take the headroom from
+`php`, which is the most over-provisioned at idle — but only after measuring
+`php` during a real import, which is when it actually needs the room.

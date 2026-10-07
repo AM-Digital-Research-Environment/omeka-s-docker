@@ -1,4 +1,4 @@
-FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS toolfetcher
+FROM alpine:3.24.2@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6 AS toolfetcher
 
 ARG VERSION=0.9.3
 ARG SHA=9392e779e25b9cfe0e8c1d559d8f5347863f3b0ab56d7a37d107f17f09bb247b
@@ -11,7 +11,15 @@ RUN apk add --no-cache curl \
         --output /omeka-s-cli.phar \
     && echo "${SHA} /omeka-s-cli.phar" | sha256sum -c -
 
-FROM php:8.5.10-fpm-trixie@sha256:70076c1cae0cd0ba6761832417e3a1df3e5560f0544eb0fe40357373e54420fe AS runtime
+# Build-time tool images, declared as named stages purely so Dependabot tracks
+# them. Its Docker parser only reads `FROM` lines — an image named inline in
+# `COPY --from=` or `RUN --mount=from=` is invisible to it, so those pins would
+# silently never be offered an update. Referencing the stage name below keeps
+# one `FROM` line per tool as the single place a bump has to land.
+FROM ghcr.io/mlocati/php-extension-installer:2.11.1@sha256:bd9ea77afcbc8e55e58d55ca9a39153925367e972827d2f648c949fd0e44aaca AS php-extension-installer
+FROM composer/composer:2.10.3-bin@sha256:696bfbbb82d8ab6ad3672c505bedd659e3815fd1c03cb5ef65ef7ee07a083fa6 AS composer-bin
+
+FROM php:8.5.11-fpm-trixie@sha256:b7254c1e7bc85d2df3e0539c0b1de846aa23da9fb557ae3d51148bcd49f6ee5d AS runtime
 
 ARG OMEKA_ROOT=/var/www/html
 ARG OMEKA_VERSION=4.2.1
@@ -45,7 +53,7 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
     && rm -rf /var/lib/apt/lists/*
 
 # Install PHP extensions
-RUN --mount=type=bind,from=ghcr.io/mlocati/php-extension-installer:2.11.1@sha256:bd9ea77afcbc8e55e58d55ca9a39153925367e972827d2f648c949fd0e44aaca,source=/usr/bin/install-php-extensions,target=/usr/local/bin/install-php-extensions \
+RUN --mount=type=bind,from=php-extension-installer,source=/usr/bin/install-php-extensions,target=/usr/local/bin/install-php-extensions \
     install-php-extensions \
     apcu-5.1.28 \
     bcmath \
@@ -119,7 +127,7 @@ USER www-data
 WORKDIR /var/www/html
 
 COPY --from=toolfetcher --chmod=0755 /omeka-s-cli.phar /usr/local/bin/omeka-s-cli
-COPY --from=composer/composer:2.10.2-bin@sha256:cf313f79f608ebab80220796327f341ae663b9fa8065c73c6148c9b67f0b13b3 /composer /usr/bin/composer
+COPY --from=composer-bin /composer /usr/bin/composer
 
 # OMEKA_VERSION=latest resolves to whatever is current at build time, which is by
 # definition untested against this image; the entrypoint warns when it sees it.
@@ -298,6 +306,6 @@ CMD ["php-fpm"]
 # nginx serves the exact static assets baked into the PHP image. Keeping both
 # targets in one Dockerfile guarantees core/module/theme assets change together
 # while media remains a separately mounted read-only volume.
-FROM nginx:1.30.4-alpine@sha256:dc5069ad14f19660b141b21236140b91656bf89bbc3e2417c70ae650cd66104c AS web
+FROM nginx:1.30.5-alpine@sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94 AS web
 
 COPY --from=runtime --chown=nginx:nginx /var/www/html /var/www/html

@@ -163,6 +163,10 @@ bash scripts/backup.sh --quiesce
 # Somewhere other than backups/
 bash scripts/backup.sh /tmp/omeka-backup
 
+# Keep only the 7 newest snapshots (prunes after a successful run).
+# Every snapshot is a full database + media copy, so set this in cron.
+bash scripts/backup.sh --keep 7
+
 # Restore (asks for confirmation before overwriting anything)
 bash scripts/restore.sh backups/20260330-120000
 

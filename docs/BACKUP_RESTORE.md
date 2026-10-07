@@ -133,7 +133,30 @@ repository at that commit is what rebuilds the same Omeka around it.
 Keep a week of nightly backups:
 
 ```cron
-0 3 * * * cd /path/to/omeka-s-docker && bash scripts/backup.sh && find backups/ -maxdepth 1 -type d -mtime +7 -exec rm -rf {} +
+0 3 * * * cd /path/to/omeka-s-docker && bash scripts/backup.sh --keep 7
+```
+
+`--keep N` prunes after the new snapshot is complete and checksummed, so a
+failed run never costs you an older good copy. It only ever considers its own
+dated directories under `backups/`, skips unfinished ones, and refuses to run
+at all alongside an explicit backup directory. `BACKUP_KEEP=7` in the
+environment does the same thing.
+
+Every snapshot is a **full** copy of the database and media — roughly 4 GB on a
+mid-size collection — so an unpruned `backups/` grows without limit. Set a
+retention number from the first day.
+
+> Do not hand-roll this with `find … -exec rm -rf`. The obvious form,
+> `find backups/ -maxdepth 1 -type d -mtime +7 -exec rm -rf {} +`, also matches
+> `backups/` **itself** at depth 0 and deletes every backup you have as soon as
+> one run fails before creating a new subdirectory. `--keep` exists so that
+> trap is not in your crontab.
+
+If a deduplicating archiver (borg, restic) already holds the real history
+off-host, `--keep 1` leaves just the latest staging copy locally:
+
+```cron
+0 3 * * * cd /path/to/omeka-s-docker && bash scripts/backup.sh --keep 1
 ```
 
 Try a restore now and then, into a separate copy of the site, and keep the
