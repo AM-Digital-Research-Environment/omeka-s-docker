@@ -97,7 +97,7 @@ services:
   # just returns 502 until amira-mcp is reachable again.
   amira-mcp:
     build:
-      context: https://github.com/AM-Digital-Research-Environment/amira-mcp-server.git#${AMIRA_MCP_VERSION:-v1.20.0}
+      context: https://github.com/AM-Digital-Research-Environment/amira-mcp-server.git#${AMIRA_MCP_VERSION:-v1.23.0}
     environment:
       - PORT=8787
       - HOST=0.0.0.0

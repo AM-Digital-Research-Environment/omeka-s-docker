@@ -71,9 +71,51 @@ print(args.get("EXTRA_MODULES_FILE") or "_docker/empty-modules.txt")
 print(args.get("EXTRA_THEMES_FILE") or "_docker/empty-themes.txt")
 ' <<< "$compose_config")
 
+module_manifests=(_docker/default-modules.txt _docker/extra-modules.txt
+    "${deployment_manifests[0]}")
+
+# Module folders the manifests pin to a URL, lowercased. These are refreshed
+# from their pinned release below, so the registry must not touch them: its
+# "latest" can lag the pin (`module:update --all` flags any difference, even a
+# downgrade) and its ID can differ in case, which unpacks a second, stale copy
+# beside the live module (DRESEO next to DRESeo).
+pinned_modules() {
+    local manifest line uri name
+    for manifest in "${module_manifests[@]}"; do
+        [[ -f "$manifest" ]] || continue
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            line="${line#"${line%%[![:space:]]*}"}"
+            [[ -n "$line" && "$line" != \#* ]] || continue
+            uri="${line%%[[:space:]]*}"
+            case "$uri" in
+                gh:*|http://*|https://*|git://*) ;;
+                *) continue ;;
+            esac
+            name="${uri%/}"
+            name="${name##*/}"
+            name="${name%.zip}"
+            name="${name%.git}"
+            name="${name#Omeka-S-module-}"
+            printf '%s\n' "${name,,}"
+        done < "$manifest"
+    done
+}
+pinned="$(pinned_modules | sort -u)"
+
 echo "Updating registry-backed live modules..."
-docker compose exec -T php omeka-s-cli module:update \
-    --all --upgrade --base-path /var/www/html
+registry_list="$(docker compose exec -T php omeka-s-cli module:list --base-path /var/www/html)"
+while IFS= read -r module_id; do
+    [[ -n "$module_id" ]] || continue
+    if printf '%s\n' "$pinned" | grep -Fxq "${module_id,,}"; then
+        echo "Skipping $module_id: pinned in a manifest"
+        continue
+    fi
+    # Migrations run once at the end, for every module that needs them.
+    docker compose exec -T php omeka-s-cli module:update \
+        --base-path /var/www/html "$module_id" </dev/null
+done < <(printf '%s\n' "$registry_list" | awk -F '|' '$8 ~ /yes/ {
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2
+    }')
 
 read_module_manifest() {
     local manifest="$1" line uri
@@ -91,8 +133,7 @@ read_module_manifest() {
     done < "$manifest"
 }
 
-for manifest in _docker/default-modules.txt _docker/extra-modules.txt \
-    "${deployment_manifests[0]}"; do
+for manifest in "${module_manifests[@]}"; do
     [[ -f "$manifest" ]] && read_module_manifest "$manifest"
 done
 

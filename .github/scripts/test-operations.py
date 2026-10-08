@@ -52,7 +52,7 @@ case "$*" in
   'volume inspect '*) [[ "$3" != "${TEST_MISSING_VOLUME:-}" ]] ;;
   *'module:list'*)
     [[ "${TEST_LIST_FAIL:-}" != 1 ]] || exit 42
-    echo '| Probe | 1.0 | needs_upgrade |' ;;
+    printf '%s\n' "${TEST_LIST_ROWS:-| Probe | 1.0 | needs_upgrade |}" ;;
   *'mysqldump --help'*) echo '--masking-policies' ;;
   *'exec mysqldump '*) printf '%s\n' '-- SQL fixture' '-- Dump completed on test' ;;
   *'SELECT 1'*) exit 0 ;;
@@ -144,9 +144,8 @@ esac
         docker = self.root / "bin/docker"
         fake = docker.read_text().replace(
             "case \"$*\" in", "case \"$*\" in\n  *'module:download'*|*'module:upgrade'*) cat >/dev/null; exit 0 ;;", 1)
-        fake = fake.replace("echo '| Probe | 1.0 | needs_upgrade |'",
-                            "printf '%s\\n' '| Probe | 1.0 | needs_upgrade |' '| SecondProbe | 1.0 | needs_upgrade |'")
         docker.write_text(fake)
+        self.env["TEST_LIST_ROWS"] = "| Probe | 1.0 | needs_upgrade |\n| SecondProbe | 1.0 | needs_upgrade |"
         result = self.run_script("update-extensions.sh", "--no-backup")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         log = self.log.read_text()
@@ -154,6 +153,22 @@ esac
             self.assertIn("https://example.org/" + name + ".zip", log)
         for name in ("Probe", "SecondProbe"):
             self.assertIn("module:upgrade --base-path /var/www/html " + name, log)
+
+    def test_registry_update_skips_pinned_modules(self):
+        # The registry can lag a pin and spell its ID in another case; updating a
+        # pinned module from it downgraded DRESearch and unpacked DRESEO beside DRESeo.
+        self.config["services"]["php"]["volumes"] = [{"target": "/var/www/html/modules"}]
+        (self.root / "_docker/default-modules.txt").write_text(
+            "https://example.org/v1/DRESeo.zip\ngh:owner/Omeka-S-module-Log\n")
+        self.env["TEST_LIST_ROWS"] = "\n".join([
+            "| DRESeo | DRE SEO | active | 0.10.1 | 0.10.1 | 0.10.0 | yes |",
+            "| Log | Log | active | 3.4.41 | 3.4.41 | 3.4.40 | yes |",
+            "| Mapping | Mapping | active | 2.0 | 2.0 | 2.1 | yes |",
+            "| Current | Current | active | 1.0 | 1.0 | 1.0 | |"])
+        result = self.run_script("update-extensions.sh", "--no-backup")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        updates = [l for l in self.log.read_text().splitlines() if "module:update" in l]
+        self.assertEqual(updates, ["compose exec -T php omeka-s-cli module:update --base-path /var/www/html Mapping"])
 
     def test_failed_module_inventory_is_not_success(self):
         self.env["TEST_LIST_FAIL"] = "1"
