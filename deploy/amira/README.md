@@ -15,6 +15,7 @@ deployment-specific services — copy the pattern, not the content.
 |-------|-----------|-----------------|
 | `amira-mcp` service | [`compose.amira.yml`](../../compose.amira.yml) | An extra service on its own private `mcp` network, shared only with `web` |
 | `/mcp` web address | [`nginx-mcp-location.conf`](nginx-mcp-location.conf) | Mounted into `/etc/nginx/templates/extra-locations/`, which the base `nginx.conf` includes automatically |
+| `/favicon.ico` | [`nginx-favicon-location.conf`](nginx-favicon-location.conf) | Same extension point; serves DRE-theme's `favicon-48.png` at the domain root |
 | DRE modules | [`modules.txt`](modules.txt) | Installed into the image via the `EXTRA_MODULES_FILE` setting |
 | DRE-theme | [`themes.txt`](themes.txt) | Installed via `EXTRA_THEMES_FILE`, renamed to the folder the site rows expect |
 | `dre` vocabulary | [`vocabularies/`](vocabularies/) | `dre.owl` + `dre.json` mounted into the vocabulary folder; imported on first start |
