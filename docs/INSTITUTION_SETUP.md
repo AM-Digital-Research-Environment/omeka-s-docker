@@ -34,7 +34,7 @@ proxy networks can be supported by an institutional replacement for
 ## Extensions and branding
 
 Create `deploy/example/modules.txt` and `deploy/example/themes.txt` using the
-manifest format documented in the README. Add an overlay:
+manifest format documented in [CUSTOMISING.md](CUSTOMISING.md#modules). Add an overlay:
 
 ```yaml
 services:

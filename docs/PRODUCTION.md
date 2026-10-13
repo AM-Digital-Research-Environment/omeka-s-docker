@@ -1,8 +1,69 @@
 # Production deployment
 
-A walk-through for taking this Omeka S stack from a local install to a publicly reachable, TLS-terminated, hardened site. The README has snippets for [Caddy](../README.md#caddy-easiest-certificates-handled-for-you), [Traefik](../README.md#traefik-docker-native), and [standalone nginx](../README.md#standalone-nginx-reverse-proxy) reverse proxies — this guide expands on the standalone-nginx path with everything around it (firewall, cert provisioning, host hardening, verification).
+A walk-through for taking this Omeka S stack from a local install to a publicly reachable, TLS-terminated, hardened site.
 
-If you use Caddy or Traefik instead, only sections **2** and **6** (and onward) are still relevant — the proxies handle TLS and HTTPS redirect themselves.
+The site itself speaks plain HTTP. For a public site, put something in front of
+it that handles HTTPS certificates. Whichever you choose, Omeka produces correct
+`https://` links, emails, and IIIF manifests automatically, as long as the proxy
+forwards the usual `X-Forwarded-Proto` header (Caddy, Traefik, and standard
+nginx all do). Set `SERVER_NAME` in `.env` to your public hostname.
+
+## Choosing a proxy
+
+**Caddy (easiest — certificates handled for you).** The
+[one-command setup script](https://github.com/AM-Digital-Research-Environment/am-omeka-s-docker-bootstrap)
+sets it up for you. By hand: install [Caddy](https://caddyserver.com/) on the
+server and create a Caddyfile:
+
+```
+omeka.example.edu {
+    reverse_proxy 127.0.0.1:8080
+}
+```
+
+Then set `NGINX_PORT=8080` in `.env` so Caddy can take port 80, apply it with
+`docker compose up -d --force-recreate web`, and start Caddy. Certificates are
+obtained and renewed automatically from then on.
+
+**Traefik (Docker-native).** Add labels to the `web` service in a
+`docker-compose.override.yml`:
+
+```yaml
+services:
+  web:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.omeka.rule=Host(`omeka.example.edu`)"
+      - "traefik.http.routers.omeka.tls.certresolver=letsencrypt"
+```
+
+**Standalone nginx on the host.** The rest of this guide walks through it, with
+everything around it: firewall, certificate provisioning, host hardening,
+verification. If you use Caddy or Traefik instead, only sections **2** and **6**
+(and onward) are still relevant — those proxies handle TLS and the HTTPS
+redirect themselves.
+
+## What the template already hardens
+
+| | |
+|---|---|
+| **The database is unreachable** | It has no port open to the machine or the internet — only the site can talk to it |
+| **The site itself listens locally by default** | It expects an HTTPS proxy in front |
+| **Nothing runs as root** | Omeka runs as an unprivileged user, and containers can't gain new privileges |
+| **Omeka's own code can't be modified** | Omeka, its libraries, and its configuration are read-only while running. The module and theme folders are writable, because the admin panel manages them — [lock those down too](IMMUTABLE_CODE.md#locking-modules-and-themes-down) if you'd rather they weren't |
+| **Only one PHP file can execute** | See [What the site serves](CUSTOMISING.md#what-the-site-serves) |
+| **Private files aren't served** | Configuration, logs, source code, and dependency lists all return 404 |
+| **Resource limits** | Each service has a CPU and memory cap, so one misbehaving part can't take the machine down |
+| **Login is rate-limited** | 5 attempts per minute on the admin login page |
+| **Versions are locked** | Every image is pinned to an exact published build, so a rebuild can't silently pull something different |
+
+What is left to you: HTTPS (this guide), keeping `.env` out of Git and encrypting
+backups (they contain it), removing the admin password from `.env` once the first
+account exists, and treating Docker access on the host as root access. Consider
+scanning your images for known vulnerabilities, e.g.
+`docker scout cves omeka-s-docker-php:latest`. Committed database transactions
+are flushed to disk by default; for the trade-off see
+`innodb-flush-log-at-trx-commit` in [DB_TUNING.md](DB_TUNING.md).
 
 ---
 
@@ -66,7 +127,61 @@ See [institution setup](INSTITUTION_SETUP.md) for examples and resource sizing.
 sudo apt-get install -y nginx
 ```
 
-Write `/etc/nginx/sites-available/yoursite.conf` using [the example in the README](../README.md#standalone-nginx-reverse-proxy). Key points:
+Write `/etc/nginx/sites-available/yoursite.conf`:
+
+```nginx
+# HTTP → HTTPS redirect (also serves ACME HTTP-01 challenges)
+server {
+    listen 80;
+    listen [::]:80;
+    server_name omeka.example.edu;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# HTTPS — terminates TLS and proxies to the Omeka container on :8080
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name omeka.example.edu;
+
+    ssl_certificate     /etc/letsencrypt/live/omeka.example.edu/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/omeka.example.edu/privkey.pem;
+
+    # Modern TLS (Mozilla intermediate)
+    ssl_protocols           TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache       shared:SSL:50m;
+    ssl_session_timeout     1d;
+    ssl_session_tickets     off;
+
+    # Enable HSTS only after the cert pipeline is confirmed working
+    # add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+
+    # Match the container's upload limit (Omeka allows 100 MB)
+    client_max_body_size 100M;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host  $host;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+}
+```
+
+Key points:
 
 - The HTTP block redirects to HTTPS **except** for `/.well-known/acme-challenge/` — needed if you use certbot HTTP-01 challenges.
 - `client_max_body_size 100M` to match the container's upload limit.
