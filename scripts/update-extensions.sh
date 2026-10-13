@@ -5,26 +5,33 @@ set -Eeuo pipefail
 
 usage() {
     cat <<'EOF'
-Usage: scripts/update-extensions.sh [--dry-run] [--no-backup] [--pull]
+Usage: scripts/update-extensions.sh [--dry-run] [--no-backup] [--rebuild] [--pull]
 
-Updates module/theme release pins, rebuilds the matching PHP and nginx images,
-and, when the active Compose stack uses extension volumes, updates those live
-volumes too. Pending module database migrations are applied at the end.
+Updates module/theme release pins and the code the site runs. When the active
+Compose stack keeps modules/themes on volumes, the live volumes are refreshed
+in place and the images are left alone; when the code is image-managed, the
+PHP and nginx images are rebuilt instead. Pending module database migrations
+are applied at the end.
 
   --dry-run    Check pinned GitHub releases; change nothing.
   --no-backup  Skip the normal database/media/extension backup.
-  --pull       Refresh Dockerfile base images while rebuilding.
+  --rebuild    Also rebuild the images on a volume-backed stack, so a fresh
+               volume would be seeded with the new pins.
+  --pull       Refresh Dockerfile base images while rebuilding (implies
+               --rebuild).
 EOF
 }
 
 dry_run=false
 backup=true
+rebuild=false
 rebuild_args=()
 while (($#)); do
     case "$1" in
         --dry-run) dry_run=true ;;
         --no-backup) backup=false ;;
-        --pull) rebuild_args+=(--pull) ;;
+        --rebuild) rebuild=true ;;
+        --pull) rebuild=true; rebuild_args+=(--pull) ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
     esac
@@ -38,19 +45,11 @@ if [[ "$dry_run" == true ]]; then
     exec bash scripts/update-module.sh --dry-run
 fi
 
-if [[ "$backup" == true ]]; then
-    echo "Backing up before extension updates..."
-    bash scripts/backup.sh
-fi
-
-# This updates every pinned release manifest and refreshes branch-based image
-# downloads. It also rebuilds/restarts the application images.
-bash scripts/update-module.sh "${rebuild_args[@]}"
-
-# In the default layout, persistent volumes shadow modules/themes in the rebuilt
-# image. Detect that layout and update the live copies as part of the same job.
+# In the default layout, persistent volumes shadow modules/themes in the image,
+# so the site runs whatever the volumes hold. Detect that layout up front.
 compose_config="$(docker compose config --format json)"
-if ! python3 -c '
+volume_layout=false
+python3 -c '
 import json, sys
 config = json.load(sys.stdin)
 mounts = config["services"]["php"].get("volumes", [])
@@ -58,7 +57,25 @@ sys.exit(0 if any(
     isinstance(m, dict) and m.get("target") == "/var/www/html/modules"
     for m in mounts
 ) else 1)
-' <<< "$compose_config"; then
+' <<< "$compose_config" && volume_layout=true
+
+if [[ "$backup" == true ]]; then
+    echo "Backing up before extension updates..."
+    bash scripts/backup.sh
+fi
+
+# This updates every pinned release manifest. A rebuild only matters where the
+# image is what the site runs; on a volume-backed stack it would just reseed
+# volumes that already exist, so it is skipped unless asked for. The image then
+# lags the pins until the next rebuild (update-omeka.sh, rebuild-code.sh, or
+# --rebuild here), which only shows if the extension volumes are recreated.
+if [[ "$volume_layout" == true && "$rebuild" != true ]]; then
+    bash scripts/update-module.sh --no-rebuild
+else
+    bash scripts/update-module.sh "${rebuild_args[@]}"
+fi
+
+if [[ "$volume_layout" != true ]]; then
     echo "Extension code is image-managed; no live volume sync is needed."
 else
 

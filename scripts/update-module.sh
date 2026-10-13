@@ -5,14 +5,17 @@ set -Eeuo pipefail
 
 usage() {
     cat <<'EOF'
-Usage: scripts/update-module.sh [--dry-run] [rebuild options]
+Usage: scripts/update-module.sh [--dry-run] [--no-rebuild] [rebuild options]
 
 Rewrites the tag in every pinned GitHub release archive found in the module and
 theme manifests to that repository's newest release, then rebuilds both images
 with the download layers invalidated, so lines tracking a branch are re-fetched
 as well.
 
-  --dry-run   Report what would change; write nothing and rebuild nothing.
+  --dry-run     Report what would change; write nothing and rebuild nothing.
+  --no-rebuild  Rewrite the pins but build nothing. For stacks whose modules
+                and themes live on volumes, where scripts/update-extensions.sh
+                refreshes the live copies directly.
 
 Any other option is passed to scripts/rebuild-code.sh (--pull, --no-start).
 
@@ -24,10 +27,12 @@ EOF
 }
 
 dry_run=false
+rebuild=true
 rebuild_args=()
 while (($#)); do
     case "$1" in
         --dry-run) dry_run=true ;;
+        --no-rebuild) rebuild=false ;;
         -h|--help) usage; exit 0 ;;
         *) rebuild_args+=("$1") ;;
     esac
@@ -135,6 +140,12 @@ fi
 if [[ "$dry_run" == true ]]; then
     echo
     echo "Dry run: no manifest was written and no image was rebuilt."
+    exit 0
+fi
+
+if [[ "$rebuild" != true ]]; then
+    echo
+    echo "${bumped} pinned archive(s) rewritten; images not rebuilt (--no-rebuild)."
     exit 0
 fi
 

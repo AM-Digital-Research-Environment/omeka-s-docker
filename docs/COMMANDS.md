@@ -278,10 +278,18 @@ To update everything configured for either storage layout in one pass:
 # Check release pins only
 bash scripts/update-extensions.sh --dry-run
 
-# Back up, update pins, rebuild, refresh live volumes when present, and apply
-# pending module migrations
+# Back up, update pins, refresh the live volumes (or rebuild the images when
+# the code is image-managed), and apply pending module migrations
 bash scripts/update-extensions.sh
+
+# Also rebuild the images on a volume-backed stack, so they match the pins
+bash scripts/update-extensions.sh --rebuild
 ```
+
+On a volume-backed stack the site runs the code on the volumes, so a module or
+theme bump needs no rebuild and no container restart; PHP picks up the new
+files within a couple of seconds. The images keep the old pins until the next
+rebuild, which only matters if the extension volumes are ever recreated.
 
 The backup is the safe default because module migrations change the database.
 Use `--no-backup` only when you already have a current verified backup.
