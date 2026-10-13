@@ -149,6 +149,7 @@ everything else.**
 | Task | Use | Why |
 |---|---|---|
 | Add or update a module or theme | **Easy Admin, or omeka-s-cli** | They are stored outside the image, so a running site can change them |
+| Update every configured module and theme at once | `scripts/update-extensions.sh` | Moves pinned releases forward and updates the running copies in place, no rebuild |
 | Move to a new Omeka S version | `scripts/update-omeka.sh` | Omeka's own code is built in: backs up, pins the version, rebuilds |
 | Turn a module on or off | **omeka-s-cli** | Database state |
 | Apply a module or core database upgrade | **omeka-s-cli** | `module:upgrade`, `core:migrate` — deliberately manual |

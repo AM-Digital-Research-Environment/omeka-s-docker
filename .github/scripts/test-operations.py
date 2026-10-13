@@ -170,6 +170,24 @@ esac
         updates = [l for l in self.log.read_text().splitlines() if "module:update" in l]
         self.assertEqual(updates, ["compose exec -T php omeka-s-cli module:update --base-path /var/www/html Mapping"])
 
+    def update_module_args(self, *args):
+        (self.root / "scripts/update-module.sh").write_text(
+            '#!/bin/bash\nprintf "%s\\n" "$*" > "$PWD/update-module.args"\n')
+        result = self.run_script("update-extensions.sh", "--no-backup", *args)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        return (self.root / "update-module.args").read_text().strip()
+
+    def test_volume_extensions_skip_image_rebuild(self):
+        # The site runs the volumes' copies, so rebuilding for a module bump only
+        # costs time; --rebuild (or --pull) still asks for it.
+        self.config["services"]["php"]["volumes"] = [{"target": "/var/www/html/modules"}]
+        self.assertEqual(self.update_module_args(), "--no-rebuild")
+        self.assertEqual(self.update_module_args("--rebuild"), "")
+        self.assertEqual(self.update_module_args("--pull"), "--pull")
+
+    def test_immutable_extensions_always_rebuild(self):
+        self.assertEqual(self.update_module_args(), "")
+
     def test_failed_module_inventory_is_not_success(self):
         self.env["TEST_LIST_FAIL"] = "1"
         result = self.run_script("update-extensions.sh", "--no-backup")

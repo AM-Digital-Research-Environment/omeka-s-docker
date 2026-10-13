@@ -20,7 +20,7 @@ deployment-specific services — copy the pattern, not the content.
 | DRE-theme | [`themes.txt`](themes.txt) | Installed via `EXTRA_THEMES_FILE`, renamed to the folder the site rows expect |
 | `dre` vocabulary | [`vocabularies/`](vocabularies/) | `dre.owl` + `dre.json` mounted into the vocabulary folder; imported on first start |
 | Search | base `docker-compose.yml` | Switched on with `COMPOSE_PROFILES=search`, used by the DRESearch module |
-| Storage for precomputed visualizations | [`compose.amira.yml`](../../compose.amira.yml) | A `dre_visualizations_data` volume — see [below](#the-visualizations-volume) |
+| Storage for precomputed visualizations | [`compose.amira.yml`](../../compose.amira.yml) | A `dre_visualizations_private` volume — see [below](#the-visualizations-volume) |
 | iframe embedding | `.env` | `FRAME_ANCESTORS` permits the frederickmadore.com domains |
 | MCP version | `.env` | `AMIRA_MCP_VERSION`; leave unset to use the release pinned in [`compose.amira.yml`](../../compose.amira.yml) |
 
@@ -31,8 +31,9 @@ explains why each one is pinned the way it is.
 
 Every DRE module and DRE-theme is installed from its published release archive,
 so the images carry the packaged module or theme rather than a clone of its
-development tree. `bash scripts/update-module.sh` moves those pins to the newest
-release.
+development tree. `bash scripts/update-extensions.sh` moves those pins to the
+newest release and updates the running site's copies in place, without
+rebuilding the images (add `--rebuild` to also rebuild them).
 
 ## Activating the overlay
 
@@ -140,35 +141,23 @@ the site easier to attack:
 ## The visualizations volume
 
 The DreVisualizations module precomputes its dashboards, knowledge graph, and
-photo galleries, and writes the results inside its own module folder. The
-overlay gives that one sub-folder its own storage, `dre_visualizations_data`,
-mounted for both `php` (which writes it) and `web` (which serves it to browsers,
-read-only).
+photo galleries. Since v2.29.0 it writes them to private storage outside the
+document root, named by `DRE_VISUALIZATIONS_DATA_DIR`, and serves them through
+an Omeka endpoint rather than as static files. The overlay points that setting
+at its own volume, `dre_visualizations_private`, mounted for `php` only; nginx
+has nothing to read from it.
 
-It earns its keep two ways: the folder stays writable even on a site that has
-[locked modules and themes down](../../docs/IMMUTABLE_CODE.md#locking-modules-and-themes-down),
-and roughly a gigabyte of regenerable output stays out of every module backup.
-
-Two things to know:
+It earns its keep two ways: the output survives restarts and cannot be swept up
+by a temporary-directory cleanup, and roughly a gigabyte of regenerable output
+stays out of every backup.
 
 **It is not backed up, on purpose.** Everything in it can be regenerated from the
 database with the admin "Regenerate" action. Disaster recovery is: restore the
 database and media, start the stack, regenerate.
 
-**It hides the module's own shipped data files.** Docker copies them in the first
-time the empty volume is mounted, and never again. So if a new release of
-DreVisualizations changes those shipped inputs, a rebuild alone won't pick them
-up — delete the volume and regenerate:
-
-```bash
-docker compose down
-docker volume rm omeka-dre-dev_dre_visualizations_data
-docker compose up -d
-```
-
-The real fix belongs upstream: the module should write under Omeka's `files/`
-folder rather than into its own code. Until it does, this mount keeps it working
-without patching the module.
+The module's own shipped files (its static geography under `asset/`) are no
+longer covered by this volume. They are ordinary module content on the module
+storage, so updating the module updates them; no volume needs deleting.
 
 ## Rolling your own overlay
 

@@ -63,8 +63,9 @@ on persistent volumes. Rebuilds alone do not update existing extension volumes.
 
 `scripts/update-module.sh` checks only generic and selected deployment
 manifests, including custom file paths. `scripts/update-extensions.sh` also
-updates live extension volumes and runs pending migrations. These commands
-require a valid `.env`/Compose configuration. Use `--dry-run` first. Keep
+updates live extension volumes and runs pending migrations; on a volume-backed
+stack it does so without rebuilding the images unless given `--rebuild`. These
+commands require a valid `.env`/Compose configuration. Use `--dry-run` first. Keep
 changes to files rather than scattering release URLs through shell history;
 review pins before committing them.
 

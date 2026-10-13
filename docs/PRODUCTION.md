@@ -282,10 +282,9 @@ fix; they are the things to know before trusting an assumption.
   `.immutable-layout-v1` stops the stack booting an installed database against
   an empty media volume. It is not a cryptographic association between a
   specific database and a specific media volume.
-- **AMIRA only:** the visualizations volume masks the module's shipped static
-  inputs after its first population. If a DreVisualizations release changes
-  those inputs, delete the volume and regenerate rather than rebuilding alone —
-  see [deploy/amira/README.md](../deploy/amira/README.md).
+- **AMIRA only:** precomputed visualizations are not backed up. After a
+  restore, run the DreVisualizations admin "Regenerate" action — see
+  [deploy/amira/README.md](../deploy/amira/README.md#the-visualizations-volume).
 
 ### Memory ceilings are oversubscribed on purpose
 

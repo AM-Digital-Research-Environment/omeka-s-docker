@@ -31,7 +31,7 @@ those two archives are simply absent from its backups.
 | Omeka itself and its libraries | They come from the image. The repository, at the revision you built from, is the record of them; deployment configuration is backed up separately |
 | Typesense search index | Derived from Omeka; a live filesystem copy is not a supported database snapshot |
 | Login sessions | Nothing worth keeping; people simply log in again |
-| `dre_visualizations_data` (AMIRA only) | Rebuilt from the database by the admin "Regenerate" action |
+| `dre_visualizations_private` (AMIRA only) | Rebuilt from the database by the admin "Regenerate" action |
 
 This is why the repository matters as much as the backup: the backup holds your
 data and settings, the repository holds the recipe for Omeka. Keep both, and

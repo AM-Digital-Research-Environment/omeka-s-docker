@@ -13,7 +13,9 @@ nothing can change them on a running site. Upgrading Omeka is always a rebuild.
 lists in `_docker/` are used to fill the module and theme storage the first time
 a site starts. After that the site's own copies are what counts, so the admin
 panel can install, update, and remove them the way Omeka documents — and a later
-image rebuild does not overwrite what the site is running.
+image rebuild does not overwrite what the site is running. For the same reason
+`scripts/update-extensions.sh` updates them in place and skips the image rebuild
+unless given `--rebuild`.
 
 **PHP and the web server are built together.** They are two targets in the same
 `Dockerfile`, and the web target copies the finished application folder out of

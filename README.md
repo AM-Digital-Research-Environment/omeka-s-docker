@@ -77,7 +77,8 @@ instance from it.
 │   ├── rebuild-code.sh         # Rebuild and restart on new Omeka / PHP / web server code
 │   ├── install-module.sh       # Add a module to what a build starts with
 │   ├── install-theme.sh        # Add a theme to what a build starts with
-│   ├── update-module.sh        # Re-download modules that track a branch
+│   ├── update-extensions.sh    # Update configured modules and themes on the running site
+│   ├── update-module.sh        # Move release pins forward and rebuild the images
 │   ├── update-omeka.sh         # Move to a new Omeka S version
 │   ├── backup.sh               # Back up database, files, and settings
 │   └── restore.sh              # Restore a backup, here or on a new server
@@ -539,6 +540,18 @@ docker compose exec php omeka-s-cli module:upgrade Cron  # then apply its databa
 `module:upgrade` changes the database, so back up first — going back to older
 code does not undo it.
 
+To update every module and theme configured in the lists in one go — moving
+pinned release archives to their newest release as well — use:
+
+```bash
+bash scripts/update-extensions.sh --dry-run   # see what would move
+bash scripts/update-extensions.sh             # back up, update, apply database changes
+```
+
+On a normal site this updates the running copies in place: no image rebuild and
+no restart. Add `--rebuild` to also rebuild the images so they match the new
+pins; that only matters if the module and theme storage is ever recreated.
+
 The two commands below apply only to sites that have
 [locked modules and themes down](#locking-modules-and-themes-down); on a normal
 site they rebuild the image without changing what is running:
@@ -656,6 +669,8 @@ Plain names work too for modules in Omeka's own registry (`CSVImport`), as do
 full GitHub references. `bash scripts/install-module.sh` writes these lines for
 you and rebuilds in one step, and `bash scripts/update-module.sh` moves every
 pinned release archive to that project's newest release before rebuilding.
+On a site that is already running, `bash scripts/update-extensions.sh` moves the
+pins and updates the running copies instead, without a rebuild.
 
 Only add to `_docker/default-modules.txt` if a module genuinely belongs in
 *every* site built from this template. For anything specific to your own
