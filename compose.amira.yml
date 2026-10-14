@@ -5,6 +5,7 @@
 #   - amira-mcp service (MCP server for the public AMIRA dataset at /mcp)
 #   - /mcp nginx location (deploy/amira/nginx-mcp-location.conf)
 #   - /favicon.ico nginx location (deploy/amira/nginx-favicon-location.conf)
+#   - /.well-known/void nginx location (deploy/amira/nginx-well-known-void-location.conf)
 #   - DRE modules baked into the php image (deploy/amira/modules.txt)
 #   - dre custom vocabulary (deploy/amira/vocabularies/)
 #
@@ -33,6 +34,8 @@ services:
       - ./deploy/amira/nginx-mcp-location.conf:/etc/nginx/templates/extra-locations/mcp.conf.template:ro
       # Serves the DRE-theme icon at /favicon.ico (same extension point).
       - ./deploy/amira/nginx-favicon-location.conf:/etc/nginx/templates/extra-locations/favicon.conf.template:ro
+      # Lets /.well-known/void through to DRE-LinkedData (same extension point).
+      - ./deploy/amira/nginx-well-known-void-location.conf:/etc/nginx/templates/extra-locations/well-known-void.conf.template:ro
       # No DreVisualizations mount here any more. Up to v2.28.x nginx served the
       # precomputed dashboard JSON straight from the module's asset/data tree;
       # v2.29.0 moved generated data to private storage served through a

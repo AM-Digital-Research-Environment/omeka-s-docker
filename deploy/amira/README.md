@@ -16,6 +16,7 @@ deployment-specific services — copy the pattern, not the content.
 | `amira-mcp` service | [`compose.amira.yml`](../../compose.amira.yml) | An extra service on its own private `mcp` network, shared only with `web` |
 | `/mcp` web address | [`nginx-mcp-location.conf`](nginx-mcp-location.conf) | Mounted into `/etc/nginx/templates/extra-locations/`, which the base `nginx.conf` includes automatically |
 | `/favicon.ico` | [`nginx-favicon-location.conf`](nginx-favicon-location.conf) | Same extension point; serves DRE-theme's `favicon-48.png` at the domain root |
+| `/.well-known/void` | [`nginx-well-known-void-location.conf`](nginx-well-known-void-location.conf) | Same extension point; exempts this one path from the dot-path deny so DRE-LinkedData can answer it |
 | DRE modules | [`modules.txt`](modules.txt) | Installed into the image via the `EXTRA_MODULES_FILE` setting |
 | DRE-theme | [`themes.txt`](themes.txt) | Installed via `EXTRA_THEMES_FILE`, renamed to the folder the site rows expect |
 | `dre` vocabulary | [`vocabularies/`](vocabularies/) | `dre.owl` + `dre.json` mounted into the vocabulary folder; imported on first start |
@@ -25,8 +26,8 @@ deployment-specific services — copy the pattern, not the content.
 | MCP version | `.env` | `AMIRA_MCP_VERSION`; leave unset to use the release pinned in [`compose.amira.yml`](../../compose.amira.yml) |
 
 The modules installed for AMIRA are DRESearch, DRE-SEO, DRE-Visualizations
-(which provides the `DreVisualizations` module), BulkEdit, Reference, and
-LocalContexts. [`modules.txt`](modules.txt) is the authoritative list and
+(which provides the `DreVisualizations` module), DRE-LinkedData (which provides
+the `DRELinkedData` module), BulkEdit, Reference, and LocalContexts. [`modules.txt`](modules.txt) is the authoritative list and
 explains why each one is pinned the way it is.
 
 Every DRE module and DRE-theme is installed from its published release archive,
