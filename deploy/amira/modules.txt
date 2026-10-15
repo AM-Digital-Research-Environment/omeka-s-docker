@@ -10,7 +10,7 @@
 # and git history included. Prefer the release archive where one exists.
 # scripts/update-module.sh rewrites the tag in these URLs to the newest release.
 https://github.com/AM-Digital-Research-Environment/DRESearch/releases/download/v1.28.1/DRESearch.zip
-https://github.com/AM-Digital-Research-Environment/DRE-SEO/releases/download/v0.13.0/DRESeo.zip
+https://github.com/AM-Digital-Research-Environment/DRE-SEO/releases/download/v0.13.1/DRESeo.zip
 # The repository is DRE-Visualizations; the archive it publishes, and so the
 # module folder it unpacks to, is DreVisualizations. Since v2.29.0 its generated
 # artifacts live on a private volume outside the document root
@@ -19,7 +19,7 @@ https://github.com/AM-Digital-Research-Environment/DRE-Visualizations/releases/d
 # The repository is DRE-LinkedData; the module folder is DRELinkedData. Its dump
 # lives under files/ (already persistent), and /.well-known/void needs the
 # exception in deploy/amira/nginx-well-known-void-location.conf.
-https://github.com/AM-Digital-Research-Environment/DRE-LinkedData/releases/download/v0.3.0/DRELinkedData.zip
+https://github.com/AM-Digital-Research-Environment/DRE-LinkedData/releases/download/v0.3.1/DRELinkedData.zip
 
 # Third-party modules this deployment runs. BulkEdit and Reference depend on
 # Common, which _docker/default-modules.txt already provides. Their latest
