@@ -17,7 +17,7 @@ RUN apk add --no-cache curl \
 # silently never be offered an update. Referencing the stage name below keeps
 # one `FROM` line per tool as the single place a bump has to land.
 FROM ghcr.io/mlocati/php-extension-installer:2.11.1@sha256:bd9ea77afcbc8e55e58d55ca9a39153925367e972827d2f648c949fd0e44aaca AS php-extension-installer
-FROM composer/composer:2.10.3-bin@sha256:696bfbbb82d8ab6ad3672c505bedd659e3815fd1c03cb5ef65ef7ee07a083fa6 AS composer-bin
+FROM composer/composer:2.10.3-bin@sha256:206a6dc365fd66aac01e2744d8a6bc898108e802b1bcdde1cd782da788bf1db9 AS composer-bin
 
 FROM php:8.5.11-fpm-trixie@sha256:b7254c1e7bc85d2df3e0539c0b1de846aa23da9fb557ae3d51148bcd49f6ee5d AS runtime
 
