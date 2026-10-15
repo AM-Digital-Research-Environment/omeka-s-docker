@@ -6,6 +6,7 @@
 #   - /mcp nginx location (deploy/amira/nginx-mcp-location.conf)
 #   - /favicon.ico nginx location (deploy/amira/nginx-favicon-location.conf)
 #   - /.well-known/void nginx location (deploy/amira/nginx-well-known-void-location.conf)
+#   - dre: vocabulary at /ontology/dre (deploy/amira/nginx-dre-vocabulary-*.conf)
 #   - DRE modules baked into the php image (deploy/amira/modules.txt)
 #   - dre custom vocabulary (deploy/amira/vocabularies/)
 #
@@ -36,6 +37,12 @@ services:
       - ./deploy/amira/nginx-favicon-location.conf:/etc/nginx/templates/extra-locations/favicon.conf.template:ro
       # Lets /.well-known/void through to DRE-LinkedData (same extension point).
       - ./deploy/amira/nginx-well-known-void-location.conf:/etc/nginx/templates/extra-locations/well-known-void.conf.template:ro
+      # Serves the dre: vocabulary at /ontology/dre: the negotiation map goes in
+      # the http context (templates/ root -> conf.d/), the locations at the
+      # extension point, and the generated files in a read-only directory.
+      - ./deploy/amira/nginx-dre-vocabulary-map.conf:/etc/nginx/templates/01-dre-vocabulary.conf.template:ro
+      - ./deploy/amira/nginx-dre-vocabulary-location.conf:/etc/nginx/templates/extra-locations/dre-vocabulary.conf.template:ro
+      - ./deploy/amira/vocabularies:/srv/dre-vocabulary:ro
       # No DreVisualizations mount here any more. Up to v2.28.x nginx served the
       # precomputed dashboard JSON straight from the module's asset/data tree;
       # v2.29.0 moved generated data to private storage served through a
@@ -60,7 +67,7 @@ services:
       # dre vocabulary + its import manifest, picked up on first run by the
       # entrypoint's vocabulary import alongside the generic vocabularies
       # baked into the image at build.
-      - ./deploy/amira/vocabularies/dre.owl:/usr/local/share/omeka-vocabs/dre.owl:ro
+      - ./deploy/amira/vocabularies/dre.rdf:/usr/local/share/omeka-vocabs/dre.rdf:ro
       - ./deploy/amira/vocabularies/dre.json:/usr/local/share/omeka-vocabs/dre.json:ro
       # DreVisualizations generated state (v2.29.0+). The "Regenerate" job
       # writes precomputed dashboard, knowledge-graph and photo-gallery

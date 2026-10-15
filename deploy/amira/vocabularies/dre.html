@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRE vocabulary</title>
+<meta name="description" content="Properties the Africa Multiple Digital Research Environment adds to Dublin Core, BIBO, FOAF and the other vocabularies of AMIRA, the Africa Multiple Interactive Research Atlas: identifiers and links into the University of Bayreuth&#x27;s systems, provenance of machine-generated values, and the internal fields that keep AMIRA in sync with its source database.">
+<link rel="canonical" href="https://data.africamultiple.uni-bayreuth.de/ontology/dre">
+<link rel="alternate" type="text/turtle" href="dre.ttl" title="Turtle">
+<link rel="alternate" type="application/rdf+xml" href="dre.rdf" title="RDF/XML">
+<link rel="alternate" type="application/ld+json" href="dre.jsonld" title="JSON-LD">
+<style>
+  :root { color-scheme: light dark; --bg: #fff; --fg: #1d1d1f; --muted: #5f6368;
+    --rule: #dadce0; --accent: #8a1538; --code: #f4f4f5; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #121212; --fg: #e8e8ea; --muted: #a0a3a8; --rule: #333;
+      --accent: #e8849e; --code: #1e1e20; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 52rem; margin: 0 auto; padding: 2.5rem 1rem 4rem; }
+  h1 { font-size: 1.75rem; line-height: 1.25; margin: 0 0 .5rem; }
+  h2 { font-size: 1.25rem; margin: 2.5rem 0 1rem; }
+  h3 { font-size: 1.1rem; margin: 0 0 .25rem; }
+  a { color: var(--accent); }
+  code { background: var(--code); padding: .1em .3em; border-radius: 3px;
+    font-size: .9em; overflow-wrap: anywhere; }
+  .lead { color: var(--muted); margin: 0 0 1.5rem; }
+  dl.meta { display: grid; grid-template-columns: max-content 1fr; gap: .25rem 1rem; margin: 0; }
+  dl.meta dt { color: var(--muted); }
+  dl.meta dd { margin: 0; min-width: 0; }
+  section.term { border-top: 1px solid var(--rule); padding: 1.25rem 0; scroll-margin-top: 1rem; }
+  section.term:target { background: var(--code); padding-left: .75rem; padding-right: .75rem; }
+  .badge { font-size: .75rem; border: 1px solid var(--muted); color: var(--muted);
+    border-radius: 999px; padding: 0 .5rem; margin-left: .5rem; vertical-align: middle; }
+  .iri { color: var(--muted); font-size: .9rem; margin: 0 0 .5rem; }
+  .term p { margin: .25rem 0; }
+  @media (max-width: 30rem) { dl.meta { grid-template-columns: 1fr; } dl.meta dd { margin-bottom: .5rem; } }
+</style>
+</head>
+<body>
+<main>
+<h1>DRE — Africa Multiple Digital Research Environment vocabulary</h1>
+<p class="lead">Properties the Africa Multiple Digital Research Environment adds to Dublin Core, BIBO, FOAF and the other vocabularies of AMIRA, the Africa Multiple Interactive Research Atlas: identifiers and links into the University of Bayreuth&#x27;s systems, provenance of machine-generated values, and the internal fields that keep AMIRA in sync with its source database.</p>
+<dl class="meta">
+  <dt>Namespace</dt><dd><code>https://data.africamultiple.uni-bayreuth.de/ontology/dre#</code></dd>
+  <dt>Prefix</dt><dd><code>dre</code></dd>
+  <dt>Formats</dt><dd><a href="dre.ttl" type="text/turtle">Turtle</a> · <a href="dre.rdf" type="application/rdf+xml">RDF/XML</a> · <a href="dre.jsonld" type="application/ld+json">JSON-LD</a></dd>
+  <dt>Publisher</dt><dd><a href="http://www.wikidata.org/entity/Q141717295">Africa Multiple Cluster of Excellence, University of Bayreuth</a></dd>
+  <dt>Licence</dt><dd><a href="https://creativecommons.org/publicdomain/zero/1.0/">CC0 1.0</a></dd>
+  <dt>Modified</dt><dd>2026-10-15</dd>
+  <dt>Used in</dt><dd><a href="https://data.africamultiple.uni-bayreuth.de/linked-data/void">AMIRA's Linked Data</a></dd>
+</dl>
+
+<h2>Former namespace</h2>
+<p>Until 2026-10-15 these terms were published under <code>http://am-digital.org/ontology/dre/</code>,
+which never resolved. Each term here is declared <code>owl:equivalentProperty</code> to
+its former IRI, so data loaded from earlier dumps can still be joined with current data.</p>
+
+<h2>Terms</h2>
+<p><a href="#id"><code>dre:id</code></a>, <a href="#security"><code>dre:security</code></a>, <a href="#bitstream"><code>dre:bitstream</code></a>, <a href="#mongoId"><code>dre:mongoId</code></a>, <a href="#rdspaceHandle"><code>dre:rdspaceHandle</code></a>, <a href="#collectionUrl"><code>dre:collectionUrl</code></a>, <a href="#generatedBy"><code>dre:generatedBy</code></a>, <a href="#series"><code>dre:series</code></a>, <a href="#wisskiUrl"><code>dre:wisskiUrl</code></a></p>
+
+<section class="term" id="id">
+  <h3>DRE ID <code>dre:id</code></h3>
+  <p class="iri">https://data.africamultiple.uni-bayreuth.de/ontology/dre#id</p>
+  <p>Internal identifier used by the Digital Research Environment.</p>
+  <p>Equivalent to the former IRI <code>http://am-digital.org/ontology/dre/id</code>.</p>
+</section>
+<section class="term" id="security">
+  <h3>Security level <code>dre:security</code></h3>
+  <p class="iri">https://data.africamultiple.uni-bayreuth.de/ontology/dre#security</p>
+  <p>Data sensitivity level (DSL1-DSL5) defining access restrictions.</p>
+  <p>Equivalent to the former IRI <code>http://am-digital.org/ontology/dre/security</code>.</p>
+</section>
+<section class="term" id="bitstream">
+  <h3>Bitstream <code>dre:bitstream</code></h3>
+  <p class="iri">https://data.africamultiple.uni-bayreuth.de/ontology/dre#bitstream</p>
+  <p>Filename of the associated digital object or file.</p>
+  <p>Equivalent to the former IRI <code>http://am-digital.org/ontology/dre/bitstream</code>.</p>
+</section>
+<section class="term" id="mongoId">
+  <h3>MongoDB ID <code>dre:mongoId</code></h3>
+  <p class="iri">https://data.africamultiple.uni-bayreuth.de/ontology/dre#mongoId</p>
+  <p>Original MongoDB ObjectId, used for sync reconciliation. Should be private.</p>
+  <p>Equivalent to the former IRI <code>http://am-digital.org/ontology/dre/mongoId</code>.</p>
+</section>
+<section class="term" id="rdspaceHandle">
+  <h3>RDSpace Handle <code>dre:rdspaceHandle</code></h3>
+  <p class="iri">https://data.africamultiple.uni-bayreuth.de/ontology/dre#rdspaceHandle</p>
+  <p>Persistent handle URL from the RDSpace repository at the University of Bayreuth (rdspace.uni-bayreuth.de).</p>
+  <p>Equivalent to the former IRI <code>http://am-digital.org/ontology/dre/rdspaceHandle</code>.</p>
+</section>
+<section class="term" id="collectionUrl">
+  <h3>Collection URL <code>dre:collectionUrl</code></h3>
+  <p class="iri">https://data.africamultiple.uni-bayreuth.de/ontology/dre#collectionUrl</p>
+  <p>Permalink to the item in the University of Bayreuth Digital Collections (DSpace) platform at collections.uni-bayreuth.de. A different system from RDSpace.</p>
+  <p>Equivalent to the former IRI <code>http://am-digital.org/ontology/dre/collectionUrl</code>.</p>
+</section>
+<section class="term" id="generatedBy">
+  <h3>Generated by <code>dre:generatedBy</code></h3>
+  <p class="iri">https://data.africamultiple.uni-bayreuth.de/ontology/dre#generatedBy</p>
+  <p>The agent — typically an AI model — that automatically generated this value (e.g. a machine-produced transcript, description or translation). Used as a value annotation pointing to the generating tool&#x27;s authority record, distinguishing machine-generated content from a human contributor role.</p>
+  <p>Equivalent to the former IRI <code>http://am-digital.org/ontology/dre/generatedBy</code>.</p>
+</section>
+<section class="term" id="series">
+  <h3>Series <code>dre:series</code></h3>
+  <p class="iri">https://data.africamultiple.uni-bayreuth.de/ontology/dre#series</p>
+  <p>The bibliographic series (and series number) a publication belongs to, e.g. &#x27;BIGSASworks!; 23&#x27;. Kept distinct from dcterms:isPartOf, which holds the publication&#x27;s single immediate container (its journal or book) — a monograph or working paper with no such container uses its primary series as the isPartOf container instead, and only a secondary series statement lands here.</p>
+  <p>Equivalent to the former IRI <code>http://am-digital.org/ontology/dre/series</code>.</p>
+</section>
+<section class="term" id="wisskiUrl">
+  <h3>WissKI URL <code>dre:wisskiUrl</code><span class="badge">deprecated</span></h3>
+  <p class="iri">https://data.africamultiple.uni-bayreuth.de/ontology/dre#wisskiUrl</p>
+  <p>Navigate URL to the item in the WissKI knowledge base at the University of Bayreuth. No longer populated: WissKI links were retired from the sync.</p>
+  <p>Equivalent to the former IRI <code>http://am-digital.org/ontology/dre/wisskiUrl</code>.</p>
+</section>
+</main>
+</body>
+</html>
