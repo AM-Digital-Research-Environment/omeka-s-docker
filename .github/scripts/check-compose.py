@@ -241,7 +241,7 @@ if is_amira:
     # The AMIRA overlay contributes these; they disappear if compose.immutable.yml
     # is layered after it instead of directly after the base stack.
     for target in (
-        "/usr/local/share/omeka-vocabs/dre.owl",
+        "/usr/local/share/omeka-vocabs/dre.rdf",
         "/usr/local/share/omeka-vocabs/dre.json",
     ):
         require(
@@ -254,6 +254,18 @@ if is_amira:
         "AMIRA /mcp nginx template is missing — list compose.immutable.yml"
         " directly after docker-compose.yml",
     )
+    # The /ontology/dre locations use variables from the http-level map, so
+    # losing the map but keeping the locations would stop nginx from starting.
+    for target in (
+        "/etc/nginx/templates/01-dre-vocabulary.conf.template",
+        "/etc/nginx/templates/extra-locations/dre-vocabulary.conf.template",
+        "/srv/dre-vocabulary",
+    ):
+        require(
+            len(mounts_at(services["web"], target)) == 1,
+            f"AMIRA dre vocabulary mount {target} is missing — list compose.immutable.yml"
+            " directly after docker-compose.yml",
+        )
 
 php_tmpfs = tmpfs_targets(services["php"])
 for target in ("/tmp", "/run/omeka", "/run/php-fpm", "/var/www/.cache"):

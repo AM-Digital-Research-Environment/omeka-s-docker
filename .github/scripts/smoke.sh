@@ -280,6 +280,25 @@ else
     [[ "$code" != "502" ]]
 fi
 
+if [[ "$variant" == "amira" ]]; then
+    log "Probing the dre: vocabulary at /ontology/dre..."
+    # Negotiated by Accept in nginx: browsers get HTML, RDF clients what they
+    # name, and no preference gets Turtle. Each answer names its document.
+    for pair in "text/html,*/*;q=0.8|text/html|dre.html" "text/turtle|text/turtle|dre.ttl" \
+        "application/rdf+xml|application/rdf+xml|dre.rdf" \
+        "application/ld+json|application/ld+json|dre.jsonld" "*/*|text/turtle|dre.ttl"; do
+        IFS='|' read -r accept type document <<< "$pair"
+        headers=$(curl -fsS -D - -o /dev/null -H "Accept: $accept" "$url/ontology/dre")
+        echo "$headers" | grep -qi "^content-type: $type"
+        echo "$headers" | grep -qi "^content-location: /ontology/$document"
+        echo "$headers" | grep -qi '^vary: Accept\b'
+    done
+    curl -fsS "$url/ontology/dre.ttl" | grep -F '<https://data.africamultiple.uni-bayreuth.de/ontology/dre#>'
+    # Only the four generated documents are served from that directory.
+    [[ "$(probe "$url/ontology/dre.json")" == "404" ]]
+    echo "    /ontology/dre negotiates HTML, Turtle, RDF/XML and JSON-LD"
+fi
+
 log "Checking baked modules..."
 if [[ "$variant" == "amira" ]]; then
     docker compose exec -T php test -d /var/www/html/modules/DRESearch
