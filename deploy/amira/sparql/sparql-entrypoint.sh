@@ -21,13 +21,25 @@
 # and runs on. So a watchdog also samples the server's CPU time: saturated for
 # twice the query timeout means a query has escaped it, and the server is
 # restarted on the same store, which takes well under a second.
+#
+# Neither bounds a response that keeps streaming: the timeouts apply to each
+# read and write, not to the request. So each connection on the socket is
+# relayed by its own socat under `timeout`, and closed after
+# SPARQL_REQUEST_LIMIT seconds whatever it is doing. A slow or huge download
+# cannot hold one of the endpoint's few concurrent slots for long.
 
 set -Eeuo pipefail
+
+port=7878
+
+# One relayed connection (socat runs `sparql-entrypoint relay` per client).
+if [[ "${1:-}" == relay ]]; then
+    exec timeout --kill-after=2 "${SPARQL_REQUEST_LIMIT:-60}" socat STDIO "TCP:127.0.0.1:$port"
+fi
 
 dump_dir=${SPARQL_DUMP_DIR:-/media/dre-linked-data}
 data_dir=/data
 socket=/run/sparql/sparql.sock
-port=7878
 query_timeout=${SPARQL_QUERY_TIMEOUT:-30}
 poll_interval=${SPARQL_POLL_INTERVAL:-60}
 watchdog_limit=$((query_timeout * 2))
@@ -80,6 +92,9 @@ load() {
         return 1
     fi
     rm -f "$incoming"
+    # Compacts the freshly loaded store, as Oxigraph recommends for a
+    # read-only workload. Not essential: a store it fails on still serves.
+    nice -n 10 oxigraph optimize --location "$store" || log "optimize failed; serving the store as loaded"
     touch "$store.complete"
 }
 
@@ -136,7 +151,7 @@ server_ticks() {
     echo $((fields[11] + fields[12]))
 }
 
-socat "UNIX-LISTEN:$socket,fork,unlink-early,mode=0666" "TCP:127.0.0.1:$port" &
+socat "UNIX-LISTEN:$socket,fork,unlink-early,mode=0666" "EXEC:$0 relay" &
 relay_pid=$!
 
 saturated=$(saturation_ticks)
