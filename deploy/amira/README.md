@@ -162,8 +162,9 @@ by nginx (Oxigraph, reached over plain HTTP, would state `http://`). A browser
 opening `/sparql` itself is sent to the *Linked open data* page
 (`/s/amira/page/linked-open-data`), which explains the endpoint and runs
 example queries. Cross-origin requests are allowed, so browser tools such as
-YASGUI can use the endpoint directly. Results are gzip-compressed for clients
-that accept it. Writes are refused, and `SERVICE` (federated queries) always
+YASGUI can use the endpoint directly. Results are sent uncompressed:
+compressing them would take the web server's small CPU share, which every page
+request depends on. Writes are refused, and `SERVICE` (federated queries) always
 fails: the service has no network (see below).
 
 ### Switching it on
