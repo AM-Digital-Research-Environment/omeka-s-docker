@@ -293,6 +293,13 @@ if [[ "$variant" == "amira" ]]; then
     [[ "$(curl -s -o /dev/null -w '%{http_code}' -X OPTIONS -H 'Origin: https://example.org' \
         -H 'Access-Control-Request-Method: POST' "$url/sparql")" == "204" ]]
     [[ "$(curl -s -o /dev/null -w '%{http_code}' -X PUT "$url/sparql")" == "405" ]]
+    # A browser opening the endpoint is sent to the page that explains it,
+    # by a relative redirect, whether or not the service runs.
+    redirect=$(curl -sS -D - -o /dev/null -H 'Accept: text/html' "$url/sparql")
+    grep -q '^HTTP/[0-9.]* 303' <<< "$redirect"
+    grep -qi '^location: /s/amira/page/linked-open-data' <<< "$redirect"
+    # The service description's rewrite target is internal.
+    [[ "$(probe "$url/sparql-service-description")" == "404" ]]
 else
     [[ "$code" != "503" ]]
 fi

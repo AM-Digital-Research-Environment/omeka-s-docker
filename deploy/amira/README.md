@@ -157,8 +157,15 @@ https://data.africamultiple.uni-bayreuth.de/sparql
 
 Send a query as `GET /sparql?query=...` or `POST` it, as
 `application/sparql-query` or as a form. Without a query, `GET /sparql` returns
-the service description. Cross-origin requests are allowed, so browser tools
-such as YASGUI can use the endpoint directly. Writes are refused.
+the service description, with the endpoint's public `https://` address put back
+by nginx (Oxigraph, reached over plain HTTP, would state `http://`). A browser
+opening `/sparql` itself is sent to the *Linked open data* page
+(`/s/amira/page/linked-open-data`), which explains the endpoint and runs
+example queries. Cross-origin requests are allowed, so browser tools such as
+YASGUI can use the endpoint directly. Results are sent uncompressed:
+compressing them would take the web server's small CPU share, which every page
+request depends on. Writes are refused, and `SERVICE` (federated queries) always
+fails: the service has no network (see below).
 
 ### Switching it on
 
@@ -180,7 +187,7 @@ answers `503`, and the rest of the site is unaffected either way.
 
 ### Keeping it current
 
-There is nothing to schedule. Once a minute the service reads
+The endpoint follows the dump, so it is as current as the last dump. Once a minute the service reads
 `files/dre-linked-data/state.json`. When the module has published a new dump, it
 loads that dump into a fresh store while the old one keeps answering, and swaps
 it in only once the load has finished, so a query never sees half a graph. At
@@ -190,7 +197,20 @@ of the swap are cut off.
 A store is never edited in place: if a load fails, the previous one stays in
 service and the next check tries again. A restart reuses the last completed
 store, so it does not reload. The `sparql_data` volume holding the stores is not
-backed up; a fresh one is rebuilt from the dump on start.
+backed up; a fresh one is rebuilt from the dump on start. Each new store is
+compacted (`oxigraph optimize`) before it is swapped in.
+
+What does need scheduling is the dump itself, which the module writes only when
+asked. Its command-line script with `--if-stale` writes one only when records
+changed since the last, so it is cheap to run nightly, after the sync:
+
+```cron
+# /etc/cron.d/amira-linked-data  (replace <user> and the path)
+30 4 * * * <user> cd /path/to/omeka-s-docker && docker compose exec -T -u www-data php php modules/DRELinkedData/scripts/generate-dump.php --if-stale --quiet
+```
+
+It exits `0` when it wrote a dump or found nothing to do, and the endpoint picks
+the new dump up within a minute.
 
 ### What keeps it from slowing the site down
 
@@ -205,6 +225,12 @@ backed up; a fresh one is rebuilt from the dump on start.
   second and reuses the store. Tested on this host: a deliberate cross product
   was stopped at 60 s, and Omeka's pages kept answering in under 0.1 s
   throughout.
+- **A limit on the whole request.** Both timeouts above apply to each read and
+  write, so a result that keeps streaming, or a client that reads it slowly,
+  outlives them. Each connection is therefore relayed under `timeout` and
+  closed after `SPARQL_REQUEST_LIMIT` (60 s), whatever it is doing; the client
+  sees a truncated response. Without it a three-way join over the whole graph
+  streamed 399 MB for 42 s, holding one of the four slots.
 - **Limits at nginx.** Each visitor gets 60 queries a minute (bursts of 20) and
   two at a time, and the endpoint as a whole runs at most four at a time. Past
   that, clients get `429`. Query bodies are capped at 64 KB, and large results
@@ -220,9 +246,9 @@ backed up; a fresh one is rebuilt from the dump on start.
   media volume read-only, runs as an unprivileged user on a read-only
   filesystem, and only its `/sparql` path is exposed.
 
-The result size is bounded by the graph and the timeout. Selecting every triple
-returns about 50 MB in roughly eight seconds, the same data the dump already
-offers in compressed form.
+The result size is bounded by the graph and the request limit. Constructing
+every triple returns about 35 MB of N-Triples in roughly four seconds, the same
+data the dump already offers in compressed form.
 
 ### Updating
 

@@ -224,6 +224,9 @@ services:
       # Seconds a query may run. nginx-sparql-location.conf waits a little
       # longer; raise both together.
       - SPARQL_QUERY_TIMEOUT=30
+      # Seconds a whole request may take, streaming the result included,
+      # before its connection is closed.
+      - SPARQL_REQUEST_LIMIT=60
       # Seconds between checks of state.json for a new dump.
       - SPARQL_POLL_INTERVAL=60
     volumes:
