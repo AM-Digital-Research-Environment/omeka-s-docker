@@ -5,9 +5,9 @@
 A ready-to-run Docker setup for hosting an Omeka S digital archive. It installs
 itself, is hardened for public use, and can be rebuilt identically at any time.
 
-Built for the [Africa Multiple](https://www.africamultiple.uni-bayreuth.de/)
-research-data platform and kept general enough for anyone else to run their own
-instance from it.
+Built for [AMIRA](https://data.africamultiple.uni-bayreuth.de/), the
+research-data platform of the Africa Multiple Cluster of Excellence, and kept
+general enough for anyone else to run their own instance from it.
 
 - **Installs itself**: Omeka S and a useful set of modules are set up on the
   first start, admin account included if you want
@@ -15,7 +15,8 @@ instance from it.
   from the admin panel with the bundled Easy Admin module — no terminal needed
 - **Omeka itself can't change underneath you**: the core is fixed in the image,
   so upgrades are deliberate and rolling one back is easy
-- **Hardened and tuned by default**: nothing runs as root, the database is never
+- **Hardened and tuned by default**: PHP runs as an unprivileged user, every
+  service gives up the system privileges it doesn't need, the database is never
   exposed, only public files are served, and PHP, MySQL, and nginx come sized
   for an Omeka workload
 - **Backups and restores in one command**, including moving to a new server
