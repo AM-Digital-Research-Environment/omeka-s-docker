@@ -13,6 +13,8 @@
 #                        service itself is NOT built (external repo with a
 #                        build-time data fetch); /mcp answering 502 instead of
 #                        404 proves the overlay's nginx location is wired in.
+#                        The sparql profile stays off, so /sparql must answer
+#                        its own 503 and the rest of the site must not care.
 #   smoke.sh immutable — base + compose.immutable.yml: modules/themes back in
 #                        the image layer. Checks that nothing under the document
 #                        root is writable, plus the backup/restore round trip
@@ -278,6 +280,21 @@ if [[ "$variant" == "amira" ]]; then
 else
     # No MCP location in the base stack — Omeka must handle the URL.
     [[ "$code" != "502" ]]
+fi
+
+log "Probing /sparql routing..."
+code=$(probe "$url/sparql")
+echo "    GET /sparql -> $code"
+if [[ "$variant" == "amira" ]]; then
+    # Location and limit zones loaded; the opt-in service is not running.
+    [[ "$code" == "503" ]]
+    headers=$(curl -sS -D - -o /dev/null "$url/sparql")
+    grep -qi '^access-control-allow-origin: \*' <<< "$headers"
+    [[ "$(curl -s -o /dev/null -w '%{http_code}' -X OPTIONS -H 'Origin: https://example.org' \
+        -H 'Access-Control-Request-Method: POST' "$url/sparql")" == "204" ]]
+    [[ "$(curl -s -o /dev/null -w '%{http_code}' -X PUT "$url/sparql")" == "405" ]]
+else
+    [[ "$code" != "503" ]]
 fi
 
 if [[ "$variant" == "amira" ]]; then

@@ -42,6 +42,20 @@ updates:
           - "version-update:semver-minor"
           - "version-update:semver-major"
 
+  # The AMIRA SPARQL endpoint's image (oxigraph, debian slim), built from its
+  # own Dockerfile and so outside the directory above.
+  - package-ecosystem: "docker"
+    directory: "/deploy/amira/sparql"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "docker"
+    labels:
+      - "dependencies"
+      - "docker"
+    open-pull-requests-limit: 5
+
   # Monitor the image tags pinned in docker-compose.yml: mysql and typesense.
   # (nginx is built from the Dockerfile's web target, so the ecosystem above
   # owns it.) This ecosystem only matches conventional Compose filenames, so

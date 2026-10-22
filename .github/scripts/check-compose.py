@@ -57,7 +57,9 @@ errors: list[str] = []
 
 expected_services = {"web", "php", "db", "typesense"}
 if is_amira:
-    expected_services.add("amira-mcp")
+    # CI renders the AMIRA variants with --profile sparql so the opt-in
+    # service is checked too.
+    expected_services.update({"amira-mcp", "sparql"})
 missing_services = expected_services - services.keys()
 require(not missing_services, f"required services are missing: {', '.join(sorted(missing_services))}")
 require(("amira-mcp" in services) == is_amira, "AMIRA overlay service mismatch")
@@ -108,10 +110,11 @@ for name, service in services.items():
 for name in ("web", "php", "typesense"):
     require(services[name].get("read_only") is True, f"{name} root filesystem must be read-only")
 if is_amira:
-    require(
-        services["amira-mcp"].get("read_only") is True,
-        "amira-mcp root filesystem must be read-only",
-    )
+    for name in ("amira-mcp", "sparql"):
+        require(
+            services[name].get("read_only") is True,
+            f"{name} root filesystem must be read-only",
+        )
 
 web_ports = services["web"].get("ports", [])
 require(len(web_ports) == 1, "web must publish exactly one port")
@@ -254,6 +257,18 @@ if is_amira:
         "AMIRA /mcp nginx template is missing — list compose.immutable.yml"
         " directly after docker-compose.yml",
     )
+    # The /sparql location uses the zones from the http-level limits file and
+    # proxies to the socket, so the three travel together.
+    for target in (
+        "/etc/nginx/templates/02-sparql.conf.template",
+        "/etc/nginx/templates/extra-locations/sparql.conf.template",
+        "/srv/sparql",
+    ):
+        require(
+            len(mounts_at(services["web"], target)) == 1,
+            f"AMIRA SPARQL mount {target} is missing — list compose.immutable.yml"
+            " directly after docker-compose.yml",
+        )
     # The /ontology/dre locations use variables from the http-level map, so
     # losing the map but keeping the locations would stop nginx from starting.
     for target in (
@@ -287,6 +302,30 @@ if is_amira:
         set(services["amira-mcp"].get("networks", {})) == {"mcp"},
         "amira-mcp network exposure changed",
     )
+    # Oxigraph runs SPARQL SERVICE clauses as outbound HTTP requests and has
+    # no switch to refuse them, so the endpoint must have no network at all:
+    # on any Docker network a public query could aim them at Omeka or at the
+    # host. nginx reaches it through a Unix socket on a shared volume instead.
+    sparql = services["sparql"]
+    require(sparql.get("network_mode") == "none", "sparql must run with network_mode: none")
+    require(not sparql.get("networks"), "sparql must not join any network")
+    sparql_media = mounts_at(sparql, "/media")
+    require(
+        len(sparql_media) == 1
+        and sparql_media[0].get("source") == "omeka_media"
+        and sparql_media[0].get("read_only") is True,
+        "sparql must mount omeka_media read-only",
+    )
+    socket_mounts = [
+        (mounts_at(services["web"], "/srv/sparql") or [{}])[0],
+        (mounts_at(sparql, "/run/sparql") or [{}])[0],
+    ]
+    require(
+        socket_mounts[0].get("source") == socket_mounts[1].get("source") == "sparql_socket",
+        "web and sparql must share the sparql_socket volume",
+    )
+    require(socket_mounts[0].get("read_only") is True, "web sparql_socket mount must be read-only")
+
     mcp_context = str(services["amira-mcp"].get("build", {}).get("context", ""))
     require(
         re.search(r"#v\d+\.\d+\.\d+$", mcp_context) is not None,

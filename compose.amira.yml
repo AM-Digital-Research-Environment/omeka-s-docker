@@ -7,6 +7,8 @@
 #   - /favicon.ico nginx location (deploy/amira/nginx-favicon-location.conf)
 #   - /.well-known/void nginx location (deploy/amira/nginx-well-known-void-location.conf)
 #   - dre: vocabulary at /ontology/dre (deploy/amira/nginx-dre-vocabulary-*.conf)
+#   - optional sparql service, a read-only SPARQL endpoint over the
+#     DRE-LinkedData dump at /sparql (profile "sparql"; deploy/amira/sparql/)
 #   - DRE modules baked into the php image (deploy/amira/modules.txt)
 #   - dre custom vocabulary (deploy/amira/vocabularies/)
 #
@@ -43,6 +45,13 @@ services:
       - ./deploy/amira/nginx-dre-vocabulary-map.conf:/etc/nginx/templates/01-dre-vocabulary.conf.template:ro
       - ./deploy/amira/nginx-dre-vocabulary-location.conf:/etc/nginx/templates/extra-locations/dre-vocabulary.conf.template:ro
       - ./deploy/amira/vocabularies:/srv/dre-vocabulary:ro
+      # /sparql: rate and concurrency zones in the http context, the location
+      # at the extension point, and the socket the sparql service listens on.
+      # Mounted whether or not the "sparql" profile is on; without it the
+      # socket is absent and /sparql answers 503.
+      - ./deploy/amira/nginx-sparql-limits.conf:/etc/nginx/templates/02-sparql.conf.template:ro
+      - ./deploy/amira/nginx-sparql-location.conf:/etc/nginx/templates/extra-locations/sparql.conf.template:ro
+      - sparql_socket:/srv/sparql:ro
       # No DreVisualizations mount here any more. Up to v2.28.x nginx served the
       # precomputed dashboard JSON straight from the module's asset/data tree;
       # v2.29.0 moved generated data to private storage served through a
@@ -185,6 +194,83 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # Read-only SPARQL endpoint over the DRE-LinkedData dump, reached at /sparql
+  # through the web nginx (deploy/amira/nginx-sparql-location.conf). OPT-IN:
+  # starts only with the "sparql" profile, e.g. COMPOSE_PROFILES=search,sparql,
+  # and needs the dump the DRELinkedData module writes to
+  # files/dre-linked-data/. See deploy/amira/README.md#sparql-endpoint.
+  #
+  # Oxigraph, wrapped by deploy/amira/sparql/sparql-entrypoint.sh, which loads
+  # the dump into a fresh store, swaps it in only once complete, and reloads
+  # whenever the module publishes a new dump. Everything in it is rebuilt from
+  # that dump, so nothing here is backed up.
+  #
+  # Sized so it cannot slow the site down: at ~220k triples it idles under
+  # 20M, a reload takes a few seconds, and a query that outruns its timeout is
+  # stopped by the entrypoint's watchdog. cpu_shares gives Omeka priority
+  # whenever the two compete for the CPU.
+  sparql:
+    build:
+      context: deploy/amira/sparql
+    profiles:
+      - sparql
+    # No network at all, not even a private one. Oxigraph executes SPARQL
+    # SERVICE clauses as outbound HTTP requests and cannot be told not to; on
+    # any Docker network a public query could aim them at Omeka or at the
+    # host's own ports. The web nginx talks to it over the socket below.
+    network_mode: none
+    environment:
+      - SPARQL_DUMP_DIR=/media/dre-linked-data
+      # Seconds a query may run. nginx-sparql-location.conf waits a little
+      # longer; raise both together.
+      - SPARQL_QUERY_TIMEOUT=30
+      # Seconds between checks of state.json for a new dump.
+      - SPARQL_POLL_INTERVAL=60
+    volumes:
+      # Read-only, and nocopy so this service never seeds the media volume.
+      - type: volume
+        source: omeka_media
+        target: /media
+        read_only: true
+        volume:
+          nocopy: true
+      - sparql_data:/data:rw
+      - sparql_socket:/run/sparql:rw
+    restart: unless-stopped
+    # Security hardening
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777,size=16M
+    # A quarter of the default weight: under contention php, db and web get
+    # the CPU first.
+    cpu_shares: 256
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.05'
+          memory: 32M
+    # Probes the same path nginx uses: a request through the socket.
+    healthcheck:
+      test: ["CMD-SHELL", "printf 'GET /sparql HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' | socat -t5 - UNIX-CONNECT:/run/sparql/sparql.sock | head -n 1 | grep -q ' 200 '"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      # The first load of a ~220k-triple dump takes a few seconds; this also
+      # covers a slow disk.
+      start_period: 120s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 networks:
   mcp: {}
 
@@ -197,3 +283,17 @@ volumes:
   #   docker volume rm omeka-s-docker_dre_visualizations_data
   dre_visualizations_private:
     driver: local
+  # Oxigraph stores built from the dump by the sparql service: the one being
+  # served, plus the next one while a reload runs. Disposable and not backed
+  # up; a fresh volume is rebuilt from the dump on start.
+  sparql_data:
+    driver: local
+  # Holds only the sparql service's Unix socket, shared with web. A tmpfs, so
+  # a stale socket never outlives a restart, owned by the service's fixed uid
+  # (deploy/amira/sparql/Dockerfile) so it can create the socket there.
+  sparql_socket:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: "size=1m,uid=10001,gid=10001,mode=0755"

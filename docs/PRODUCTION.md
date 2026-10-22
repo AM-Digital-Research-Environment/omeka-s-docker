@@ -418,10 +418,12 @@ fit:
 | typesense | 512M | ~363M | in-memory index for a ~10k-item corpus |
 | amira-mcp | 384M | ~83M | grows as the snapshot is re-crawled |
 | web | 256M | ~10M | but its tmpfs can occupy ~130M of the same limit |
+| sparql (AMIRA, opt-in) | 256M | ~7M | reaches its ceiling only on a runaway query, which its watchdog stops |
 
-Total ceilings ~3.7 GiB against ~1.0 GiB of anonymous use. Nothing is wrong
-with that — but **raising one service's ceiling meaningfully requires lowering
-another's**, and several services peaking together can reach the OOM killer.
+Total ceilings ~3.7 GiB (~4.0 GiB with the opt-in SPARQL endpoint) against
+~1.0 GiB of anonymous use. Nothing is wrong with that — but **raising one
+service's ceiling meaningfully requires lowering another's**, and several
+services peaking together can reach the OOM killer.
 
 Measure with the cgroup counters, not `docker stats`:
 

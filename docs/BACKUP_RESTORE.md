@@ -32,6 +32,7 @@ those two archives are simply absent from its backups.
 | Typesense search index | Derived from Omeka; a live filesystem copy is not a supported database snapshot |
 | Login sessions | Nothing worth keeping; people simply log in again |
 | `dre_visualizations_private` (AMIRA only) | Rebuilt from the database by the admin "Regenerate" action |
+| `sparql_data`, `sparql_socket` (AMIRA only) | The SPARQL endpoint reloads its store from the Linked Data dump, which is in `omeka_media` |
 
 This is why the repository matters as much as the backup: the backup holds your
 data and settings, the repository holds the recipe for Omeka. Keep both, and

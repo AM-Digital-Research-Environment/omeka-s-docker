@@ -32,12 +32,12 @@ jobs:
 
       - name: Shell script syntax
         run: |
-          for script in docker-entrypoint.sh scripts/*.sh deploy/amira/*.sh .github/scripts/*.sh; do
+          for script in docker-entrypoint.sh scripts/*.sh deploy/amira/*.sh deploy/amira/sparql/*.sh .github/scripts/*.sh; do
             bash -n "$script"
           done
 
       - name: ShellCheck
-        run: shellcheck --severity=warning docker-entrypoint.sh scripts/*.sh deploy/amira/*.sh .github/scripts/*.sh
+        run: shellcheck --severity=warning docker-entrypoint.sh scripts/*.sh deploy/amira/*.sh deploy/amira/sparql/*.sh .github/scripts/*.sh
 
       - name: Operation failure paths (no containers)
         run: python3 .github/scripts/test-operations.py
@@ -59,7 +59,7 @@ jobs:
         run: docker compose --profile search config --format json | python3 .github/scripts/check-compose.py base
 
       - name: Validate Compose security contract (base + AMIRA overlay)
-        run: docker compose --profile search -f docker-compose.yml -f compose.amira.yml config --format json | python3 .github/scripts/check-compose.py amira
+        run: docker compose --profile search --profile sparql -f docker-compose.yml -f compose.amira.yml config --format json | python3 .github/scripts/check-compose.py amira
 
       - name: Validate Compose security contract (base + immutable overlay)
         run: docker compose --profile search -f docker-compose.yml -f compose.immutable.yml config --format json | python3 .github/scripts/check-compose.py immutable
@@ -68,11 +68,11 @@ jobs:
       # layered directly after the base stack. This asserts the supported
       # ordering keeps the AMIRA overlay's own mounts.
       - name: Validate Compose security contract (base + immutable + AMIRA)
-        run: docker compose --profile search -f docker-compose.yml -f compose.immutable.yml -f compose.amira.yml config --format json | python3 .github/scripts/check-compose.py amira-immutable
+        run: docker compose --profile search --profile sparql -f docker-compose.yml -f compose.immutable.yml -f compose.amira.yml config --format json | python3 .github/scripts/check-compose.py amira-immutable
 
       - name: Reject unsupported overlay ordering (immutable after AMIRA)
         run: |
-          if docker compose --profile search -f docker-compose.yml -f compose.amira.yml -f compose.immutable.yml config --format json | python3 .github/scripts/check-compose.py amira-immutable; then
+          if docker compose --profile search --profile sparql -f docker-compose.yml -f compose.amira.yml -f compose.immutable.yml config --format json | python3 .github/scripts/check-compose.py amira-immutable; then
             echo "ERROR: layering compose.immutable.yml after an overlay silently drops that overlay's mounts, but the contract accepted it." >&2
             exit 1
           fi
