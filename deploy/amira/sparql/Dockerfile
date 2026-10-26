@@ -6,7 +6,7 @@
 # and nginx reaches it through the socket on a shared volume.
 #
 # Both images are pinned by digest. Dependabot watches this directory.
-FROM ghcr.io/oxigraph/oxigraph:0.5.12@sha256:10677fb643f8c5a7bfb03dd8f7971c79a84b01e795c24201c8cfa12fd569f1c0 AS oxigraph
+FROM ghcr.io/oxigraph/oxigraph:0.5.13@sha256:260454ee29c091d2cdb99dd156212594ff3127850627adb4cfdcd9b1e425d480 AS oxigraph
 
 FROM debian:trixie-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad
 
