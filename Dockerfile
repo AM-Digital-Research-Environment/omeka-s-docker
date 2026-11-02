@@ -318,6 +318,6 @@ CMD ["php-fpm"]
 # nginx serves the exact static assets baked into the PHP image. Keeping both
 # targets in one Dockerfile guarantees core/module/theme assets change together
 # while media remains a separately mounted read-only volume.
-FROM nginx:1.30.6-alpine@sha256:970364228b1e4f932abc22d321932816782cca8a20b85a77552a7cfe9acfb3b5 AS web
+FROM nginx:1.30.6-alpine@sha256:47928bf67eb62a1863cb08d9ecb52d3e704304ba614eaee17884204677702951 AS web
 
 COPY --from=runtime --chown=nginx:nginx /var/www/html /var/www/html
