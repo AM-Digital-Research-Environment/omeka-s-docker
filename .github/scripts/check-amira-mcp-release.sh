@@ -63,8 +63,16 @@ EOF
 existing="$(gh issue list --state open --limit 100 --json number,title \
     -q "[.[] | select(.title | startswith(\"${TITLE_PREFIX}\"))] | .[0].number // empty")"
 
+# ISSUE_ASSIGNEE (optional) is assigned so they get a notification.
+create_args=()
+edit_args=()
+if [[ -n "${ISSUE_ASSIGNEE:-}" ]]; then
+    create_args=(--assignee "$ISSUE_ASSIGNEE")
+    edit_args=(--add-assignee "$ISSUE_ASSIGNEE")
+fi
+
 if [[ -z "$existing" ]]; then
-    gh issue create --title "$title" --body "$body"
+    gh issue create --title "$title" --body "$body" "${create_args[@]}"
     echo "Opened a tracking issue."
     exit 0
 fi
@@ -75,5 +83,7 @@ if [[ "$current_title" == "$title" ]]; then
     exit 0
 fi
 
-gh issue edit "$existing" --title "$title" --body "$body"
+gh issue edit "$existing" --title "$title" --body "$body" "${edit_args[@]}"
+# An edit does not notify anyone; a comment does.
+gh issue comment "$existing" --body "A newer release, ${latest}, is now available."
 echo "Updated issue #${existing} to track ${latest}."

@@ -1,5 +1,21 @@
 # Dependabot configuration for automated dependency updates
 # https://docs.github.com/en/code-security/dependabot/dependabot-version-updates
+#
+# Dependabot keeps pinned versions current and, through Dependabot alerts and
+# security updates (repository settings), flags vulnerable dependencies in the
+# ecosystems GitHub's advisory database covers. That database does NOT cover
+# Docker images or GitHub Actions, and this repository has no composer/npm
+# manifests, so on its own Dependabot reports no vulnerabilities here at all.
+# The gaps are filled by:
+#   - .github/workflows/security.yml: Trivy scans every image the stacks run
+#     (OS packages and the composer vendor trees of Omeka core and modules),
+#     the checkout (secrets, Dockerfiles), and zizmor audits the workflows.
+#   - .github/workflows/untracked-pins.yml: weekly issue for pins no ecosystem
+#     can parse (Omeka S core, omeka-s-cli, APCu, module/theme release URLs).
+#   - .github/workflows/amira-mcp-release.yml: same, for the amira-mcp tag.
+#
+# PRs are assigned to fmadore so they notify. Forks: change or drop the
+# assignees lists (the workflows read the ISSUE_ASSIGNEE variable instead).
 
 version: 2
 updates:
@@ -27,6 +43,12 @@ updates:
       - "dependencies"
       - "docker"
     open-pull-requests-limit: 5
+    assignees:
+      - "fmadore"
+    # Let a release age a week before proposing it, so a compromised or
+    # yanked publish is usually caught first. Security updates ignore this.
+    cooldown:
+      default-days: 7
     # Stay on the nginx stable line. nginx ships two concurrent branches and
     # encodes them in the minor: even = stable (1.30, 1.32...), odd = mainline
     # (1.31, 1.33...). `1.31.3-alpine` IS the `mainline-alpine` tag, so any
@@ -55,6 +77,12 @@ updates:
       - "dependencies"
       - "docker"
     open-pull-requests-limit: 5
+    assignees:
+      - "fmadore"
+    # Let a release age a week before proposing it, so a compromised or
+    # yanked publish is usually caught first. Security updates ignore this.
+    cooldown:
+      default-days: 7
 
   # Monitor the image tags pinned in docker-compose.yml: mysql and typesense.
   # (nginx is built from the Dockerfile's web target, so the ecosystem above
@@ -72,6 +100,12 @@ updates:
       - "dependencies"
       - "docker"
     open-pull-requests-limit: 5
+    assignees:
+      - "fmadore"
+    # Let a release age a week before proposing it, so a compromised or
+    # yanked publish is usually caught first. Security updates ignore this.
+    cooldown:
+      default-days: 7
     # MySQL ships two concurrent lines: 9.x LTS (the `lts` tag) and the
     # calendar-versioned Innovation line (26.x = `innovation` = `latest`).
     # Dependabot only sees that 26 > 9, so a major bump jumps release tracks
@@ -97,3 +131,9 @@ updates:
       - "dependencies"
       - "github-actions"
     open-pull-requests-limit: 5
+    assignees:
+      - "fmadore"
+    # Let a release age a week before proposing it, so a compromised or
+    # yanked publish is usually caught first. Security updates ignore this.
+    cooldown:
+      default-days: 7

@@ -1,6 +1,7 @@
 # Omeka S Docker Template
 
 [![CI](https://github.com/AM-Digital-Research-Environment/omeka-s-docker/actions/workflows/ci.yml/badge.svg)](https://github.com/AM-Digital-Research-Environment/omeka-s-docker/actions/workflows/ci.yml)
+[![Security](https://github.com/AM-Digital-Research-Environment/omeka-s-docker/actions/workflows/security.yml/badge.svg)](https://github.com/AM-Digital-Research-Environment/omeka-s-docker/actions/workflows/security.yml)
 
 A ready-to-run Docker setup for hosting an Omeka S digital archive. It installs
 itself, is hardened for public use, and can be rebuilt identically at any time.
@@ -177,6 +178,28 @@ You then confirm Omeka's database upgrade in the admin interface.
 docker compose pull                    # newer database and search images
 bash scripts/rebuild-code.sh --pull    # newer PHP and web server images
 ```
+
+**Knowing when to update**: the repository watches this for you.
+
+- **Dependabot** opens weekly pull requests for newer image tags (PHP, nginx,
+  MySQL, Typesense, Oxigraph) and GitHub Actions.
+- **Security** ([security.yml](.github/workflows/security.yml)) scans every
+  image the stacks run with Trivy, on each push and pull request and weekly.
+  It covers OS packages and the PHP libraries bundled in Omeka and its modules,
+  and also checks the repository for committed secrets and the workflows with
+  zizmor. Findings appear under **Security → Code scanning** and on pull
+  requests; the weekly run opens an issue when a fixable high or critical
+  vulnerability exists.
+- **Untracked pins** ([untracked-pins.yml](.github/workflows/untracked-pins.yml))
+  opens an issue when Omeka S, omeka-s-cli, APCu or a pinned module or theme
+  release falls behind, since Dependabot cannot see those.
+
+These issues and Dependabot PRs are assigned to the maintainer so they send a
+notification. In a fork, set the `ISSUE_ASSIGNEE` repository variable and edit
+the `assignees` in [dependabot.yml](.github/dependabot.yml). Repository
+settings to turn on (Settings → Advanced Security): Dependabot alerts,
+Dependabot security updates, secret scanning with push protection; code
+scanning needs no setup beyond these workflows.
 
 ## Backups
 
