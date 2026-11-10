@@ -16,10 +16,10 @@ RUN apk add --no-cache curl \
 # `COPY --from=` or `RUN --mount=from=` is invisible to it, so those pins would
 # silently never be offered an update. Referencing the stage name below keeps
 # one `FROM` line per tool as the single place a bump has to land.
-FROM ghcr.io/mlocati/php-extension-installer:2.12.3@sha256:ac4b252c153a9f6de5578ff2c417790aba836bb49855543144606033eceda253 AS php-extension-installer
-FROM composer/composer:2.11.0-bin@sha256:003932f2656d41d29a5037cb6478f0bba93ed3cd4bd4e86e5ccfed26217044c8 AS composer-bin
+FROM ghcr.io/mlocati/php-extension-installer:2.13.2@sha256:4fd45396c16685266d32bf147a24ecd5e81029d3820295895bf4a90131190ac9 AS php-extension-installer
+FROM composer/composer:2.11.1-bin@sha256:56a1b0a72bacd78079e3fa49a49e7bf58326365753415c99385ea2b08bded0a5 AS composer-bin
 
-FROM php:8.5.12-fpm-trixie@sha256:8b4b4a764f7985137b13e4cb49dd59e967d9daa7946a731f9d06e31e748e39bb AS runtime
+FROM php:8.5.12-fpm-trixie@sha256:baf3ea13a8207fa18e1011bad1016e8b5e59fc974c6966d0efa6f36a16f875f0 AS runtime
 
 ARG OMEKA_ROOT=/var/www/html
 ARG OMEKA_VERSION=4.2.1
