@@ -98,9 +98,11 @@ jobs:
         id: image
         run: |
           read -ra args <<< "$COMPOSE_ARGS"
-          ref="$(docker compose "${args[@]}" config --images "$SERVICE")"
-          if docker compose "${args[@]}" config --format json \
-              | jq -e --arg s "$SERVICE" '.services[$s].build' >/dev/null; then
+          docker compose "${args[@]}" config --format json > compose.json
+          # Not `config --images <service>`: that also lists the service's
+          # dependencies. Built services default to <project>-<service>.
+          ref="$(jq -er --arg s "$SERVICE" '.services[$s].image // "\(.name)-\($s)"' compose.json)"
+          if jq -e --arg s "$SERVICE" '.services[$s].build' compose.json >/dev/null; then
             docker compose "${args[@]}" build --pull "$SERVICE"
           else
             docker pull "$ref"
