@@ -37,4 +37,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           UPSTREAM: AM-Digital-Research-Environment/amira-mcp-server
+          # Assigned, and so notified. Override with the ISSUE_ASSIGNEE
+          # repository variable; forks default to no assignee.
+          ISSUE_ASSIGNEE: ${{ vars.ISSUE_ASSIGNEE || (github.repository == 'AM-Digital-Research-Environment/omeka-s-docker' && 'fmadore' || '') }}
         run: bash .github/scripts/check-amira-mcp-release.sh

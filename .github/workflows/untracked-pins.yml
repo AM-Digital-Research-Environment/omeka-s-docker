@@ -1,0 +1,44 @@
+name: Untracked pins check
+
+# Versions pinned where no Dependabot ecosystem can parse them (Omeka S core,
+# omeka-s-cli, APCu, module/theme release URLs) are compared against their
+# latest upstream release. Anything behind is listed in a single tracking
+# issue, which updates itself and closes when everything is current. See
+# .github/scripts/check-untracked-pins.sh.
+
+on:
+  schedule:
+    # Mondays, matching the Dependabot cadence in .github/dependabot.yml.
+    - cron: "15 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Compare untracked pins against upstream
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          # The AMIRA manifests are only checked upstream or in forks that opt
+          # in, like the amira-mcp release check.
+          INCLUDE_AMIRA: ${{ github.repository == 'AM-Digital-Research-Environment/omeka-s-docker' || vars.ENABLE_AMIRA_RELEASE_CHECK == 'true' }}
+          # Assigned, and so notified. Override with the ISSUE_ASSIGNEE
+          # repository variable; forks default to no assignee.
+          ISSUE_ASSIGNEE: ${{ vars.ISSUE_ASSIGNEE || (github.repository == 'AM-Digital-Research-Environment/omeka-s-docker' && 'fmadore' || '') }}
+        run: bash .github/scripts/check-untracked-pins.sh

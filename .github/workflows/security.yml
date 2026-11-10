@@ -1,0 +1,273 @@
+name: Security
+
+# Known-vulnerability and hygiene scanning that Dependabot cannot do here:
+# GitHub's advisory database has no coverage for Docker images or for the
+# OS/PHP packages inside them, so a vulnerable image would otherwise go
+# unnoticed. Dependabot still owns *keeping versions current*; this workflow
+# owns *telling you when what runs is vulnerable*.
+#
+#   images   build or pull every image the stacks run and scan it with Trivy
+#            (OS packages + composer vendor trees: Omeka core and modules).
+#   repo     Trivy secret + Dockerfile misconfiguration scan of the checkout.
+#   zizmor   security audit of the GitHub Actions workflows themselves.
+#   report   scheduled runs only: one tracking issue listing images with
+#            fixable HIGH/CRITICAL vulnerabilities, assigned so it notifies.
+#
+# Results land in Security -> Code scanning, which also annotates each PR with
+# the alerts it introduces. Every image job writes a summary table.
+#
+# Failure policy: scheduled and manual runs fail when an image has a fixable
+# HIGH or CRITICAL vulnerability. Pushes and PRs only warn, so a newly
+# published CVE does not block unrelated changes. A committed secret always
+# fails.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Mondays, ahead of the 06:00 Dependabot/release checks.
+    - cron: "30 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  images:
+    name: Image scan (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: php
+            service: php
+            compose: -f docker-compose.yml
+          - name: web
+            service: web
+            compose: -f docker-compose.yml
+          - name: db
+            service: db
+            compose: -f docker-compose.yml
+          - name: typesense
+            service: typesense
+            compose: --profile search -f docker-compose.yml
+          - name: amira-php
+            service: php
+            compose: -f docker-compose.yml -f compose.amira.yml
+          - name: amira-mcp
+            service: amira-mcp
+            compose: -f docker-compose.yml -f compose.amira.yml
+          - name: sparql
+            service: sparql
+            compose: --profile sparql -f docker-compose.yml -f compose.amira.yml
+    env:
+      # Placeholders so `docker compose config` resolves; nothing is started.
+      MYSQL_DATABASE: scan
+      MYSQL_USER: scan
+      MYSQL_PASSWORD: scan-placeholder
+      TYPESENSE_API_KEY: scan-placeholder
+      SERVER_NAME: scan.example.org
+      COMPOSE_PROJECT_NAME: scan
+      COMPOSE_ARGS: ${{ matrix.compose }}
+      SERVICE: ${{ matrix.service }}
+      NAME: ${{ matrix.name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        with:
+          # Bumped by hand in both jobs (Dependabot sees only the action SHA).
+          # Prefer a release that has been out for a couple of weeks.
+          version: v0.76.1
+
+      # The image list comes from the compose files, so a Dependabot bump is
+      # scanned exactly as it would be deployed.
+      - name: Build or pull the image
+        id: image
+        run: |
+          read -ra args <<< "$COMPOSE_ARGS"
+          ref="$(docker compose "${args[@]}" config --images "$SERVICE")"
+          if docker compose "${args[@]}" config --format json \
+              | jq -e --arg s "$SERVICE" '.services[$s].build' >/dev/null; then
+            docker compose "${args[@]}" build --pull "$SERVICE"
+          else
+            docker pull "$ref"
+          fi
+          echo "ref=${ref}" >> "$GITHUB_OUTPUT"
+
+      - name: Scan with Trivy
+        env:
+          REF: ${{ steps.image.outputs.ref }}
+        run: |
+          trivy image --quiet --scanners vuln --pkg-types os,library \
+            --ignore-unfixed --severity MEDIUM,HIGH,CRITICAL \
+            --format json --output trivy.json "$REF"
+          trivy convert --format sarif --output trivy.sarif trivy.json
+
+      - name: Summarise
+        id: summary
+        env:
+          REF: ${{ steps.image.outputs.ref }}
+        run: |
+          count() { jq --arg s "$1" '[.Results[]?.Vulnerabilities[]? | select(.Severity == $s)] | length' trivy.json; }
+          critical="$(count CRITICAL)"; high="$(count HIGH)"; medium="$(count MEDIUM)"
+          echo "blocking=$((critical + high))" >> "$GITHUB_OUTPUT"
+          mkdir -p summary
+          jq -n --arg name "$NAME" --arg ref "$REF" \
+            --argjson critical "$critical" --argjson high "$high" --argjson medium "$medium" \
+            '{name: $name, ref: $ref, critical: $critical, high: $high, medium: $medium}' \
+            > "summary/${NAME}.json"
+          {
+            echo "### ${NAME}: fixable vulnerabilities"
+            echo
+            echo "\`${REF}\` — critical **${critical}**, high **${high}**, medium ${medium}"
+            echo
+            if (( critical + high > 0 )); then
+              echo "| Severity | ID | Package | Installed | Fixed in | Where |"
+              echo "|---|---|---|---|---|---|"
+              jq -r '[.Results[]? as $r | $r.Vulnerabilities[]?
+                       | select(.Severity == "CRITICAL" or .Severity == "HIGH")
+                       | [.Severity, .VulnerabilityID, .PkgName, .InstalledVersion,
+                          (.FixedVersion | split(", ") | .[0:3] | join(", ")), $r.Target]]
+                     | sort_by(.[0] != "CRITICAL", .[2]) | .[0:60][]
+                     | "| " + join(" | ") + " |"' trivy.json
+              echo
+              echo "Showing at most 60 rows; the full list is in Security → Code scanning."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Fork PRs get a read-only token and cannot upload; their summary table
+      # above still shows the results.
+      - name: Upload to code scanning
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: trivy.sarif
+          category: trivy-image-${{ matrix.name }}
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: scan-summary-${{ matrix.name }}
+          path: summary/${{ matrix.name }}.json
+          retention-days: 7
+
+      - name: Apply the failure policy
+        env:
+          BLOCKING: ${{ steps.summary.outputs.blocking }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          (( BLOCKING == 0 )) && exit 0
+          msg="${NAME} has ${BLOCKING} fixable HIGH/CRITICAL vulnerabilities (see the job summary)."
+          if [[ "$EVENT" == "schedule" || "$EVENT" == "workflow_dispatch" ]]; then
+            echo "::error::${msg}"
+            exit 1
+          fi
+          echo "::warning::${msg}"
+
+  repo:
+    name: Repository scan (secrets, Dockerfiles)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        with:
+          # Bumped by hand in both jobs (Dependabot sees only the action SHA).
+          # Prefer a release that has been out for a couple of weeks.
+          version: v0.76.1
+
+      - name: Scan the checkout
+        run: |
+          trivy fs --quiet --scanners secret,misconfig \
+            --severity MEDIUM,HIGH,CRITICAL --format sarif --output trivy-repo.sarif .
+          trivy fs --quiet --scanners secret,misconfig \
+            --severity MEDIUM,HIGH,CRITICAL --format table . | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload to code scanning
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: trivy-repo.sarif
+          category: trivy-repo
+
+      - name: Fail on committed secrets
+        run: trivy fs --quiet --scanners secret --exit-code 1 .
+
+      - name: Warn on serious Dockerfile problems
+        run: |
+          if ! trivy fs --quiet --scanners misconfig --severity HIGH,CRITICAL --exit-code 1 . >/dev/null; then
+            echo "::warning::Trivy found HIGH/CRITICAL Dockerfile misconfigurations (see Security → Code scanning)."
+          fi
+
+  zizmor:
+    name: Workflow audit (zizmor)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: zizmorcore/zizmor-action@53290badfa369cb0bf7ad16342cb62c2fa47ac7b # v0.8.0
+        with:
+          # Uploads SARIF to code scanning; fork PRs cannot, so they get
+          # inline annotations instead.
+          # Bumped by hand; Dependabot sees only the action SHA.
+          version: 1.31.1
+          advanced-security: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+          annotations: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+
+  report:
+    name: Vulnerability tracking issue
+    needs: images
+    # Scheduled runs only, and not in forks unless they opt in.
+    if: >-
+      always() && github.event_name == 'schedule' &&
+      (github.repository == 'AM-Digital-Research-Environment/omeka-s-docker' || vars.ENABLE_SECURITY_ISSUE == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: scan-summary-*
+          path: summary
+          merge-multiple: true
+
+      - name: Open, update or close the tracking issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EXPECTED_IMAGES: "7"
+          # Assigned, and so notified. Override with the ISSUE_ASSIGNEE
+          # repository variable.
+          ISSUE_ASSIGNEE: ${{ vars.ISSUE_ASSIGNEE || (github.repository == 'AM-Digital-Research-Environment/omeka-s-docker' && 'fmadore' || '') }}
+        run: bash .github/scripts/report-image-scan.sh summary
