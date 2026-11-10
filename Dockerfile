@@ -1,12 +1,12 @@
 FROM alpine:3.24.3@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a AS toolfetcher
 
-ARG VERSION=0.9.3
-ARG SHA=9392e779e25b9cfe0e8c1d559d8f5347863f3b0ab56d7a37d107f17f09bb247b
+ARG VERSION=0.19.0
+ARG SHA=67dc278055921291757523f60fb79791635e6714435474842c0ea5260d600428
 
 SHELL ["/bin/ash", "-eo", "pipefail", "-c"]
 
 RUN apk add --no-cache curl \
-    && curl --fail --show-error --location \
+    && curl --fail --show-error --location --retry 5 --retry-all-errors \
         https://github.com/GhentCDH/Omeka-S-Cli/releases/download/v${VERSION}/omeka-s-cli.phar \
         --output /omeka-s-cli.phar \
     && echo "${SHA} /omeka-s-cli.phar" | sha256sum -c -
