@@ -317,12 +317,20 @@ services:
       - PORT=8787
       - HOST=0.0.0.0
       - AMIRA_ACCESS=curator
-      # The internal address, as the upstream curator docs prescribe: the keyed
-      # crawl goes straight to the web nginx over the curator network and never
-      # leaves the host. nginx serves it from its only server block whatever
-      # the Host header. The server builds returned links from this too, so
-      # they point at http://web until upstream separates the two.
-      - AMIRA_SITE_BASE=http://web
+      # Two bases. AMIRA_SITE_BASE is the public site, the same as amira-mcp's:
+      # every link the server returns (amira_url, admin_url, citations) is
+      # built from it, so curators can open them. AMIRA_API_BASE is where the
+      # keyed crawl goes: the web nginx over the curator network, so requests
+      # carrying the Omeka key never leave the host or pass the host's TLS
+      # proxy and its access log. nginx serves it from its only server block
+      # whatever the Host header. The Compose contract check holds both.
+      #
+      # AMIRA_API_BASE needs an amira-mcp-server commit that supports it (PR
+      # #39). An older one ignores it and crawls AMIRA_SITE_BASE/api, i.e.
+      # sends the key out to the public URL: pin AMIRA_MCP_CURATOR_VERSION to a
+      # commit that has it.
+      - AMIRA_SITE_BASE=https://${SERVER_NAME:?You must set SERVER_NAME when using compose.amira.yml}
+      - AMIRA_API_BASE=http://web/api
       - AMIRA_SITE_SLUG=amira
       - AMIRA_LIVE_REFRESH=true
       # Both files are re-read while running: tokens every 2 s at most (delete

@@ -8,6 +8,7 @@ import os
 import re
 import sys
 from typing import Any
+from urllib.parse import urlsplit
 
 
 def fail(message: str) -> None:
@@ -426,10 +427,22 @@ if is_curator:
     require("healthcheck" in curator, "amira-mcp-curator healthcheck is missing")
     curator_env = environment(curator)
     require(curator_env.get("AMIRA_ACCESS") == "curator", "amira-mcp-curator must set AMIRA_ACCESS=curator")
+    # Links go to the public site; the keyed crawl stays inside the stack.
+    site_base = curator_env.get("AMIRA_SITE_BASE", "")
     require(
-        curator_env.get("AMIRA_SITE_BASE") == "http://web",
+        site_base.startswith("https://")
+        and site_base == environment(services["amira-mcp"]).get("AMIRA_SITE_BASE"),
+        "amira-mcp-curator AMIRA_SITE_BASE must be the public https site, the same as"
+        " amira-mcp's, so the links it returns open for curators",
+    )
+    api_base = urlsplit(curator_env.get("AMIRA_API_BASE", ""))
+    require(
+        api_base.scheme == "http"
+        and api_base.hostname == "web"
+        and api_base.path.rstrip("/").endswith("/api"),
         "amira-mcp-curator must crawl Omeka over the internal network"
-        " (AMIRA_SITE_BASE=http://web), so its keyed requests never leave the host",
+        " (AMIRA_API_BASE=http://web/api), never the public host, so requests"
+        " carrying the Omeka key never leave the stack",
     )
     for name in ("AMIRA_MCP_BEARER_TOKEN", "AMIRA_MCP_TOKEN_FILE"):
         require(name not in curator_env, f"amira-mcp-curator must not set {name}; it uses personal tokens")

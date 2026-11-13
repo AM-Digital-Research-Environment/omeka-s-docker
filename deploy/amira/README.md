@@ -180,6 +180,13 @@ Design and decisions:
 > release ignores `AMIRA_ACCESS` and would serve the public data at
 > `/curator/mcp` with no token. Once curator mode ships, set it to that
 > release tag. `update-amira-mcp.sh` never touches it.
+>
+> **The commit must also support `AMIRA_API_BASE`**, which #39 adds after its
+> first curator-mode commits (it is not on `feat/curator-mode` as of 13
+> November 2026; check `docs/curator.md` there). A commit without it ignores
+> the setting and crawls `AMIRA_SITE_BASE/api` instead: the public URL,
+> through the host's TLS proxy, with the Omeka key in every query string. Do
+> not start the service on such a commit.
 
 ### How it fits together
 
@@ -189,10 +196,14 @@ Design and decisions:
   whether or not the service exists.
 - **Never exposed directly.** No host port. It sits on its own `curator`
   network, shared only with `web`: nginx can reach it, the public `amira-mcp`
-  cannot, and it cannot reach the database or the search index. It reads Omeka
-  at `http://web/api`, so its keyed requests never leave the host. The network
+  cannot, and it cannot reach the database or the search index. The network
   is not `internal`, because the server fetches its enrichments from GitHub as
   `amira-mcp` does.
+- **Two bases.** `AMIRA_API_BASE=http://web/api` is where it crawls Omeka with
+  the key, so those requests never leave the host or reach the host nginx and
+  its access log. `AMIRA_SITE_BASE` is the public `https://` site, the same as
+  `amira-mcp`'s, and every link it returns (`amira_url`, `admin_url`,
+  citations) is built from it, so curators can open them. CI requires both.
 - **One path.** nginx proxies exactly `/curator/mcp` to the server's `/mcp`,
   passes `Authorization` through, streams like `/mcp`, overwrites
   `X-Forwarded-For` (the server's per-client rate limit) and replaces whatever
@@ -243,7 +254,7 @@ Design and decisions:
 
    ```bash
    COMPOSE_PROFILES=search,curator          # plus sparql if you run it
-   AMIRA_MCP_CURATOR_VERSION=<commit SHA on feat/curator-mode>
+   AMIRA_MCP_CURATOR_VERSION=<commit SHA on feat/curator-mode, with AMIRA_API_BASE>
    AMIRA_CURATOR_UID=<output of id -u>
    AMIRA_CURATOR_GID=<output of id -g>
    ```
@@ -382,11 +393,8 @@ in Omeka and the secrets directory.
 
 ### Not done yet
 
-- **Links point at `http://web`.** The server builds every link it returns
-  (`amira_url`, `admin_url`, citations) from `AMIRA_SITE_BASE`, which here is
-  the internal address its crawl uses, as upstream's docs prescribe. Curators
-  cannot open those links until upstream separates the API address from the
-  public one.
+- **`AMIRA_API_BASE` upstream.** The service relies on it (see the note at the
+  top of this section); it lands with amira-mcp-server #39.
 - **OAuth.** Sign-in for claude.ai and ChatGPT goes through Pocket ID on its
   own subdomain (for example `auth.africamultiple.uni-bayreuth.de`, pending
   DNS and a certificate), with the curator server checking the tokens.
