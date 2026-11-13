@@ -33,6 +33,7 @@ those two archives are simply absent from its backups.
 | Login sessions | Nothing worth keeping; people simply log in again |
 | `dre_visualizations_private` (AMIRA only) | Rebuilt from the database by the admin "Regenerate" action |
 | `sparql_data`, `sparql_socket` (AMIRA only) | The SPARQL endpoint reloads its store from the Linked Data dump, which is in `omeka_media` |
+| `deploy/amira/curator-secrets/` (AMIRA only) | The curator endpoint's Omeka key and token hashes. A lost key is replaced by a new one in Omeka and tokens are re-issued; keep your own copy of the tokens file if re-issuing every token would be a nuisance. Its cache is a tmpfs and holds nothing durable |
 
 This is why the repository matters as much as the backup: the backup holds your
 data and settings, the repository holds the recipe for Omeka. Keep both, and

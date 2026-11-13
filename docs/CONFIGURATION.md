@@ -96,6 +96,9 @@ Per-service memory and CPU caps are covered in
 | `COMPOSE_FILE` | No | — | Switches on a deployment folder, e.g. `docker-compose.yml:compose.amira.yml`. Once set, every `docker compose` command includes it automatically |
 | `COMPOSE_PROFILES` | No | — | Switches on optional services, e.g. `search` |
 | `AMIRA_MCP_VERSION` | No | see `compose.amira.yml` | AMIRA only: which release of the MCP server to run. Set it with `deploy/amira/update-amira-mcp.sh` |
+| `AMIRA_MCP_CURATOR_VERSION` | With the `curator` profile | — | AMIRA only: the amira-mcp-server ref the curator endpoint is built from: a commit SHA, branch or release tag. No default: until curator mode is released it has to name a ref containing it, including `AMIRA_API_BASE` support. See [the curator endpoint](../deploy/amira/README.md#curator-mcp-endpoint) |
+| `AMIRA_CURATOR_UID`, `AMIRA_CURATOR_GID` | With the `curator` profile | `1000` | AMIRA only: the user the curator endpoint runs as. Set them to the owner of the secrets directory so its files can stay readable by that user alone |
+| `AMIRA_CURATOR_SECRETS_DIR` | No | `./deploy/amira/curator-secrets` | AMIRA only: the gitignored directory holding the curator endpoint's Omeka key and token hashes |
 
 ## What's tuned out of the box
 

@@ -1,0 +1,12 @@
+# Personal tokens for the curator MCP endpoint (amira-mcp-curator).
+# Template only: copy it to deploy/amira/curator-secrets/tokens, mode 0600.
+# The copy is gitignored; CI rejects any line here that is not a comment. See
+# deploy/amira/README.md#curator-mcp-endpoint.
+#
+# One line per curator: a name (what the audit log prints) and the SHA-256 of
+# their token, never the token itself. Generate both with
+#   docker compose run --rm --no-deps amira-mcp-curator node server/tokenCli.js <name>
+# and paste the line it prints. The server re-reads this file every 2 s at
+# most: deleting a line revokes that curator, with no restart.
+#
+# alice <64 hex characters printed by tokenCli>

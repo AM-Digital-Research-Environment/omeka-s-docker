@@ -1,0 +1,11 @@
+# Omeka API key of the curator MCP service account (amira-mcp-curator).
+# Template only: copy it to deploy/amira/curator-secrets/omeka-key, mode 0600,
+# and fill in the two lines below without the leading "#". The copy is
+# gitignored; this file must never hold a real key (CI rejects any line here
+# that is not a comment). See deploy/amira/README.md#curator-mcp-endpoint.
+#
+# Omeka shows both values once, when the key is created under
+# Admin > Users > <service account> > Edit > API keys.
+#
+# key_identity=<the key identity, 32 characters>
+# key_credential=<the key credential, 32 characters>

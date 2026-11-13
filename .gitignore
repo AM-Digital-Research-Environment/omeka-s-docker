@@ -26,6 +26,11 @@ Thumbs.db
 *.swo
 __pycache__/
 *.py[cod]
+# AMIRA curator MCP secrets: the Omeka service key and the personal-token
+# hashes (compose.amira.yml, profile "curator"). Templates live next to it as
+# deploy/amira/curator-*.example.
+/deploy/amira/curator-secrets/
+
 _docker/restored-local.config.php
 _docker/migrated-local.config.php
 CLAUDE.md

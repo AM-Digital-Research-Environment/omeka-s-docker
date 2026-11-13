@@ -13,6 +13,8 @@
 #                        service itself is NOT built (external repo with a
 #                        build-time data fetch); /mcp answering 502 instead of
 #                        404 proves the overlay's nginx location is wired in.
+#                        The curator profile stays off too, so /curator/mcp
+#                        must answer 502 the same way.
 #                        The sparql profile stays off, so /sparql must answer
 #                        its own 503 and the rest of the site must not care.
 #   smoke.sh immutable — base + compose.immutable.yml: modules/themes back in
@@ -280,6 +282,31 @@ if [[ "$variant" == "amira" ]]; then
 else
     # No MCP location in the base stack — Omeka must handle the URL.
     [[ "$code" != "502" ]]
+fi
+
+if [[ "$variant" == "amira" ]]; then
+    log "Probing /curator/mcp routing..."
+    # Location present, the curator profile off: 502, and the site unaffected.
+    code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Authorization: Bearer smoke' "$url/curator/mcp")
+    echo "    POST /curator/mcp -> $code"
+    [[ "$code" == "502" ]]
+fi
+
+log "Checking Omeka API keys stay out of the access log..."
+# Omeka reads API keys from the query string; nginx must log them redacted.
+# Hyphenated values, so check-committed-secrets.sh does not take them for keys.
+code=$(probe "$url/api/items?key_identity=smoke-identity-value&key_credential=smoke-credential-value&per_page=1")
+echo "    GET /api/items?key_identity=…&key_credential=… -> $code"
+sleep 1
+# Access-log lines only (they start with the client address). nginx's error
+# log cannot be reformatted, so an upstream error on a keyed request would
+# still quote the key there: see "API keys in the logs" in
+# deploy/amira/README.md.
+access_log=$(docker compose logs --no-color --no-log-prefix web 2>/dev/null | grep -E '^[0-9a-f.:]+ - ' || true)
+grep -qF 'GET /api/items?key_identity=[REDACTED]&key_credential=[REDACTED]&per_page=1 HTTP/1.1' <<< "$access_log"
+if grep -qE 'smoke-(identity|credential)-value' <<< "$access_log"; then
+    echo "SECURITY: an API key reached the access log!" >&2
+    exit 1
 fi
 
 log "Probing /sparql routing..."

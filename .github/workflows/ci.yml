@@ -58,8 +58,13 @@ jobs:
       - name: Validate Compose security contract (base)
         run: docker compose --profile search config --format json | python3 .github/scripts/check-compose.py base
 
+      # Without the curator profile the contract also asserts that the curator
+      # service is absent: it serves private data and must never start by default.
       - name: Validate Compose security contract (base + AMIRA overlay)
         run: docker compose --profile search --profile sparql -f docker-compose.yml -f compose.amira.yml config --format json | python3 .github/scripts/check-compose.py amira
+
+      - name: Validate Compose security contract (base + AMIRA overlay + curator profile)
+        run: docker compose --profile search --profile sparql --profile curator -f docker-compose.yml -f compose.amira.yml config --format json | python3 .github/scripts/check-compose.py amira-curator
 
       - name: Validate Compose security contract (base + immutable overlay)
         run: docker compose --profile search -f docker-compose.yml -f compose.immutable.yml config --format json | python3 .github/scripts/check-compose.py immutable
@@ -77,6 +82,20 @@ jobs:
             exit 1
           fi
           echo "Unsupported ordering correctly rejected."
+
+      # Renders the nginx templates as Compose mounts them and runs nginx -t in
+      # a throwaway container from the web target's nginx image, with every
+      # upstream absent. Then checks with real requests that the access log
+      # carries no Omeka API key and, for AMIRA, that /curator/mcp answers 502
+      # without its service and proxies correctly to a stand-in.
+      - name: nginx templates render and pass nginx -t (base)
+        run: bash .github/scripts/check-nginx.sh base
+
+      - name: nginx templates render and pass nginx -t (base + AMIRA overlay)
+        run: bash .github/scripts/check-nginx.sh amira
+
+      - name: No curator MCP secrets committed
+        run: bash .github/scripts/check-committed-secrets.sh
 
   smoke:
     runs-on: ubuntu-latest

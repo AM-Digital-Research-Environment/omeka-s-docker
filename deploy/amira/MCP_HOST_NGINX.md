@@ -69,3 +69,34 @@ curl -s -X POST https://data.africamultiple.uni-bayreuth.de/mcp \
 
 Expect a streamed `event: message` / `data: {...}` `initialize` result, reporting the
 `amira-mcp-server` version currently deployed — not an Omeka HTML page or a 404.
+
+## 5. `/curator/mcp` (only with the curator profile)
+
+The [curator endpoint](README.md#curator-mcp-endpoint) streams the same way, and the
+`/mcp` block above does not match it (`/curator/mcp` does not start with `/mcp`), so
+without its own block it falls through to the buffered `location /`. Add this next to the
+`/mcp` block, then apply and reload as in step 3:
+
+```nginx
+    # AMIRA curator MCP endpoint — private data for token holders; the curator
+    # server checks the token. Un-buffered for SSE, never cached.
+    location = /curator/mcp {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection        "";
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        limit_req zone=mcp burst=20 nodelay;
+    }
+```
+
+`Authorization` passes through by default; keep it that way. Check with
+`curl -s -o /dev/null -w '%{http_code}\n' -X POST https://data.africamultiple.uni-bayreuth.de/curator/mcp`:
+`401` means the request reached the curator server and was refused for want of a token,
+`502` that the curator service is not running.
