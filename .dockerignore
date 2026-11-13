@@ -15,5 +15,6 @@ README.md
 secrets/
 _docker/restored-local.config.php
 _docker/migrated-local.config.php
+deploy/amira/curator-secrets
 *.key
 *.pem

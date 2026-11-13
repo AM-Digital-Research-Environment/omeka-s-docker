@@ -9,6 +9,9 @@
 #   - dre: vocabulary at /ontology/dre (deploy/amira/nginx-dre-vocabulary-*.conf)
 #   - optional sparql service, a read-only SPARQL endpoint over the
 #     DRE-LinkedData dump at /sparql (profile "sparql"; deploy/amira/sparql/)
+#   - optional amira-mcp-curator service, the internal MCP endpoint that also
+#     serves private records to curators at /curator/mcp (profile "curator";
+#     deploy/amira/README.md#curator-mcp-endpoint)
 #   - DRE modules baked into the php image (deploy/amira/modules.txt)
 #   - dre custom vocabulary (deploy/amira/vocabularies/)
 #
@@ -52,6 +55,10 @@ services:
       - ./deploy/amira/nginx-sparql-limits.conf:/etc/nginx/templates/02-sparql.conf.template:ro
       - ./deploy/amira/nginx-sparql-location.conf:/etc/nginx/templates/extra-locations/sparql.conf.template:ro
       - sparql_socket:/srv/sparql:ro
+      # /curator/mcp, proxied to amira-mcp-curator over the curator network.
+      # Mounted whether or not the "curator" profile is on; without it the
+      # location answers 502 and the rest of the site is unaffected.
+      - ./deploy/amira/nginx-curator-mcp-location.conf:/etc/nginx/templates/extra-locations/curator-mcp.conf.template:ro
       # No DreVisualizations mount here any more. Up to v2.28.x nginx served the
       # precomputed dashboard JSON straight from the module's asset/data tree;
       # v2.29.0 moved generated data to private storage served through a
@@ -61,6 +68,7 @@ services:
     networks:
       - frontend
       - mcp
+      - curator
 
   php:
     build:
@@ -274,8 +282,131 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # AMIRA curator MCP server: the same amira-mcp-server code as amira-mcp,
+  # started with AMIRA_ACCESS=curator. It crawls the Omeka API with a service
+  # key, so it also sees private records and private values, and serves them
+  # only to curators holding a personal token (it checks the token itself and
+  # logs one audit line per request). Reached at /curator/mcp through the web
+  # nginx (deploy/amira/nginx-curator-mcp-location.conf); never published to
+  # the host. OPT-IN: starts only with the "curator" profile, e.g.
+  # COMPOSE_PROFILES=search,curator. Needs the secrets directory below first;
+  # see deploy/amira/README.md#curator-mcp-endpoint.
+  #
+  # Its own version variable rather than AMIRA_MCP_VERSION: curator mode is
+  # not in a release yet (amira-mcp-server PR #39), so this service has to
+  # build from a branch or commit while amira-mcp stays on its release tag,
+  # and update-amira-mcp.sh must not move it. Set AMIRA_MCP_CURATOR_VERSION in
+  # .env to anything a Docker git context accepts after "#": a full commit SHA
+  # (preferred, since it cannot move), a branch such as feat/curator-mode, or
+  # the release tag once curator mode ships. Left unset, the ref below does not
+  # exist, so the build fails naming the variable. Falling back to
+  # AMIRA_MCP_VERSION instead would start a release that ignores AMIRA_ACCESS
+  # and serves the public data at /curator/mcp with no token required.
+  amira-mcp-curator:
+    build:
+      context: https://github.com/AM-Digital-Research-Environment/amira-mcp-server.git#${AMIRA_MCP_CURATOR_VERSION:-AMIRA_MCP_CURATOR_VERSION-is-not-set}
+    profiles:
+      - curator
+    # Runs as the owner of the secrets directory, so the key file can stay
+    # 0600 on the host. The image's own user (node, uid 1000) is only the
+    # default: uid 1000 is usually a real login on the host, and making the
+    # key readable to it would hand that account the key. Set both in .env to
+    # `id -u` and `id -g` of the owner of AMIRA_CURATOR_SECRETS_DIR.
+    user: "${AMIRA_CURATOR_UID:-1000}:${AMIRA_CURATOR_GID:-1000}"
+    environment:
+      - PORT=8787
+      - HOST=0.0.0.0
+      - AMIRA_ACCESS=curator
+      # The internal address, as the upstream curator docs prescribe: the keyed
+      # crawl goes straight to the web nginx over the curator network and never
+      # leaves the host. nginx serves it from its only server block whatever
+      # the Host header. The server builds returned links from this too, so
+      # they point at http://web until upstream separates the two.
+      - AMIRA_SITE_BASE=http://web
+      - AMIRA_SITE_SLUG=amira
+      - AMIRA_LIVE_REFRESH=true
+      # Both files are re-read while running: tokens every 2 s at most (delete
+      # a line to revoke), the key every minute (rotation needs no restart).
+      - AMIRA_OMEKA_KEY_FILE=/run/secrets/amira-curator/omeka-key
+      - AMIRA_MCP_TOKENS_FILE=/run/secrets/amira-curator/tokens
+      # Private data: on the tmpfs below, never on a volume. Curator mode
+      # refuses to start without this set explicitly.
+      - AMIRA_CACHE_DIR=/var/cache/amira-curator
+      # Data Omeka has not confirmed for this long is refused; the refresh
+      # interval must stay below it. Both are the upstream defaults, stated
+      # so the pair is visible.
+      - AMIRA_CURATOR_MAX_STALE_HOURS=24
+      - AMIRA_REFRESH_INTERVAL_HOURS=1
+      # Per-curator rate limit instead of one bucket for everyone behind the
+      # proxy. Safe only because the /curator/mcp location overwrites
+      # X-Forwarded-For; see the amira-mcp service above, and the Compose
+      # contract check, which ties the two.
+      - AMIRA_TRUST_PROXY=true
+    volumes:
+      # The Omeka key (omeka-key) and the personal tokens (tokens), gitignored.
+      # The directory is mounted rather than each file: a bind-mounted file
+      # keeps pointing at the old inode once an editor or `sed -i` replaces it,
+      # so a deleted token line would never reach the server. Missing directory
+      # = refuse to start (create_host_path: false), never an empty one.
+      - type: bind
+        source: ${AMIRA_CURATOR_SECRETS_DIR:-./deploy/amira/curator-secrets}
+        target: /run/secrets/amira-curator
+        read_only: true
+        bind:
+          create_host_path: false
+    # Its own network, shared only with web: it can reach the Omeka API
+    # through nginx, and nothing but nginx can reach it, the public amira-mcp
+    # included. It cannot reach the database or the search index. Not
+    # internal, because the server fetches its GitHub-hosted enrichments
+    # (full-text map, corpus vectors), as amira-mcp does.
+    networks:
+      - curator
+    restart: unless-stopped
+    # Security hardening
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      # AMIRA_CACHE_DIR: owner-only, and gone when the container stops. Its
+      # pages count against the memory limit below.
+      - /var/cache/amira-curator:uid=${AMIRA_CURATOR_UID:-1000},gid=${AMIRA_CURATOR_GID:-1000},mode=0700,size=128M
+      - /tmp:mode=1777,size=16M
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          # 384M to match amira-mcp. UNMEASURED: the curator snapshot adds the
+          # private records and the private ILAM OCR full text, which has not
+          # been counted yet, and the cache tmpfs above is charged to the same
+          # limit. Measure with the cgroup counters in docs/PRODUCTION.md once
+          # it runs, and resize from that.
+          memory: 384M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
+    # Same probe and timings as amira-mcp. /healthz shows liveness and
+    # freshness only (no counts) in curator mode, and answers 503 while the
+    # first keyed crawl runs or once Omeka refuses the key. start_period is
+    # longer because nothing is served before that crawl completes: curator
+    # mode never falls back to the bundled public snapshot.
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:'+(process.env.PORT||8787)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 60s
+      timeout: 20s
+      retries: 3
+      start_period: 600s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 networks:
   mcp: {}
+  # amira-mcp-curator and web only (see the service above).
+  curator: {}
 
 volumes:
   # Precomputed DreVisualizations artifacts, private storage outside the

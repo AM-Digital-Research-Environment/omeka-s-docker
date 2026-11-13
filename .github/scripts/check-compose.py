@@ -42,14 +42,62 @@ def tmpfs_targets(service: dict[str, Any]) -> set[str]:
     return {str(entry).split(":", 1)[0] for entry in service.get("tmpfs", [])}
 
 
+def check_forwarded_for(service_name: str, template: str, path: str) -> None:
+    """AMIRA_TRUST_PROXY on an MCP service and X-Forwarded-For in the nginx
+    location in front of it are one decision; see where this is called."""
+    service_env = environment(services[service_name])
+    # Mirrors the upstream parseBool (src/config.ts): anything else is false.
+    trusts_proxy = service_env.get("AMIRA_TRUST_PROXY", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    templates = mounts_at(services["web"], f"/etc/nginx/templates/extra-locations/{template}")
+    location_conf: str | None = None
+    if templates:
+        try:
+            with open(str(templates[0].get("source", "")), encoding="utf-8") as handle:
+                location_conf = handle.read()
+        except OSError as error:
+            fail(f"cannot read the {path} location template: {error}")
+    if location_conf is None:
+        return
+    forwarded_for = [
+        line.strip()
+        for line in location_conf.splitlines()
+        if re.match(r"\s*proxy_set_header\s+X-Forwarded-For\b", line, re.IGNORECASE)
+    ]
+    require(
+        len(forwarded_for) == 1,
+        f"the {path} location must set X-Forwarded-For exactly once",
+    )
+    overwrites = bool(forwarded_for) and "$proxy_add_x_forwarded_for" not in forwarded_for[0]
+    require(
+        trusts_proxy,
+        f"{service_name} must set AMIRA_TRUST_PROXY so its rate limit is per visitor"
+        " rather than one bucket shared by everyone behind the proxy",
+    )
+    require(
+        not (trusts_proxy and not overwrites),
+        f"the {path} location appends to X-Forwarded-For while {service_name} trusts"
+        " it; the header is the rate-limit key, so a caller-supplied entry"
+        " would make the limit forgeable. Use `proxy_set_header"
+        " X-Forwarded-For $remote_addr`",
+    )
+
+
 variant = sys.argv[1] if len(sys.argv) > 1 else "base"
-if variant not in {"base", "amira", "immutable", "amira-immutable"}:
-    raise SystemExit("usage: check-compose.py base|amira|immutable|amira-immutable")
+if variant not in {"base", "amira", "amira-curator", "immutable", "amira-immutable"}:
+    raise SystemExit("usage: check-compose.py base|amira|amira-curator|immutable|amira-immutable")
 
 # Modules/themes are admin-managed volumes by default; compose.immutable.yml
 # drops them back into the image layer.
-is_amira = variant in {"amira", "amira-immutable"}
+is_amira = variant in {"amira", "amira-curator", "amira-immutable"}
 is_immutable = variant in {"immutable", "amira-immutable"}
+# amira-curator is the AMIRA overlay rendered with --profile curator too; every
+# other variant must leave the curator service out.
+is_curator = variant == "amira-curator"
 
 config = json.load(sys.stdin)
 services: dict[str, dict[str, Any]] = config.get("services", {})
@@ -60,9 +108,17 @@ if is_amira:
     # CI renders the AMIRA variants with --profile sparql so the opt-in
     # service is checked too.
     expected_services.update({"amira-mcp", "sparql"})
+if is_curator:
+    expected_services.add("amira-mcp-curator")
 missing_services = expected_services - services.keys()
 require(not missing_services, f"required services are missing: {', '.join(sorted(missing_services))}")
 require(("amira-mcp" in services) == is_amira, "AMIRA overlay service mismatch")
+# The curator service serves private data, so it stays behind its profile:
+# present when the profile is asked for, never by default.
+require(
+    ("amira-mcp-curator" in services) == is_curator,
+    "amira-mcp-curator must start only with the curator profile",
+)
 
 if missing_services:
     for error in errors:
@@ -110,7 +166,7 @@ for name, service in services.items():
 for name in ("web", "php", "typesense"):
     require(services[name].get("read_only") is True, f"{name} root filesystem must be read-only")
 if is_amira:
-    for name in ("amira-mcp", "sparql"):
+    for name in ("amira-mcp", "sparql", *(("amira-mcp-curator",) if is_curator else ())):
         require(
             services[name].get("read_only") is True,
             f"{name} root filesystem must be read-only",
@@ -257,6 +313,14 @@ if is_amira:
         "AMIRA /mcp nginx template is missing — list compose.immutable.yml"
         " directly after docker-compose.yml",
     )
+    # Mounted with or without the curator profile: the location resolves its
+    # upstream per request, so without the service it answers 502 instead of
+    # stopping nginx from starting.
+    require(
+        len(mounts_at(services["web"], "/etc/nginx/templates/extra-locations/curator-mcp.conf.template")) == 1,
+        "AMIRA /curator/mcp nginx template is missing — list compose.immutable.yml"
+        " directly after docker-compose.yml",
+    )
     # The /sparql location uses the zones from the http-level limits file and
     # proxies to the socket, so the three travel together.
     for target in (
@@ -286,7 +350,7 @@ php_tmpfs = tmpfs_targets(services["php"])
 for target in ("/tmp", "/run/omeka", "/run/php-fpm", "/var/www/.cache"):
     require(target in php_tmpfs, f"php writable tmpfs is missing: {target}")
 
-expected_web_networks = {"frontend", "mcp"} if is_amira else {"frontend"}
+expected_web_networks = {"frontend", "mcp", "curator"} if is_amira else {"frontend"}
 require(
     set(services["web"].get("networks", {})) == expected_web_networks,
     "web network exposure changed",
@@ -342,47 +406,69 @@ if is_amira:
     # forgeable limit. (Which end of the chain upstream counts from has already
     # changed once — leftmost in v1.17.0, AMIRA_PROXY_HOPS from the right in
     # v1.19.0 — which is exactly why we send one entry rather than a chain.)
-    mcp_env = environment(services["amira-mcp"])
-    # Mirrors the upstream parseBool (src/config.ts): anything else is false.
-    trusts_proxy = mcp_env.get("AMIRA_TRUST_PROXY", "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
-    mcp_templates = mounts_at(
-        services["web"], "/etc/nginx/templates/extra-locations/mcp.conf.template"
+    # The curator service runs the same code behind /curator/mcp.
+    check_forwarded_for("amira-mcp", "mcp.conf.template", "/mcp")
+    if is_curator:
+        check_forwarded_for("amira-mcp-curator", "curator-mcp.conf.template", "/curator/mcp")
+
+if is_curator:
+    # The curator service holds an Omeka key with view-all and caches private
+    # records, so where each of those lives is part of the contract.
+    curator = services["amira-mcp-curator"]
+    require(
+        set(curator.get("networks", {})) == {"curator"},
+        "amira-mcp-curator must sit on its own curator network, shared only with web",
     )
-    location_conf: str | None = None
-    if mcp_templates:
-        try:
-            with open(str(mcp_templates[0].get("source", "")), encoding="utf-8") as handle:
-                location_conf = handle.read()
-        except OSError as error:
-            fail(f"cannot read the /mcp location template: {error}")
-    if location_conf is not None:
-        forwarded_for = [
-            line.strip()
-            for line in location_conf.splitlines()
-            if re.match(r"\s*proxy_set_header\s+X-Forwarded-For\b", line, re.IGNORECASE)
+    require(
+        set(services["web"].get("networks", {})) >= {"curator"},
+        "web must join the curator network to proxy /curator/mcp",
+    )
+    require("healthcheck" in curator, "amira-mcp-curator healthcheck is missing")
+    curator_env = environment(curator)
+    require(curator_env.get("AMIRA_ACCESS") == "curator", "amira-mcp-curator must set AMIRA_ACCESS=curator")
+    require(
+        curator_env.get("AMIRA_SITE_BASE") == "http://web",
+        "amira-mcp-curator must crawl Omeka over the internal network"
+        " (AMIRA_SITE_BASE=http://web), so its keyed requests never leave the host",
+    )
+    for name in ("AMIRA_MCP_BEARER_TOKEN", "AMIRA_MCP_TOKEN_FILE"):
+        require(name not in curator_env, f"amira-mcp-curator must not set {name}; it uses personal tokens")
+    curator_mounts = [mount for mount in curator.get("volumes", []) if isinstance(mount, dict)]
+    require(
+        all(mount.get("type") == "bind" for mount in curator_mounts),
+        "amira-mcp-curator must not mount a volume: its cache holds private data and belongs on tmpfs",
+    )
+    for name in ("AMIRA_OMEKA_KEY_FILE", "AMIRA_MCP_TOKENS_FILE"):
+        path = curator_env.get(name, "")
+        holders = [
+            mount
+            for mount in curator_mounts
+            if path.startswith(str(mount.get("target", "")).rstrip("/") + "/")
         ]
-        require(
-            len(forwarded_for) == 1,
-            "the /mcp location must set X-Forwarded-For exactly once",
-        )
-        overwrites = bool(forwarded_for) and "$proxy_add_x_forwarded_for" not in forwarded_for[0]
-        require(
-            trusts_proxy,
-            "amira-mcp must set AMIRA_TRUST_PROXY so its rate limit is per visitor"
-            " rather than one bucket shared by everyone behind the proxy",
-        )
-        require(
-            not (trusts_proxy and not overwrites),
-            "the /mcp location appends to X-Forwarded-For while amira-mcp trusts"
-            " it; the header is the rate-limit key, so a caller-supplied entry"
-            " would make the limit forgeable. Use `proxy_set_header"
-            " X-Forwarded-For $remote_addr`",
-        )
+        require(bool(path) and len(holders) == 1, f"amira-mcp-curator {name} must come from one mount")
+        for mount in holders:
+            require(mount.get("read_only") is True, f"amira-mcp-curator {name} mount must be read-only")
+            require(
+                (mount.get("bind") or {}).get("create_host_path") is False,
+                f"amira-mcp-curator {name} mount must not create a missing host directory",
+            )
+    cache_dir = curator_env.get("AMIRA_CACHE_DIR", "")
+    require(
+        any(
+            cache_dir == target or cache_dir.startswith(target.rstrip("/") + "/")
+            for target in tmpfs_targets(curator)
+        ),
+        "amira-mcp-curator AMIRA_CACHE_DIR must be on a tmpfs",
+    )
+    limits = ((curator.get("deploy") or {}).get("resources") or {}).get("limits") or {}
+    require(bool(limits.get("memory")), "amira-mcp-curator must have a memory limit")
+    # Same code as amira-mcp, at a ref of its own until curator mode is
+    # released: a branch or commit is allowed here, unlike for amira-mcp.
+    curator_repo, _, curator_ref = str(curator.get("build", {}).get("context", "")).partition("#")
+    require(
+        curator_repo == mcp_context.partition("#")[0] and bool(curator_ref),
+        "amira-mcp-curator must build from the amira-mcp repository at an explicit ref",
+    )
 
 if errors:
     for error in errors:
