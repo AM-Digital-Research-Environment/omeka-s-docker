@@ -419,11 +419,12 @@ fit:
 | amira-mcp | 384M | ~83M | grows as the snapshot is re-crawled |
 | web | 256M | ~10M | but its tmpfs can occupy ~130M of the same limit |
 | sparql (AMIRA, opt-in) | 256M | ~7M | reaches its ceiling only on a runaway query, which its watchdog stops |
-| amira-mcp-curator (AMIRA, opt-in) | 384M | **unmeasured** | set to match amira-mcp; holds the private records and the private ILAM full text, not yet counted, and its 128M cache tmpfs counts against the same limit |
+| amira-mcp-curator (AMIRA, opt-in) | 512M | ~260M | measured 2026-11-13 after the first keyed crawl, plus ~21M of cache tmpfs on the same limit; at 384M the crawl hit the ceiling. Set with `AMIRA_CURATOR_MEMORY_LIMIT` |
 
-Total ceilings ~3.7 GiB (~4.0 GiB with the opt-in SPARQL endpoint, ~4.4 GiB
-with the curator endpoint as well) against ~1.0 GiB of anonymous use, before
-the curator endpoint is counted. Nothing is wrong with that — but **raising one
+Total ceilings ~3.7 GiB (~4.0 GiB with the opt-in SPARQL endpoint) against
+~1.0 GiB of anonymous use. The curator endpoint adds ~260M of anonymous use;
+when it runs on the reference host, take its 512M from php
+(`PHP_CONTAINER_MEMORY=1408M`), which keeps the total at ~4.4 GiB. Nothing is wrong with that — but **raising one
 service's ceiling meaningfully requires lowering another's**, and several
 services peaking together can reach the OOM killer.
 

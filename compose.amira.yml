@@ -385,12 +385,12 @@ services:
       resources:
         limits:
           cpus: '0.25'
-          # 384M to match amira-mcp. UNMEASURED: the curator snapshot adds the
-          # private records and the private ILAM OCR full text, which has not
-          # been counted yet, and the cache tmpfs above is charged to the same
-          # limit. Measure with the cgroup counters in docs/PRODUCTION.md once
-          # it runs, and resize from that.
-          memory: 384M
+          # Measured on 2026-11-13 after the first keyed crawl: anon ~260M plus
+          # ~21M of cache tmpfs (charged to this same limit). At 384M the first
+          # crawl hit the ceiling 236 times and pushed 39M to swap, so 512M. On
+          # the 3.8 GiB reference host the extra 128M came out of php
+          # (PHP_CONTAINER_MEMORY=1408M); see docs/PRODUCTION.md.
+          memory: ${AMIRA_CURATOR_MEMORY_LIMIT:-512M}
         reservations:
           cpus: '0.05'
           memory: 64M
