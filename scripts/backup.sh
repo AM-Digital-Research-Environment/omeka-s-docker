@@ -96,7 +96,7 @@ if [[ "$KEEP" != 0 && "$DEFAULT_LAYOUT" != true ]]; then
     echo "       to prune alongside an explicit backup directory." >&2
     exit 2
 fi
-HELPER_IMAGE="alpine:3.24.3@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a"
+HELPER_IMAGE="alpine:3.24.4@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf"
 
 # Resolve compose project name and volume prefix
 COMPOSE_CONFIG="$(cd "$PROJECT_DIR" && docker compose config --format json)"
