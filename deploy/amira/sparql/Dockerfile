@@ -10,7 +10,9 @@ FROM ghcr.io/oxigraph/oxigraph:0.5.13@sha256:260454ee29c091d2cdb99dd156212594ff3
 
 FROM debian:trixie-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2
 
+# upgrade: take Debian security fixes published after the base image was built.
 RUN apt-get update \
+    && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends socat \
     && rm -rf /var/lib/apt/lists/* \
     # A fixed uid/gid: the sparql_socket tmpfs volume in compose.amira.yml is

@@ -252,6 +252,7 @@ fi
 THEMES
 
 COPY --chown=www-data:www-data _docker/local-themes/ /tmp/local-themes/
+COPY _docker/vendor-security-floors.txt /tmp/vendor-security-floors.txt
 RUN shopt -s nullglob \
     && for theme_dir in /tmp/local-themes/*/; do \
         theme_name=$(basename "$theme_dir"); \
@@ -269,7 +270,18 @@ RUN shopt -s nullglob \
         [ -d "$module_dir/vendor" ] || composer install \
             --working-dir "$module_dir" --no-dev --no-interaction \
             --prefer-dist --optimize-autoloader; \
-    done
+    done \
+    # Raise vendored packages a module release ships at a known-vulnerable
+    # version (see the manifest for syntax and when to drop entries).
+    && while read -r module_name floor; do \
+        case "$module_name" in ''|'#'*) continue ;; esac; \
+        module_dir="${OMEKA_ROOT}/modules/${module_name}"; \
+        package="${floor%%:*}"; \
+        [ -f "$module_dir/composer.lock" ] && grep -q "\"name\": \"${package}\"" "$module_dir/composer.lock" || continue; \
+        composer update "$package" --with "$floor" \
+            --working-dir "$module_dir" --no-dev --no-interaction \
+            --prefer-dist --optimize-autoloader || exit 1; \
+    done < /tmp/vendor-security-floors.txt
 
 # Persist PHP sessions on a dedicated volume (mounted in docker-compose.yml)
 # instead of the default tmpfs /tmp, so container restarts/recreates no longer
@@ -318,6 +330,10 @@ CMD ["php-fpm"]
 # nginx serves the exact static assets baked into the PHP image. Keeping both
 # targets in one Dockerfile guarantees core/module/theme assets change together
 # while media remains a separately mounted read-only volume.
-FROM nginx:1.30.6-alpine@sha256:47928bf67eb62a1863cb08d9ecb52d3e704304ba614eaee17884204677702951 AS web
+FROM nginx:1.30.6-alpine@sha256:901e593c95dc85f5a729f5765516321366ef4ac401821431d408897e95287d0a AS web
+
+# Pick up Alpine security fixes published after the base image was built (the
+# runtime stage does the same with apt-get upgrade).
+RUN apk upgrade --no-cache
 
 COPY --from=runtime --chown=nginx:nginx /var/www/html /var/www/html

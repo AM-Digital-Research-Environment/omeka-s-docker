@@ -1,0 +1,12 @@
+# Security floors for PHP packages a module release vendors at a vulnerable
+# version. After modules are vendored, the build raises each listed package to
+# the given constraint with a targeted `composer update` (the rest of the
+# module's lock is left alone). A line is skipped when the module is absent or
+# does not lock the package, so entries are safe to keep after upstream ships
+# the fix — remove them once the module's own composer.lock reaches the floor.
+#
+# Syntax: <ModuleDir> <vendor/package>:<constraint>
+
+# CVE-2026-109413 (DoS via deeply nested inline YAML): Common 3.4.96 ships
+# symfony/yaml v5.4.53; fixed in 5.4.54.
+Common symfony/yaml:~5.4.54
