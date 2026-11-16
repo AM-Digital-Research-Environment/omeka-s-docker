@@ -176,7 +176,7 @@ text. It serves them only to curators holding a personal token, and logs the
 curator's name and the tool for every request. What the server does with
 private data, and why it refuses to start when anything is missing, is in
 amira-mcp-server's
-[`docs/curator.md`](https://github.com/AM-Digital-Research-Environment/amira-mcp-server/blob/v1.38.0/docs/curator.md).
+[`docs/curator.md`](https://github.com/AM-Digital-Research-Environment/amira-mcp-server/blob/v1.38.1/docs/curator.md).
 Design and decisions:
 [amira-mcp-server#26](https://github.com/AM-Digital-Research-Environment/amira-mcp-server/issues/26).
 
@@ -257,7 +257,7 @@ Design and decisions:
 
    ```bash
    COMPOSE_PROFILES=search,curator          # plus sparql if you run it
-   AMIRA_MCP_CURATOR_VERSION=v1.38.0        # v1.36.0 or later
+   AMIRA_MCP_CURATOR_VERSION=v1.38.1        # v1.36.0 or later
    AMIRA_CURATOR_UID=<output of id -u>
    AMIRA_CURATOR_GID=<output of id -g>
    ```
