@@ -84,7 +84,28 @@ updates:
     cooldown:
       default-days: 7
 
-  # Monitor the image tags pinned in docker-compose.yml: mysql and typesense.
+  # The Typesense image (upstream release + Ubuntu security updates), built
+  # from its own Dockerfile.
+  - package-ecosystem: "docker"
+    directory: "/_docker/typesense"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "docker"
+    labels:
+      - "dependencies"
+      - "docker"
+    open-pull-requests-limit: 5
+    assignees:
+      - "fmadore"
+    # Let a release age a week before proposing it, so a compromised or
+    # yanked publish is usually caught first. Security updates ignore this.
+    cooldown:
+      default-days: 7
+
+  # Monitor the image tag pinned in docker-compose.yml: mysql. (typesense is
+  # built from _docker/typesense, tracked above.)
   # (nginx is built from the Dockerfile's web target, so the ecosystem above
   # owns it.) This ecosystem only matches conventional Compose filenames, so
   # the compose.<name>.yml overlays are NOT scanned — neither pins an `image:`

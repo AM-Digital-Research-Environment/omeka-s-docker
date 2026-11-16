@@ -290,7 +290,10 @@ services:
   # Stays on the internal backend network — never published to the host; the
   # php service talks to it server-side at http://typesense:8108.
   typesense:
-    image: typesense/typesense:30.2@sha256:610f2d34b1f93d00762869da2c67736775e5798d19a2c8b91b014b8a0cc1e110
+    # The pinned upstream release plus current Ubuntu security updates; the
+    # release and its digest live in _docker/typesense/Dockerfile.
+    build:
+      context: _docker/typesense
     profiles:
       - search
     # NOTE: TYPESENSE_API_KEY defaults to empty so plain `docker compose up -d`

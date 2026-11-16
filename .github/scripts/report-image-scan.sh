@@ -72,13 +72,14 @@ or the job summaries of the run: ${RUN_URL:-}
 
 Typical fixes:
 
-- **OS packages** (debian/alpine): a rebuild picks up patched packages once
+- **OS packages** (debian/alpine/ubuntu): a rebuild picks up patched packages once
   the base image is refreshed. Merge pending Dependabot docker PRs, then
-  rebuild (\`scripts/rebuild-code.sh\`, or \`docker compose build --pull\`).
+  rebuild (\`scripts/rebuild-code.sh\`, or \`docker compose build --pull\`;
+  php, web, sparql and typesense all apply OS updates at build time).
 - **PHP packages** under \`modules/*/vendor\` or \`vendor\`: they ship inside
   the module or Omeka release; update the module
   (\`scripts/update-extensions.sh\`) or report it upstream.
-- **mysql / typesense / oxigraph / amira-mcp**: wait for, or bump to, an
+- **mysql, the typesense or oxigraph binaries, amira-mcp**: wait for, or bump to, an
   upstream image or release that includes the fix.
 
 This issue updates itself on each scheduled scan and closes when every image

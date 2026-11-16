@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 import os
 import re
 import sys
@@ -181,10 +182,29 @@ if web_ports and isinstance(web_ports[0], dict):
 for name in ("web", "php", "db", "typesense"):
     require("healthcheck" in services[name], f"{name} healthcheck is missing")
 
-for name in ("db", "typesense"):
-    image = str(services[name].get("image", ""))
-    require("@sha256:" in image, f"{name} image must be digest-pinned")
-    require(":latest" not in image, f"{name} image must not use latest")
+db_image = str(services["db"].get("image", ""))
+require("@sha256:" in db_image, "db image must be digest-pinned")
+require(":latest" not in db_image, "db image must not use latest")
+
+# typesense is a thin local build over the upstream release (OS updates only);
+# its base image must stay digest-pinned in that Dockerfile.
+typesense_context = str(services["typesense"].get("build", {}).get("context", ""))
+require(
+    typesense_context.rstrip("/").endswith("_docker/typesense"),
+    "typesense must build from _docker/typesense",
+)
+typesense_from = [
+    line.split()[1]
+    for line in (Path(__file__).resolve().parents[2] / "_docker/typesense/Dockerfile").read_text().splitlines()
+    if line.startswith("FROM ")
+]
+require(
+    len(typesense_from) == 1
+    and typesense_from[0].startswith("typesense/typesense:")
+    and "@sha256:" in typesense_from[0]
+    and ":latest" not in typesense_from[0],
+    "typesense base image must be a digest-pinned typesense/typesense release",
+)
 
 # Omeka code is immutable image content in both application containers. The
 # two targets must use the exact same build inputs so nginx cannot serve stale
