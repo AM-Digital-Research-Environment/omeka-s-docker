@@ -416,7 +416,7 @@ fit:
 | php | 1536M | ~21M idle | far higher during imports and thumbnailing |
 | db | 1024M | ~563M | 512M InnoDB buffer pool plus overhead |
 | typesense | 512M | ~363M | in-memory index for a ~10k-item corpus |
-| amira-mcp | 384M | ~83M | grows as the snapshot is re-crawled |
+| amira-mcp | 384M | ~129M | measured 2026-11-13 (was ~83M in October); grows as the snapshot is re-crawled |
 | web | 256M | ~10M | but its tmpfs can occupy ~130M of the same limit |
 | sparql (AMIRA, opt-in) | 256M | ~7M | reaches its ceiling only on a runaway query, which its watchdog stops |
 | amira-mcp-curator (AMIRA, opt-in) | 512M | ~260M | measured 2026-11-13 after the first keyed crawl, plus ~21M of cache tmpfs on the same limit; at 384M the crawl hit the ceiling. Set with `AMIRA_CURATOR_MEMORY_LIMIT` |

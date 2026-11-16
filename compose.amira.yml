@@ -292,16 +292,16 @@ services:
   # COMPOSE_PROFILES=search,curator. Needs the secrets directory below first;
   # see deploy/amira/README.md#curator-mcp-endpoint.
   #
-  # Its own version variable rather than AMIRA_MCP_VERSION: curator mode is
-  # not in a release yet (amira-mcp-server PR #39), so this service has to
-  # build from a branch or commit while amira-mcp stays on its release tag,
-  # and update-amira-mcp.sh must not move it. Set AMIRA_MCP_CURATOR_VERSION in
-  # .env to anything a Docker git context accepts after "#": a full commit SHA
-  # (preferred, since it cannot move), a branch such as feat/curator-mode, or
-  # the release tag once curator mode ships. Left unset, the ref below does not
-  # exist, so the build fails naming the variable. Falling back to
-  # AMIRA_MCP_VERSION instead would start a release that ignores AMIRA_ACCESS
-  # and serves the public data at /curator/mcp with no token required.
+  # Its own version variable rather than AMIRA_MCP_VERSION, so the private
+  # endpoint is upgraded deliberately: update-amira-mcp.sh moves only
+  # amira-mcp and never touches this one. Curator mode, including the
+  # AMIRA_API_BASE support it depends on, has shipped since amira-mcp-server
+  # v1.36.0. Set AMIRA_MCP_CURATOR_VERSION in .env to that release tag or a
+  # later one (anything a Docker git context accepts after "#" also works,
+  # such as a full commit SHA). Left unset, the ref below does not exist, so
+  # the build fails naming the variable. Falling back to AMIRA_MCP_VERSION
+  # instead could start a release older than v1.36.0, which ignores
+  # AMIRA_ACCESS and serves the public data at /curator/mcp with no token.
   amira-mcp-curator:
     build:
       context: https://github.com/AM-Digital-Research-Environment/amira-mcp-server.git#${AMIRA_MCP_CURATOR_VERSION:-AMIRA_MCP_CURATOR_VERSION-is-not-set}

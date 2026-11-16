@@ -115,6 +115,17 @@ The helper validates the published tag, records it in `.env`, builds it, and
 recreates only `amira-mcp`. Use `--refresh-data` for a same-version rebuild of
 the bundled data snapshot. The rest of the stack keeps running.
 
+The helper never moves the [curator endpoint](#curator-mcp-endpoint), which
+has its own `AMIRA_MCP_CURATOR_VERSION`. To keep both on the same release, set
+it in `.env` too, then
+`docker compose build amira-mcp-curator && docker compose up -d --no-deps amira-mcp-curator`.
+
+No Dependabot ecosystem reads the release tag in the build URL, so the
+[AMIRA MCP release check](../../.github/workflows/amira-mcp-release.yml)
+workflow stands in: every Monday it opens an issue when a newer upstream
+release exists. Forks turn it on with the `ENABLE_AMIRA_RELEASE_CHECK`
+repository variable.
+
 ### Security
 
 Like the search engine, the MCP server is set up so that adding it doesn't make
@@ -140,7 +151,7 @@ the site easier to attack:
   the chain it counts from (leftmost in v1.17.0, `AMIRA_PROXY_HOPS` from the right in
   v1.19.0). CI asserts the pair stays consistent.
 - **Locked down like everything else:** no special privileges, a read-only filesystem, and a
-  cap of a quarter CPU and 256 MB so it can't crowd out the site.
+  cap of a quarter CPU and 384 MB so it can't crowd out the site.
 - **Nothing to back up.** Its copy of the data is rebuilt from the public API, so it keeps
   no state of its own.
 - **The site never waits on it.** The `/mcp` rule looks the server up at the moment a request
@@ -165,28 +176,20 @@ text. It serves them only to curators holding a personal token, and logs the
 curator's name and the tool for every request. What the server does with
 private data, and why it refuses to start when anything is missing, is in
 amira-mcp-server's
-[`docs/curator.md`](https://github.com/AM-Digital-Research-Environment/amira-mcp-server/blob/feat/curator-mode/docs/curator.md).
+[`docs/curator.md`](https://github.com/AM-Digital-Research-Environment/amira-mcp-server/blob/v1.37.0/docs/curator.md).
 Design and decisions:
 [amira-mcp-server#26](https://github.com/AM-Digital-Research-Environment/amira-mcp-server/issues/26).
 
-> **No release contains curator mode yet.** It is in amira-mcp-server pull
-> request [#39](https://github.com/AM-Digital-Research-Environment/amira-mcp-server/pull/39)
-> (branch `feat/curator-mode`). Until it is released, build the curator image
-> from a ref that contains it, by setting `AMIRA_MCP_CURATOR_VERSION` in
-> `.env`: a full commit SHA of that branch (preferred, since it cannot move
-> under you) or the branch name itself. Left unset, the build stops with
-> `repository does not contain ref AMIRA_MCP_CURATOR_VERSION-is-not-set`; it
-> deliberately does not fall back to `AMIRA_MCP_VERSION`, because an older
-> release ignores `AMIRA_ACCESS` and would serve the public data at
-> `/curator/mcp` with no token. Once curator mode ships, set it to that
-> release tag. `update-amira-mcp.sh` never touches it.
->
-> **The commit must also support `AMIRA_API_BASE`**, which #39 adds after its
-> first curator-mode commits (it is not on `feat/curator-mode` as of 13
-> November 2026; check `docs/curator.md` there). A commit without it ignores
-> the setting and crawls `AMIRA_SITE_BASE/api` instead: the public URL,
-> through the host's TLS proxy, with the Omeka key in every query string. Do
-> not start the service on such a commit.
+> **Use amira-mcp-server v1.36.0 or later.** v1.36.0 is the first release
+> with curator mode and the `AMIRA_API_BASE` support it needs. Set the release
+> tag as `AMIRA_MCP_CURATOR_VERSION` in `.env`. Left unset, the build stops
+> with `repository does not contain ref AMIRA_MCP_CURATOR_VERSION-is-not-set`.
+> It deliberately does not fall back to `AMIRA_MCP_VERSION`: a release older
+> than v1.36.0 ignores `AMIRA_ACCESS` and would serve the public data at
+> `/curator/mcp` with no token. Without `AMIRA_API_BASE`, it would also crawl
+> `AMIRA_SITE_BASE/api`, the public URL, with the Omeka key in every query
+> string. `update-amira-mcp.sh` never touches this variable, so bump it
+> yourself when you update the public server.
 
 ### How it fits together
 
@@ -218,7 +221,7 @@ Design and decisions:
 - **Private data only in memory.** The cache is a tmpfs, owner-only, gone when
   the container stops. There is no volume and nothing to back up.
 - **Hardened like `amira-mcp`**: read-only root filesystem, every capability
-  dropped, no privilege escalation, a quarter CPU and a 384M ceiling. CI
+  dropped, no privilege escalation, a quarter CPU and a 512M ceiling. CI
   asserts all of this, and that the service is absent without the profile
   ([`check-compose.py`](../../.github/scripts/check-compose.py)).
 
@@ -254,7 +257,7 @@ Design and decisions:
 
    ```bash
    COMPOSE_PROFILES=search,curator          # plus sparql if you run it
-   AMIRA_MCP_CURATOR_VERSION=<commit SHA on feat/curator-mode, with AMIRA_API_BASE>
+   AMIRA_MCP_CURATOR_VERSION=v1.37.0        # v1.36.0 or later
    AMIRA_CURATOR_UID=<output of id -u>
    AMIRA_CURATOR_GID=<output of id -g>
    ```
@@ -377,12 +380,14 @@ follow-up.
 
 ### Memory
 
-The 384M ceiling matches `amira-mcp` and is **not measured**: the curator
-snapshot adds the private records and the private ILAM full text, which has
-not been counted, and the cache tmpfs is charged to the same limit. Measure it
-with the cgroup counters in
+The ceiling is `AMIRA_CURATOR_MEMORY_LIMIT`, 512M by default. Measured on
+13 November 2026 after the first keyed crawl: about 260M of anonymous memory,
+plus about 21M of cache tmpfs charged to the same limit. At the earlier 384M
+the crawl hit the ceiling and pushed memory to swap. On a 3.8 GiB host, take
+the extra memory from php (`PHP_CONTAINER_MEMORY=1408M`). Re-measure with the
+cgroup counters in
 [docs/PRODUCTION.md](../../docs/PRODUCTION.md#memory-ceilings-are-oversubscribed-on-purpose)
-after the first crawl and after a day of use, and resize from that.
+when the private corpus grows.
 
 ### Switching it off
 
@@ -393,8 +398,6 @@ in Omeka and the secrets directory.
 
 ### Not done yet
 
-- **`AMIRA_API_BASE` upstream.** The service relies on it (see the note at the
-  top of this section); it lands with amira-mcp-server #39.
 - **OAuth.** Sign-in for claude.ai and ChatGPT goes through Pocket ID on its
   own subdomain (for example `auth.africamultiple.uni-bayreuth.de`, pending
   DNS and a certificate), with the curator server checking the tokens.

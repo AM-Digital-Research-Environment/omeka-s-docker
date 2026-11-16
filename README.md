@@ -192,7 +192,9 @@ bash scripts/rebuild-code.sh --pull    # newer PHP and web server images
   vulnerability exists.
 - **Untracked pins** ([untracked-pins.yml](.github/workflows/untracked-pins.yml))
   opens an issue when Omeka S, omeka-s-cli, APCu or a pinned module or theme
-  release falls behind, since Dependabot cannot see those.
+  release falls behind, since Dependabot cannot see those. On the AMIRA
+  overlay, the [AMIRA MCP release check](.github/workflows/amira-mcp-release.yml)
+  does the same for the MCP server release.
 
 These issues and Dependabot PRs are assigned to the maintainer so they send a
 notification. In a fork, set the `ISSUE_ASSIGNEE` repository variable and edit
