@@ -265,6 +265,27 @@ code=$(curl -s -o /dev/null -w '%{http_code}' -L "$url/admin")
 echo "    GET /admin (followed) -> $code"
 [[ "$code" == "200" ]]
 
+log "Checking the session cookie flags and first-install summary..."
+# Defaults: plain HTTP, so not Secure, but SameSite=Lax from the FPM pool.
+cookie=$(curl -s -D - -o /dev/null "$url/login" | grep -i '^set-cookie:' | head -n 1)
+echo "    ${cookie%%=*}=… $(grep -oiE '(; *(httponly|secure|samesite=[a-z]+))+' <<< "$cookie" || true)"
+grep -qi 'samesite=lax' <<< "$cookie"
+grep -qi 'httponly' <<< "$cookie"
+# `! cmd` never trips set -e, so negative checks use an explicit if.
+if grep -qiE ';[[:space:]]*secure' <<< "$cookie"; then
+    echo "Session cookie is Secure although OMEKA_SESSION_COOKIE_SECURE defaults to false." >&2
+    exit 1
+fi
+php_log=$(docker compose logs --no-color php)
+grep -qF 'Omeka S is installed and ready.' <<< "$php_log"
+if [[ "$variant" == "amira" ]]; then
+    grep -qF 'Admin user created: admin@example.com' <<< "$php_log"
+    if grep -qF 'ci-admin-password' <<< "$php_log"; then
+        echo "SECURITY: the admin password appeared in the php log!" >&2
+        exit 1
+    fi
+fi
+
 log "Checking CSP frame-ancestors header..."
 headers=$(curl -sI "$url/")
 if [[ "$variant" == "amira" ]]; then
@@ -480,13 +501,22 @@ if [[ "$variant" == "immutable" ]]; then
 
     log "A/B test: rebuilding code while preserving database and media..."
     cp -R .github/fixtures/ImmutableProbe "$probe_module_dir"
+    # The web image carries only what nginx may serve (asset/ trees), so give
+    # the probe an asset to compare across both images.
+    mkdir -p "$probe_module_dir/asset/css"
+    printf '/* smoke %s */\n' "${GITHUB_RUN_ID:-$$}" > "$probe_module_dir/asset/css/probe.css"
     bash scripts/rebuild-code.sh --refresh
 
     docker compose exec -T php test -f /var/www/html/modules/ImmutableProbe/Module.php
-    docker compose exec -T web test -f /var/www/html/modules/ImmutableProbe/Module.php
-    php_hash=$(docker compose exec -T php sha256sum /var/www/html/modules/ImmutableProbe/Module.php | awk '{print $1}')
-    web_hash=$(docker compose exec -T web sha256sum /var/www/html/modules/ImmutableProbe/Module.php | awk '{print $1}')
+    probe_asset=/var/www/html/modules/ImmutableProbe/asset/css/probe.css
+    php_hash=$(docker compose exec -T php sha256sum "$probe_asset" | awk '{print $1}')
+    web_hash=$(docker compose exec -T web sha256sum "$probe_asset" | awk '{print $1}')
     [[ "$php_hash" == "$web_hash" ]]
+    # ...and no PHP source: the web image must not ship code nginx never runs.
+    docker compose exec -T web test ! -e /var/www/html/modules/ImmutableProbe/Module.php
+    docker compose exec -T web test ! -e /var/www/html/vendor
+    docker compose exec -T web test ! -e /var/www/html/application/src
+    [[ "$(probe "$url/modules/ImmutableProbe/asset/css/probe.css")" == "200" ]]
     [[ "$(docker compose exec -T php cat /var/www/html/files/ci-backup-marker.txt)" == "ci-file-marker" ]]
     db_marker=$(docker compose exec -T db sh -eu -c '
         exec mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --batch --skip-column-names \

@@ -44,6 +44,60 @@ def tmpfs_targets(service: dict[str, Any]) -> set[str]:
     return {str(entry).split(":", 1)[0] for entry in service.get("tmpfs", [])}
 
 
+def tmpfs_options(service: dict[str, Any], target: str) -> dict[str, str] | None:
+    for entry in service.get("tmpfs", []):
+        path, _, options = str(entry).partition(":")
+        if path == target:
+            return dict(
+                (option.partition("=")[0], option.partition("=")[2])
+                for option in options.split(",")
+                if option
+            )
+    return None
+
+
+def size_bytes(value: str) -> int:
+    """Parse a Compose/tmpfs size such as 536870912, 128M or 1g."""
+    match = re.fullmatch(r"(\d+)\s*([kmg]?)b?", str(value).strip().lower())
+    if not match:
+        return 0
+    return int(match.group(1)) * {"": 1, "k": 1024, "m": 1024**2, "g": 1024**3}[match.group(2)]
+
+
+def limits(service: dict[str, Any]) -> dict[str, Any]:
+    return ((service.get("deploy") or {}).get("resources") or {}).get("limits") or {}
+
+
+def check_node_heap(service_name: str) -> None:
+    """A Node MCP server must cap its V8 heap below its cgroup limit, with room
+    left for its tmpfs mounts (charged to the same limit) and V8's non-heap
+    memory; otherwise it dies with a heap OOM or is OOM-killed."""
+    service = services[service_name]
+    node_options = environment(service).get("NODE_OPTIONS", "")
+    heap = re.search(r"--max-old-space-size=(\d+)\b", node_options)
+    require(heap is not None, f"{service_name} must cap its V8 heap with NODE_OPTIONS=--max-old-space-size")
+    memory = size_bytes(str(limits(service).get("memory", "")))
+    require(memory > 0, f"{service_name} must have a memory limit")
+    if heap is None or memory <= 0:
+        return
+    tmpfs_total = sum(
+        size_bytes((tmpfs_options(service, target) or {}).get("size", "0"))
+        for target in tmpfs_targets(service)
+    )
+    # V8 keeps code, the young generation and buffers outside the old-space
+    # heap; 32M is a floor, not a recommendation.
+    require(
+        int(heap.group(1)) * 1024**2 + 32 * 1024**2 <= memory,
+        f"{service_name} V8 heap must stay at least 32M below its memory limit",
+    )
+    if service_name == "amira-mcp-curator":
+        # Its cache tmpfs holds data on every run, so heap + tmpfs must fit.
+        require(
+            int(heap.group(1)) * 1024**2 + tmpfs_total < memory,
+            f"{service_name} V8 heap plus its tmpfs mounts must stay under its memory limit",
+        )
+
+
 def check_forwarded_for(service_name: str, template: str, path: str) -> None:
     """AMIRA_TRUST_PROXY on an MCP service and X-Forwarded-For in the nginx
     location in front of it are one decision; see where this is called."""
@@ -153,6 +207,15 @@ for name, service in services.items():
     )
     require("ALL" in service.get("cap_drop", []), f"{name} must drop all capabilities")
     require(service.get("restart") == "unless-stopped", f"{name} restart policy changed")
+    # A process/thread cap per service, so a runaway or exploited process
+    # cannot fork-bomb the host. It lives in deploy.resources.limits.pids:
+    # Compose rejects a service-level pids_limit next to other deploy limits.
+    pids = limits(service).get("pids")
+    require(
+        isinstance(pids, int) and 0 < pids <= 1024,
+        f"{name} must set deploy.resources.limits.pids (1-1024)",
+    )
+    require(not service.get("pids_limit"), f"{name} must set its pids limit in one place only")
     if name != "web":
         require(not service.get("ports"), f"{name} must not publish host ports")
     for mount in service.get("volumes", []):
@@ -165,8 +228,65 @@ for name, service in services.items():
             f"{name} must not mount the Docker socket",
         )
 
-for name in ("web", "php", "typesense"):
+for name in ("web", "php", "db", "typesense"):
     require(services[name].get("read_only") is True, f"{name} root filesystem must be read-only")
+# Only nginx needs capabilities (binding port 80, dropping to its worker user).
+for name, service in services.items():
+    if name != "web":
+        require(not service.get("cap_add"), f"{name} must not add capabilities")
+
+# MySQL runs as the image's mysql user (uid 999 in the pinned image) from the
+# start, so its entrypoint never needs root or the chown capabilities. Its
+# writable paths outside the data volume are tmpfs owned by that user.
+db = services["db"]
+require(db.get("user") == "999:999", "db must run as the image's mysql user (999:999)")
+for target in ("/tmp", "/var/run/mysqld"):
+    options = tmpfs_options(db, target)
+    require(
+        options is not None and options.get("uid") == "999" and options.get("gid") == "999",
+        f"db needs a tmpfs at {target} owned by 999:999",
+    )
+
+# Typesense reads TYPESENSE_API_KEY from its environment. On the command line
+# the key would be readable by every local user in the host's process list.
+typesense = services["typesense"]
+require(
+    not any("api-key" in str(argument) for argument in typesense.get("command") or []),
+    "typesense must not receive its API key on the command line",
+)
+require(
+    environment(typesense).get("TYPESENSE_API_KEY") == environment(services["php"]).get("TYPESENSE_API_KEY"),
+    "typesense and php must share TYPESENSE_API_KEY",
+)
+
+# db and typesense have no business reaching the internet or the host's other
+# networks; php keeps frontend for its own outbound traffic.
+require(
+    (config.get("networks", {}).get("backend") or {}).get("internal") is True,
+    "the backend network must be internal",
+)
+
+# Settings the entrypoint and nginx templates read; a missing pass-through
+# would silently fall back to the template defaults.
+php_env_all = environment(services["php"])
+for name in ("OMEKA_SESSION_COOKIE_SECURE", "OMEKA_SESSION_COOKIE_SAMESITE", "OMEKA_AUTO_INSTALL_MODULES"):
+    require(name in php_env_all, f"php must pass {name} through")
+require(
+    php_env_all.get("OMEKA_SESSION_COOKIE_SECURE") in {"true", "false"},
+    "OMEKA_SESSION_COOKIE_SECURE must default to true or false",
+)
+web_env = environment(services["web"])
+envsubst_filter = web_env.get("NGINX_ENVSUBST_FILTER", "").replace("$$", "$")
+for name in ("SERVER_NAME", "FRAME_ANCESTORS", "NGINX_TRUSTED_PROXY_CIDR", "NGINX_HSTS_MAX_AGE"):
+    require(name in web_env, f"web must pass {name} through")
+    require(
+        re.search(envsubst_filter, name) is not None if envsubst_filter else False,
+        f"NGINX_ENVSUBST_FILTER must include {name}, or the template keeps it unsubstituted",
+    )
+require(
+    re.fullmatch(r"\d+", web_env.get("NGINX_HSTS_MAX_AGE", "")) is not None,
+    "NGINX_HSTS_MAX_AGE must be a whole number of seconds",
+)
 if is_amira:
     for name in ("amira-mcp", "sparql", *(("amira-mcp-curator",) if is_curator else ())):
         require(
@@ -429,6 +549,7 @@ if is_amira:
     # v1.19.0 — which is exactly why we send one entry rather than a chain.)
     # The curator service runs the same code behind /curator/mcp.
     check_forwarded_for("amira-mcp", "mcp.conf.template", "/mcp")
+    check_node_heap("amira-mcp")
     if is_curator:
         check_forwarded_for("amira-mcp-curator", "curator-mcp.conf.template", "/curator/mcp")
 
@@ -493,8 +614,8 @@ if is_curator:
         ),
         "amira-mcp-curator AMIRA_CACHE_DIR must be on a tmpfs",
     )
-    limits = ((curator.get("deploy") or {}).get("resources") or {}).get("limits") or {}
-    require(bool(limits.get("memory")), "amira-mcp-curator must have a memory limit")
+    require(bool(limits(curator).get("memory")), "amira-mcp-curator must have a memory limit")
+    check_node_heap("amira-mcp-curator")
     # Same code as amira-mcp, at a ref of its own until curator mode is
     # released: a branch or commit is allowed here, unlike for amira-mcp.
     curator_repo, _, curator_ref = str(curator.get("build", {}).get("context", "")).partition("#")

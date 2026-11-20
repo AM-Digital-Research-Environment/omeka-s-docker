@@ -267,9 +267,13 @@ Then set `NGINX_PORT=8080` and `SERVER_NAME=omeka.example.edu` in `.env`, run
 [docs/PRODUCTION.md](docs/PRODUCTION.md) covers Traefik and host nginx, the
 firewall, certificates, and what the template already hardens for you.
 
+Once HTTPS works, set `OMEKA_SESSION_COOKIE_SECURE=true` in `.env` (see
+[HTTPS settings](docs/PRODUCTION.md#https-settings-in-env)).
+
 Three things are left to you: keep `.env` out of Git (it already is ignored),
-remove `OMEKA_ADMIN_PASSWORD` from `.env` once the first account exists, and
-treat access to Docker on the server as root access.
+remove the three `OMEKA_ADMIN_*` values from `.env` once the first account
+exists (the site warns at every start until you do), and treat access to
+Docker on the server as root access.
 
 ## Troubleshooting
 

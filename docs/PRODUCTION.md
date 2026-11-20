@@ -49,7 +49,9 @@ redirect themselves.
 |---|---|
 | **The database is unreachable** | It has no port open to the machine or the internet — only the site can talk to it |
 | **The site itself listens locally by default** | It expects an HTTPS proxy in front |
-| **Nothing runs as root** | Omeka runs as an unprivileged user, and containers can't gain new privileges |
+| **Nothing runs as root** | Omeka and the database run as unprivileged users, and containers can't gain new privileges |
+| **The database and search engine can't reach the internet** | Their network has no route out, so a compromised one can neither phone home nor download anything |
+| **Process limits** | Each service has a cap on processes and threads, so a runaway process can't exhaust the machine |
 | **Omeka's own code can't be modified** | Omeka, its libraries, and its configuration are read-only while running. The module and theme folders are writable, because the admin panel manages them — [lock those down too](IMMUTABLE_CODE.md#locking-modules-and-themes-down) if you'd rather they weren't |
 | **Only one PHP file can execute** | See [What the site serves](CUSTOMISING.md#what-the-site-serves) |
 | **Private files aren't served** | Configuration, logs, source code, and dependency lists all return 404 |
@@ -57,9 +59,11 @@ redirect themselves.
 | **Login is rate-limited** | 5 attempts per minute on the admin login page |
 | **Versions are locked** | Every image is pinned to an exact published build, so a rebuild can't silently pull something different |
 
-What is left to you: HTTPS (this guide), keeping `.env` out of Git and encrypting
-backups (they contain it), removing the admin password from `.env` once the first
-account exists, and treating Docker access on the host as root access. Consider
+What is left to you: HTTPS (this guide, including the [HTTPS settings](#https-settings-in-env)
+in `.env`), keeping `.env` out of Git and encrypting backups (they contain it),
+removing the three `OMEKA_ADMIN_*` values from `.env` once the first account
+exists (the site logs a warning at every start until you do), scheduled
+off-host backups, and treating Docker access on the host as root access. Consider
 scanning your images for known vulnerabilities, e.g.
 `docker scout cves omeka-s-docker-php:latest`. Committed database transactions
 are flushed to disk by default; for the trade-off see
@@ -274,6 +278,24 @@ add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" alway
 
 Don't enable HSTS while testing with a self-signed cert — browsers will pin the bad state and refuse to load until the max-age expires.
 
+Instead of the host nginx line, you can let the container send the header:
+set `NGINX_HSTS_MAX_AGE=31536000` in `.env` and run `docker compose up -d web`.
+It is sent only on requests the proxy forwarded as HTTPS. Use one or the other,
+not both.
+
+### HTTPS settings in `.env`
+
+Once the site is served over HTTPS, set in `.env` and apply with
+`docker compose up -d php web`:
+
+```bash
+OMEKA_SESSION_COOKIE_SECURE=true   # login cookie only ever sent over HTTPS
+NGINX_HSTS_MAX_AGE=31536000        # unless HSTS is set on the proxy instead
+```
+
+Keep `OMEKA_SESSION_COOKIE_SECURE=false` on a plain-HTTP install: browsers
+drop a Secure cookie there and nobody can log in.
+
 ## 6. Host-OS hardening (optional but recommended)
 
 Quick wins that knock down low-severity findings on most vulnerability scanners (Greenbone, Nessus, Qualys):
@@ -314,6 +336,76 @@ Each snapshot is a full database + media copy, so set `--keep` from day one.
 It prunes only after the new snapshot is complete and checksummed. Use
 `--keep 1` when an off-host incremental archiver holds the real history.
 
+Nothing runs a backup until you add that cron entry, and a backup on the same
+disk is lost with the disk: copy each snapshot off the host as well.
+[BACKUP_RESTORE.md](BACKUP_RESTORE.md#a-retention-schedule-to-copy) has a
+schedule to copy, including the off-host step.
+
+### Disk housekeeping
+
+Image rebuilds leave build cache and superseded images behind, and Docker never
+removes them on its own; the reference host had accumulated 27 GB of build
+cache and 11 GB of unused images. Every month or so, and after a round of
+updates:
+
+```bash
+docker system df             # what is using the space
+docker builder prune -f      # build cache; the next build is slower once
+docker image prune -a -f     # images no container uses, including old releases
+```
+
+Both leave running containers, volumes and their data alone. `image prune -a`
+also deletes images of services that are currently stopped (an opt-in profile
+you switched off, say); they are rebuilt or pulled the next time they start.
+Never add `--volumes` to a prune: volumes hold the database and the media.
+
+### Host settings
+
+Worth setting once on the host:
+
+- **Keep containers running while Docker restarts.** In
+  `/etc/docker/daemon.json`, then `sudo systemctl restart docker` (that one
+  restart still stops the containers):
+
+  ```json
+  { "live-restore": true }
+  ```
+
+  Docker daemon upgrades and restarts then no longer take the site down.
+- **Swap less on small hosts.** On a host with 4 GB or so, the kernel's default
+  `vm.swappiness=60` pushes the database's buffer pool out to swap while page
+  cache stays. `echo 'vm.swappiness = 10' | sudo tee /etc/sysctl.d/99-swappiness.conf && sudo sysctl --system`.
+- **Hide the host nginx version.** Add `server_tokens off;` to the `http` block
+  of `/etc/nginx/nginx.conf` (the container's nginx already does this).
+
+### PHP-FPM sizing
+
+`PHP_PM_MAX_CHILDREN` (default 5) is how many requests PHP handles at once;
+further requests wait in a queue. Read the counters from the FPM status page:
+
+```bash
+docker compose exec php sh -c 'env -i REQUEST_METHOD=GET SCRIPT_NAME=/status \
+    SCRIPT_FILENAME=/status QUERY_STRING=full cgi-fcgi -bind -connect 127.0.0.1:9000'
+```
+
+The counters run since `start time`:
+
+- `max children reached` — how often every worker was busy. FPM also logs
+  `server reached pm.max_children setting` each time (`docker compose logs php`).
+- `max listen queue` — the most requests that ever waited for a worker. Above
+  0 means visitors waited.
+- `last request memory` (per process, in the `full` output) — what a typical
+  request needs.
+
+If both counters keep growing in normal traffic and the container's real memory
+use leaves room (the cgroup `anon` figure, see below), raise
+`PHP_PM_MAX_CHILDREN` and apply with `docker compose up -d php`. The reference
+site hit the 5-worker cap 82 times in four days while using 178M of a 1408M
+limit, so it had room for more workers. Size it as workers × typical request
+memory, plus headroom for a few heavy ones (imports, thumbnails: up to 512M
+each), and keep the database's `max-connections` (50) well above it. Raise
+`PHP_PM_MAX_SPARE_SERVERS` along with it so idle workers are kept around.
+
 See [BACKUP_RESTORE.md](BACKUP_RESTORE.md) for full backup/restore procedures and [OMEKA_CLI.md](OMEKA_CLI.md) for routine site management via `omeka-s-cli`.
 
 ## 8. Verification checklist
@@ -333,6 +425,9 @@ curl -sI http://omeka.example.edu/ | head -3   # expect 301 + Location: https://
 
 # Omeka generates correct https:// URLs
 curl -s https://omeka.example.edu/ | grep -oE 'https?://[^"]*omeka.example.edu[^"]*' | head -5
+
+# Session cookie is Secure (OMEKA_SESSION_COOKIE_SECURE=true)
+curl -sI https://omeka.example.edu/login | grep -i '^set-cookie'
 ```
 
 You should see:
@@ -340,6 +435,7 @@ You should see:
 - An issuer string for a real CA, validity dates a few months in the future, and the SAN matching your hostname.
 - A `301` redirect from HTTP to HTTPS.
 - Only `https://` URLs in the rendered HTML.
+- A `Set-Cookie` line containing `secure` (and `samesite=lax`).
 
 If any of these fail, the [Troubleshooting section of COMMANDS.md](COMMANDS.md#troubleshooting) has the usual culprits.
 
@@ -357,6 +453,11 @@ Working order for any change that rebuilds images or touches the database:
 5. If the change is to the `db` service's `command`, apply it with
    `docker compose up -d db` inside the maintenance window — the application
    rebuild helper does not necessarily recreate an already-running database.
+   Changes to a network's settings (such as `backend` becoming internal)
+   recreate that network and every container on it — run a plain
+   `docker compose up -d` in the window. If Compose refuses because the
+   network is still in use, `docker compose down` (never with `-v`) and then
+   `docker compose up -d`.
 6. Run `bash scripts/health-report.sh`, then check public and admin pages, a
    media upload, thumbnail generation, background jobs and search. Measure
    memory during a real import.
@@ -416,15 +517,16 @@ fit:
 | php | 1536M | ~21M idle | far higher during imports and thumbnailing |
 | db | 1024M | ~563M | 512M InnoDB buffer pool plus overhead |
 | typesense | 512M | ~363M | in-memory index for a ~10k-item corpus |
-| amira-mcp | 384M | ~129M | measured 2026-11-13 (was ~83M in October); grows as the snapshot is re-crawled |
+| amira-mcp | 512M | ~195M | measured 2026-11-20 (~129M on 11-13, ~83M in October); grows as the snapshot is re-crawled. At 384M it hit the ceiling 376 times and crashed with a JavaScript heap OOM; the heap is now capped at 384M (`AMIRA_MCP_HEAP_MB`). Set with `AMIRA_MCP_MEMORY_LIMIT` |
 | web | 256M | ~10M | but its tmpfs can occupy ~130M of the same limit |
 | sparql (AMIRA, opt-in) | 256M | ~7M | reaches its ceiling only on a runaway query, which its watchdog stops |
-| amira-mcp-curator (AMIRA, opt-in) | 512M | ~260M | measured 2026-11-13 after the first keyed crawl, plus ~21M of cache tmpfs on the same limit; at 384M the crawl hit the ceiling. Set with `AMIRA_CURATOR_MEMORY_LIMIT` |
+| amira-mcp-curator (AMIRA, opt-in) | 640M | ~260M | measured 2026-11-13 after the first keyed crawl, plus ~21M of cache tmpfs on the same limit; at 384M the crawl hit the ceiling, at 512M it crashed with a JavaScript heap OOM. Heap capped at 448M (`AMIRA_CURATOR_HEAP_MB`). Set with `AMIRA_CURATOR_MEMORY_LIMIT` |
 
-Total ceilings ~3.7 GiB (~4.0 GiB with the opt-in SPARQL endpoint) against
-~1.0 GiB of anonymous use. The curator endpoint adds ~260M of anonymous use;
-when it runs on the reference host, take its 512M from php
-(`PHP_CONTAINER_MEMORY=1408M`), which keeps the total at ~4.4 GiB. Nothing is wrong with that — but **raising one
+Total ceilings ~3.8 GiB (~4.0 GiB with the opt-in SPARQL endpoint) against
+~1.0 GiB of anonymous use. The curator endpoint adds ~260M of anonymous use
+and a 640M ceiling; when it runs on the reference host, take the room from php
+(`PHP_CONTAINER_MEMORY=1280M`; php was using ~178M of its 1408M when last
+measured), which keeps the total at ~4.4 GiB. Nothing is wrong with that — but **raising one
 service's ceiling meaningfully requires lowering another's**, and several
 services peaking together can reach the OOM killer.
 

@@ -152,6 +152,13 @@ services:
       # Citation URLs and live-refresh target our own public domain.
       - AMIRA_SITE_BASE=https://${SERVER_NAME:?You must set SERVER_NAME when using compose.amira.yml}
       - AMIRA_SITE_SLUG=amira
+      # An explicit V8 heap ceiling below the cgroup limit. Without it V8 sizes
+      # its heap from its own heuristics, not from the container limit, and
+      # grew until the snapshot re-crawl died with "FATAL ERROR: ... JavaScript
+      # heap out of memory" (four crashes in four days at a 384M limit). With
+      # it, V8 collects harder as it nears the ceiling and leaves the rest of
+      # the limit for what is not heap; see the memory limit below.
+      - NODE_OPTIONS=--max-old-space-size=${AMIRA_MCP_HEAP_MB:-384}
     networks:
       - mcp
     restart: unless-stopped
@@ -162,24 +169,30 @@ services:
       - ALL
     read_only: true
     tmpfs:
-      # Holds AMIRA_CACHE_DIR (read-only rootfs otherwise).
+      # Holds AMIRA_CACHE_DIR (read-only rootfs otherwise). Its pages count
+      # against the memory limit below; measured empty on 2026-11-20.
       - /tmp:mode=1777,size=128M
     deploy:
       resources:
         limits:
           cpus: '0.25'
-          # 384M, not 256M: measured at 155M of 256M (60%) and growing with the
-          # bundled snapshot that AMIRA_LIVE_REFRESH re-crawls, and a Node heap
-          # that reaches its limit is OOM-killed rather than slowed. At 384M it
-          # settles around 33%.
+          # History: 256M was outgrown (155M measured in October and growing
+          # with the snapshot AMIRA_LIVE_REFRESH re-crawls); by 2026-11-20 384M
+          # had hit its ceiling 376 times and the process had crashed with a
+          # JavaScript heap OOM four times in four days. 512M by default now,
+          # with the heap capped at AMIRA_MCP_HEAP_MB (384M): the remaining ~128M is
+          # for what V8 keeps outside the old-space heap (code, young
+          # generation, buffers) and the /tmp cache above. Raise the two
+          # together and keep the heap ~128M below the limit. Anon measured
+          # ~195M on 2026-11-20.
           #
-          # This does add 128M to the stack's ceiling total, which on a small
-          # host is already more than the host has — see the oversubscription
-          # note in docs/PRODUCTION.md. Measure before trimming something else
-          # to compensate: `docker stats` right after a recreate reads much
-          # higher than a long-running container (page cache), so a figure taken
-          # from an idle container will mislead you.
-          memory: 384M
+          # These are ceilings on a host that is already oversubscribed — see
+          # docs/PRODUCTION.md. Measure with the cgroup counters described
+          # there, not `docker stats`, which includes page cache and reads far
+          # higher right after a recreate.
+          memory: ${AMIRA_MCP_MEMORY_LIMIT:-512M}
+          # A Node process: the main thread, libuv's pool and V8's helper threads.
+          pids: 256
         reservations:
           cpus: '0.05'
           memory: 64M
@@ -264,6 +277,9 @@ services:
         limits:
           cpus: '0.5'
           memory: 256M
+          # Oxigraph, its watchdog and one short-lived socat relay per connection
+          # (nginx allows four at once).
+          pids: 128
         reservations:
           cpus: '0.05'
           memory: 32M
@@ -350,6 +366,10 @@ services:
       # X-Forwarded-For; see the amira-mcp service above, and the Compose
       # contract check, which ties the two.
       - AMIRA_TRUST_PROXY=true
+      # Explicit V8 heap ceiling, as for amira-mcp. Heap plus the 128M cache
+      # tmpfs below (448M + 128M = 576M) stays under the memory limit, leaving
+      # the rest for V8's non-heap memory; keep that true when changing either.
+      - NODE_OPTIONS=--max-old-space-size=${AMIRA_CURATOR_HEAP_MB:-448}
     volumes:
       # The Omeka key (omeka-key) and the personal tokens (tokens), gitignored.
       # The directory is mounted rather than each file: a bind-mounted file
@@ -387,10 +407,15 @@ services:
           cpus: '0.25'
           # Measured on 2026-11-13 after the first keyed crawl: anon ~260M plus
           # ~21M of cache tmpfs (charged to this same limit). At 384M the first
-          # crawl hit the ceiling 236 times and pushed 39M to swap, so 512M. On
-          # the 3.8 GiB reference host the extra 128M came out of php
-          # (PHP_CONTAINER_MEMORY=1408M); see docs/PRODUCTION.md.
-          memory: ${AMIRA_CURATOR_MEMORY_LIMIT:-512M}
+          # crawl hit the ceiling 236 times and pushed 39M to swap, so it went
+          # to 512M; it then crashed with a JavaScript heap OOM four times in
+          # the four days to 2026-11-20, as amira-mcp did. So 640M by default
+          # now, with the heap capped at AMIRA_CURATOR_HEAP_MB (448M) so V8
+          # collects before it reaches the ceiling. On the 3.8 GiB reference
+          # host the room comes out of php; see docs/PRODUCTION.md.
+          memory: ${AMIRA_CURATOR_MEMORY_LIMIT:-640M}
+          # Same code, same thread count as amira-mcp.
+          pids: 256
         reservations:
           cpus: '0.05'
           memory: 64M

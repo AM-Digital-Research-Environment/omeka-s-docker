@@ -70,40 +70,16 @@ RUN --mount=type=bind,from=php-extension-installer,source=/usr/bin/install-php-e
     tidy \
     xsl \
     zip
-        
-# Set PHP configuration
+
+# Production php.ini. The memory_limit raise here is build-time headroom for
+# the omeka-s-cli and composer runs below; at runtime uploads.ini (baked in
+# near the end of this stage and bind-mounted over by docker-compose.yml) is
+# the single source of truth for memory, upload and execution-time limits.
+# The other runtime tuning files are baked in after the download layers too,
+# so adjusting them never re-downloads Omeka core, modules and themes.
 RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
-    && sed -i \
-        -e 's/memory_limit = 128M/memory_limit = 512M/' \
-        -e 's/upload_max_filesize = 2M/upload_max_filesize = 100M/' \
-        -e 's/post_max_size = 8M/post_max_size = 100M/' \
-        -e 's/max_execution_time = 30/max_execution_time = 300/' \
-    "$PHP_INI_DIR/php.ini"
-
-COPY <<EOF /usr/local/etc/php/conf.d/90-opcache.ini
-opcache.memory_consumption=256
-opcache.interned_strings_buffer=16
-opcache.max_accelerated_files=10000
-; Extensions can change on persistent volumes through EasyAdmin or the CLI.
-opcache.revalidate_freq=2
-opcache.enable_cli=1
-opcache.enable_file_override=1
-opcache.validate_timestamps=1
-opcache.jit=1255
-opcache.jit_buffer_size=50M
-EOF
-
-COPY <<EOF /usr/local/etc/php/conf.d/91-realpath-cache.ini
-realpath_cache_size=4096K
-realpath_cache_ttl=600
-EOF
-
-COPY <<EOF /usr/local/etc/php/conf.d/docker-php-ext-apcu.ini
-extension=apcu.so
-apc.enabled=1
-apc.shm_size=256M
-apc.ttl=7200
-EOF
+    && sed -i -e 's/^memory_limit = 128M$/memory_limit = 512M/' "$PHP_INI_DIR/php.ini" \
+    && grep -qx 'memory_limit = 512M' "$PHP_INI_DIR/php.ini"
 
 # The Compose healthcheck probes this endpoint directly with cgi-fcgi. Keeping
 # the probe local avoids downloading and executing a floating script from a
@@ -308,6 +284,105 @@ RUN mkdir -p /var/lib/php-sessions /var/lib/omeka/dre-visualizations /run/omeka 
 COPY <<EOF /usr/local/etc/php/conf.d/92-sessions.ini
 session.save_path = "/var/lib/php-sessions"
 EOF
+
+# Runtime PHP tuning. Kept after the download layers on purpose: changing a
+# value here rebuilds only the cheap layers below.
+#
+# uploads.ini is baked in as the default and docker-compose.yml bind-mounts the
+# same repository file over it, so the image default and the operator override
+# are one file and cannot disagree; an image run without the mount still gets
+# the documented limits.
+COPY uploads.ini /usr/local/etc/php/conf.d/uploads.ini
+
+# Sized from live FPM measurements of a 20-module site (opcache ~68 MB used for
+# ~1,800 scripts, interned strings ~8 of 16 MB, JIT buffer under 1 MB, APCu a
+# few dozen entries in 256 MB). The headroom left is still ~3x; the memory not
+# reserved stays available to FPM workers inside the container limit.
+# opcache.enable_cli=0: without opcache.file_cache every CLI process
+# (omeka-s-cli, Omeka background jobs) compiles into a fresh private segment
+# that dies with it, so CLI opcache only adds start-up cost. The trade-off is
+# that long CPU-bound CLI jobs no longer get the JIT; Omeka jobs are dominated
+# by database and image work, where it does not matter.
+COPY <<EOF /usr/local/etc/php/conf.d/90-opcache.ini
+opcache.memory_consumption=192
+opcache.interned_strings_buffer=16
+opcache.max_accelerated_files=10000
+; Extensions can change on persistent volumes through EasyAdmin or the CLI.
+opcache.revalidate_freq=2
+opcache.enable_cli=0
+opcache.enable_file_override=1
+opcache.validate_timestamps=1
+opcache.jit=1255
+opcache.jit_buffer_size=32M
+EOF
+
+COPY <<EOF /usr/local/etc/php/conf.d/91-realpath-cache.ini
+realpath_cache_size=4096K
+realpath_cache_ttl=600
+EOF
+
+COPY <<EOF /usr/local/etc/php/conf.d/docker-php-ext-apcu.ini
+extension=apcu.so
+apc.enabled=1
+apc.shm_size=64M
+apc.ttl=7200
+EOF
+
+# php.ini-production still announces the exact PHP version in an X-Powered-By
+# header on every response; there is no reason to hand that to scanners.
+COPY <<EOF /usr/local/etc/php/conf.d/93-hardening.ini
+expose_php = Off
+EOF
+
+# ImageMagick resource limits. Debian's policy lets ONE conversion hold 1 GiB of
+# heap plus a 2 GiB memory map, outside PHP's memory_limit (the Imagick
+# thumbnailer runs inside the FPM worker). Five workers thumbnailing at once
+# could then exceed the php container's ~1.5 GB limit and get it OOM-killed.
+#
+# memory=256MiB caps the heap pixel cache per conversion. A larger image spills
+# its pixel cache to a file in /tmp — the only writable scratch space, a 256M
+# tmpfs that is itself RAM shared by all workers and PHP's upload temp files.
+# disk=256MiB keeps one conversion within what /tmp can hold, so an oversized
+# image fails cleanly with "cache resources exhausted" instead of filling /tmp
+# under concurrent uploads; map (memory-mapping that file) is subordinate to
+# disk and is set to 512MiB only so it is never the tighter limit.
+#
+# Trade-off: the largest image that still gets thumbnails drops from roughly
+# 1 GiB of pixel cache to 256 MiB — about 40 megapixels RGB / 32 megapixels
+# RGBA at Q16 (e.g. a 7000x5000 scan; an A3 page scanned at 600 dpi does not
+# fit). Omeka degrades gracefully: readImage() failing raises
+# CannotCreateThumbnailException, the media is stored without thumbnails and
+# can be re-thumbnailed later. Deployments that ingest larger scans should give
+# ImageMagick a disk-backed temporary-path and a larger disk limit.
+#
+# Coder and delegate rules stay exactly as Debian ships them (PDF thumbnails go
+# through Ghostscript). The edit is a targeted sed, and the build fails unless
+# the effective limits Imagick itself reports are the intended ones, so a
+# reformatted upstream policy cannot silently drop the cap.
+RUN <<'IMAGEMAGICK'
+set -euo pipefail
+policy=/etc/ImageMagick-7/policy.xml
+test -f "$policy"
+sed -E -i \
+    -e 's#(<policy domain="resource" name="memory" value=")[^"]*(")#\1256MiB\2#' \
+    -e 's#(<policy domain="resource" name="map" value=")[^"]*(")#\1512MiB\2#' \
+    -e 's#(<policy domain="resource" name="disk" value=")[^"]*(")#\1256MiB\2#' \
+    "$policy"
+php -r '
+    $expected = [
+        "memory" => [Imagick::RESOURCETYPE_MEMORY, 256 * 1024 ** 2],
+        "map" => [Imagick::RESOURCETYPE_MAP, 512 * 1024 ** 2],
+        "disk" => [Imagick::RESOURCETYPE_DISK, 256 * 1024 ** 2],
+    ];
+    foreach ($expected as $name => [$type, $bytes]) {
+        $actual = Imagick::getResourceLimit($type);
+        if ((int) $actual !== $bytes) {
+            fwrite(STDERR, "ImageMagick $name limit is $actual, expected $bytes; policy edit did not apply.\n");
+            exit(1);
+        }
+    }
+'
+IMAGEMAGICK
 USER www-data
 
 COPY --chown=www-data:www-data _docker/vocabularies/ /usr/local/share/omeka-vocabs/
@@ -328,12 +403,61 @@ ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["php-fpm"]
 
 # nginx serves the exact static assets baked into the PHP image. Keeping both
-# targets in one Dockerfile guarantees core/module/theme assets change together
-# while media remains a separately mounted read-only volume.
+# targets in one Dockerfile, built from the one runtime code layer, guarantees
+# core/module/theme assets change together while media remains a separately
+# mounted read-only volume.
+#
+# nginx only needs the files it may serve itself. Its allow-list (nginx.conf)
+# executes nothing but /index.php through FastCGI and 404s every other .php,
+# application/ outside asset/, and modules/themes outside asset/ and
+# theme.jpg. Shipping Omeka's PHP source and vendor/ into the web image would
+# only add size and attack surface, so this stage assembles exactly:
+#   index.php                 must exist so `index index.php` resolves "/"
+#                             (nginx checks the file; PHP-FPM runs its own copy)
+#   application/asset/
+#   modules/*/asset/
+#   themes/*/asset/, themes/*/theme.jpg
+# plus empty files/, modules/ and themes/ mountpoints. In the base stack the
+# module/theme volumes cover the image's copies; under compose.immutable.yml no
+# volume is mounted there, so these trees ARE what nginx serves. Symlinks are
+# dereferenced so a link into a path the web image does not carry still works.
+# Root-owned and world-readable: nginx workers only ever read.
+FROM runtime AS web-root
+USER root
+RUN <<'WEBROOT'
+set -euo pipefail
+src=/var/www/html
+dst=/opt/web-root
+
+copy_tree() {
+    local rel="$1"
+    mkdir -p "$dst/$(dirname "$rel")"
+    cp -RL --preserve=mode,timestamps "$src/$rel" "$dst/$rel"
+}
+
+if [ ! -d "$src/application/asset" ] || [ -z "$(ls -A "$src/application/asset")" ]; then
+    echo "ERROR: $src/application/asset is missing or empty; refusing to build a web image without core assets." >&2
+    exit 1
+fi
+mkdir -p "$dst/files" "$dst/modules" "$dst/themes"
+cp -L --preserve=mode,timestamps "$src/index.php" "$dst/index.php"
+copy_tree application/asset
+
+shopt -s nullglob
+for path in "$src"/modules/*/asset "$src"/themes/*/asset "$src"/themes/*/theme.jpg; do
+    [ -d "$path" ] || [ -f "$path" ] || continue
+    copy_tree "${path#"$src"/}"
+done
+
+chown -R root:root "$dst"
+chmod -R u=rwX,go=rX "$dst"
+echo "web root: $(find "$dst" -type f | wc -l) files, $(du -sh "$dst" | cut -f1)"
+WEBROOT
+
 FROM nginx:1.30.6-alpine@sha256:901e593c95dc85f5a729f5765516321366ef4ac401821431d408897e95287d0a AS web
 
 # Pick up Alpine security fixes published after the base image was built (the
 # runtime stage does the same with apt-get upgrade).
 RUN apk upgrade --no-cache
 
-COPY --from=runtime --chown=nginx:nginx /var/www/html /var/www/html
+COPY --from=web-root --chown=0:0 /opt/web-root/ /var/www/html/

@@ -22,11 +22,14 @@ never needed for day-to-day work.
 | `OMEKA_VERSION` | No | `4.2.1` | **rebuild** — which Omeka S release to install. `latest` picks up whatever is newest at build time, which by definition hasn't been tested with this template; you'll get a warning if you use it |
 | `OMEKA_ADMIN_EMAIL` | No | — | Set all three admin settings and the first account is created for you, skipping the setup wizard. Set only some and they're ignored |
 | `OMEKA_ADMIN_USERNAME` | No | — | Display name of that first account |
-| `OMEKA_ADMIN_PASSWORD` | No | — | Its password. Consider removing it from `.env` once the site is up |
+| `OMEKA_ADMIN_PASSWORD` | No | — | Its password. Used on the first start only: remove all three admin settings from `.env` once the site is up. The site logs a warning at every start while the password is still set |
 | `OMEKA_TZ` | No | `UTC` | Timezone, e.g. `Europe/Berlin` |
 | `OMEKA_LOCALE` | No | — | Language, e.g. `en_US` |
 | `OMEKA_TITLE` | No | — | Site title |
 | `OMEKA_LOCAL_CONFIG` | No | `./_docker/local.config.php` | Path to your copy of Omeka's own configuration file |
+| `OMEKA_SESSION_COOKIE_SECURE` | With HTTPS | `false` | `true` marks the login cookie *Secure*, so browsers only send it over HTTPS. Set it to `true` whenever the site is served over HTTPS (through a TLS proxy). Leave it `false` for a plain-HTTP install, or logging in stops working |
+| `OMEKA_SESSION_COOKIE_SAMESITE` | No | `Lax` | The login cookie's SameSite policy (`Lax`, `Strict` or `None`). `Lax` suits nearly every site |
+| `OMEKA_AUTO_INSTALL_MODULES` | No | `true` | At every start, install modules that are present on disk but not yet installed. `false` leaves that to the admin, so a module someone deliberately uninstalled stays uninstalled |
 
 To change Omeka's own settings — thumbnail sizes, where files are stored, how
 much gets logged — copy `_docker/local.config.php`, edit your copy, and point
@@ -41,6 +44,7 @@ and the backup script always saves whichever copy is actually in use.
 | `NGINX_BIND` | No | `127.0.0.1` | Who can reach that port. The default means "this machine only", which is what you want behind an HTTPS proxy. Use `0.0.0.0` to serve plain HTTP directly to the internet |
 | `SERVER_NAME` | No | `_` | Your public hostname, e.g. `omeka.example.edu`. The default accepts any name, which is fine only when a proxy sits in front |
 | `FRAME_ANCESTORS` | No | `'self'` | Which other websites may embed your site in a frame. Default: only your own. Example: `"'self' https://www.example.org"` |
+| `NGINX_HSTS_MAX_AGE` | No | `0` | Seconds for a `Strict-Transport-Security` header, which tells browsers to use HTTPS only. Sent only on requests your HTTPS proxy forwarded as HTTPS; `0` sends nothing. Use `31536000` (a year) once HTTPS works — browsers remember it, so don't set it while still testing. You can set HSTS on the proxy instead; don't do both |
 
 Serving plain HTTP directly also needs `NGINX_TRUSTED_PROXY_CIDR`; see
 [institution setup](INSTITUTION_SETUP.md#minimal-deployment).
@@ -98,6 +102,8 @@ Per-service memory and CPU caps are covered in
 | `AMIRA_MCP_VERSION` | No | see `compose.amira.yml` | AMIRA only: which release of the MCP server to run. Set it with `deploy/amira/update-amira-mcp.sh` |
 | `AMIRA_MCP_CURATOR_VERSION` | With the `curator` profile | — | AMIRA only: the amira-mcp-server ref the curator endpoint is built from: a commit SHA, branch or release tag. No default: until curator mode is released it has to name a ref containing it, including `AMIRA_API_BASE` support. See [the curator endpoint](../deploy/amira/README.md#curator-mcp-endpoint) |
 | `AMIRA_CURATOR_UID`, `AMIRA_CURATOR_GID` | With the `curator` profile | `1000` | AMIRA only: the user the curator endpoint runs as. Set them to the owner of the secrets directory so its files can stay readable by that user alone |
+| `AMIRA_MCP_MEMORY_LIMIT`, `AMIRA_MCP_HEAP_MB` | No | `512M`, `384` | AMIRA only: memory ceiling of the public MCP server and its JavaScript heap cap in MB. Keep the heap about 128M below the ceiling; raise both together |
+| `AMIRA_CURATOR_MEMORY_LIMIT`, `AMIRA_CURATOR_HEAP_MB` | No | `640M`, `448` | AMIRA only: the same for the curator endpoint. Heap plus its 128M cache must stay under the ceiling |
 | `AMIRA_CURATOR_SECRETS_DIR` | No | `./deploy/amira/curator-secrets` | AMIRA only: the gitignored directory holding the curator endpoint's Omeka key and token hashes |
 
 ## What's tuned out of the box
@@ -111,7 +117,8 @@ You should not need to change any of this, but it is worth knowing what you have
 
 **Database**
 - 512 MB kept in memory for frequently used data
-- Up to 250 simultaneous connections
+- Up to 50 simultaneous connections (the site needs about 10)
+- Binary logs off: backups use `mysqldump`, which doesn't need them
 - See [DB_TUNING.md](DB_TUNING.md) if you need to change any of it
 
 **Web server**

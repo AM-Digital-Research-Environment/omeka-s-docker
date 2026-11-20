@@ -126,6 +126,21 @@ workflow stands in: every Monday it opens an issue when a newer upstream
 release exists. Forks turn it on with the `ENABLE_AMIRA_RELEASE_CHECK`
 repository variable.
 
+### Memory (amira-mcp)
+
+The ceiling is `AMIRA_MCP_MEMORY_LIMIT`, 512M by default, and the server's
+JavaScript heap is capped at `AMIRA_MCP_HEAP_MB` (384) through `NODE_OPTIONS`.
+Without the cap, Node sizes its heap from its own heuristics rather than the
+container limit: at the earlier 384M ceiling the server hit the limit 376 times
+and crashed four times in four days with `FATAL ERROR: ... JavaScript heap out
+of memory` (to 20 November 2026). With it, Node collects harder as the heap
+fills instead of dying. The ~128M between heap and ceiling is for what Node
+keeps outside the heap, plus the cache in the container's `/tmp` tmpfs (128M at
+most, empty when measured), which is charged to the same limit. Raise both
+together and keep that gap. Anonymous memory measured ~195M on 20 November
+2026; re-measure with the cgroup counters in
+[docs/PRODUCTION.md](../../docs/PRODUCTION.md#memory-ceilings-are-oversubscribed-on-purpose).
+
 ### Security
 
 Like the search engine, the MCP server is set up so that adding it doesn't make
@@ -151,7 +166,8 @@ the site easier to attack:
   the chain it counts from (leftmost in v1.17.0, `AMIRA_PROXY_HOPS` from the right in
   v1.19.0). CI asserts the pair stays consistent.
 - **Locked down like everything else:** no special privileges, a read-only filesystem, and a
-  cap of a quarter CPU and 384 MB so it can't crowd out the site.
+  cap of a quarter CPU and 512 MB (see [Memory](#memory-amira-mcp)) so it can't crowd out
+  the site.
 - **Nothing to back up.** Its copy of the data is rebuilt from the public API, so it keeps
   no state of its own.
 - **The site never waits on it.** The `/mcp` rule looks the server up at the moment a request
@@ -380,12 +396,16 @@ follow-up.
 
 ### Memory
 
-The ceiling is `AMIRA_CURATOR_MEMORY_LIMIT`, 512M by default. Measured on
-13 November 2026 after the first keyed crawl: about 260M of anonymous memory,
-plus about 21M of cache tmpfs charged to the same limit. At the earlier 384M
-the crawl hit the ceiling and pushed memory to swap. On a 3.8 GiB host, take
-the extra memory from php (`PHP_CONTAINER_MEMORY=1408M`). Re-measure with the
-cgroup counters in
+The ceiling is `AMIRA_CURATOR_MEMORY_LIMIT`, 640M by default, and the
+JavaScript heap is capped at `AMIRA_CURATOR_HEAP_MB` (448) through
+`NODE_OPTIONS`, as for [amira-mcp](#memory-amira-mcp). Measured on 13 November
+2026 after the first keyed crawl: about 260M of anonymous memory, plus about
+21M of cache tmpfs charged to the same limit. At 384M the crawl hit the
+ceiling and pushed memory to swap; at 512M, without a heap cap, the server
+crashed with a JavaScript heap OOM four times in four days. The cache tmpfs
+(128M at most) counts against the same limit, so keep heap + 128M under the
+ceiling (448 + 128 = 576 < 640). On a 3.8 GiB host, take the extra memory from
+php (`PHP_CONTAINER_MEMORY=1280M`). Re-measure with the cgroup counters in
 [docs/PRODUCTION.md](../../docs/PRODUCTION.md#memory-ceilings-are-oversubscribed-on-purpose)
 when the private corpus grows.
 

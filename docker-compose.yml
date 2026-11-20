@@ -61,7 +61,12 @@ services:
       # Space-separated, keep the quotes around 'self' (see .env.example).
       - FRAME_ANCESTORS=${FRAME_ANCESTORS:-'self'}
       - NGINX_TRUSTED_PROXY_CIDR=${NGINX_TRUSTED_PROXY_CIDR:-172.16.0.0/12}
-      - NGINX_ENVSUBST_FILTER=^(SERVER_NAME|FRAME_ANCESTORS|NGINX_TRUSTED_PROXY_CIDR)$$
+      # Strict-Transport-Security max-age in seconds. nginx sends the header
+      # only on requests the trusted proxy forwarded as HTTPS, never on plain
+      # HTTP; 0 (the default) sends nothing. Set 31536000 once HTTPS is
+      # confirmed working — or set HSTS on the TLS proxy instead, not both.
+      - NGINX_HSTS_MAX_AGE=${NGINX_HSTS_MAX_AGE:-0}
+      - NGINX_ENVSUBST_FILTER=^(SERVER_NAME|FRAME_ANCESTORS|NGINX_TRUSTED_PROXY_CIDR|NGINX_HSTS_MAX_AGE)$$
     depends_on:
       php:
         condition: service_healthy
@@ -95,6 +100,10 @@ services:
         limits:
           cpus: '${WEB_CPU_LIMIT:-0.25}'
           memory: ${WEB_MEMORY_LIMIT:-256M}
+          # Caps processes + threads, so a runaway or exploited process cannot
+          # fork-bomb the host. nginx needs a master plus one worker per host CPU
+          # (worker_processes auto); raise this only on a host with ~100+ cores.
+          pids: 128
         reservations:
           cpus: '0.05'
           memory: 64M
@@ -151,6 +160,10 @@ services:
       - MYSQL_USER=${MYSQL_USER:-omeka}
       - MYSQL_PASSWORD=${MYSQL_PASSWORD:?You must set MYSQL_PASSWORD in .env}
       - OMEKA_VERSION=${OMEKA_VERSION:-4.2.1}
+      # First-start only: with all three set, the entrypoint creates the first
+      # admin and skips the browser installer. Remove them from .env after the
+      # first start; the entrypoint warns while a password is still set on an
+      # installed site.
       - OMEKA_ADMIN_EMAIL=${OMEKA_ADMIN_EMAIL:-}
       - OMEKA_ADMIN_PASSWORD=${OMEKA_ADMIN_PASSWORD:-}
       - OMEKA_ADMIN_USERNAME=${OMEKA_ADMIN_USERNAME:-}
@@ -165,6 +178,16 @@ services:
       # with `openssl rand -base64 32` and then NEVER change it — anything
       # already encrypted with the old value becomes unreadable.
       - OMEKA_SECRET_KEY=${OMEKA_SECRET_KEY:-}
+      # Session cookie flags. Secure must be true whenever visitors reach the
+      # site over HTTPS (through a TLS proxy), so the cookie is never sent in
+      # clear; it must stay false for plain-HTTP installs, where browsers would
+      # drop a Secure cookie and nobody could log in.
+      - OMEKA_SESSION_COOKIE_SECURE=${OMEKA_SESSION_COOKIE_SECURE:-false}
+      - OMEKA_SESSION_COOKIE_SAMESITE=${OMEKA_SESSION_COOKIE_SAMESITE:-Lax}
+      # At start the entrypoint installs modules that are on disk but not yet
+      # installed in the database. false leaves that to the admin, so a module
+      # an admin deliberately uninstalled stays uninstalled.
+      - OMEKA_AUTO_INSTALL_MODULES=${OMEKA_AUTO_INSTALL_MODULES:-true}
       # PHP-FPM pool tuning (defaults in entrypoint if unset).
       # Five workers fit typical traffic, NOT five simultaneous 512M requests.
       # OPcache/APCu and tmpfs also count toward the 1536M container limit.
@@ -204,6 +227,9 @@ services:
         limits:
           cpus: '${PHP_CPU_LIMIT:-1.0}'
           memory: ${PHP_CONTAINER_MEMORY:-1536M}
+          # Processes + threads: FPM workers, plus the ImageMagick/Ghostscript
+          # subprocesses (and their threads) that thumbnailing starts per request.
+          pids: 512
         reservations:
           cpus: '0.25'
           memory: 512M
@@ -222,6 +248,10 @@ services:
   db:
     image: mysql:9.7.4@sha256:df90258da46f6e7ff8574ff84f17618aba0765cac749928299c69fd4e7cb8ad8
     # MySQL tuning parameters — see docs/DB_TUNING.md for explanations
+    # --skip-log-bin: a single server with no replica, backed up with
+    # mysqldump, has no use for binary logs, which otherwise pile up on the
+    # data volume (4.9 GB on the reference host). DB_TUNING.md shows how to
+    # turn them back on for point-in-time recovery.
     command: >-
       --innodb-buffer-pool-size=512M
       --innodb-log-buffer-size=32M
@@ -231,13 +261,14 @@ services:
       --innodb-flush-method=O_DIRECT
       --innodb-flush-log-at-trx-commit=1
       --innodb-file-per-table=1
-      --max-connections=250
-      --table-open-cache=400
+      --max-connections=50
+      --table-open-cache=2000
       --tmp-table-size=32M
       --max-heap-table-size=32M
       --sort-buffer-size=2M
       --join-buffer-size=2M
       --thread-cache-size=8
+      --skip-log-bin
     volumes:
       - mysql_data:/var/lib/mysql:rw
     environment:
@@ -248,21 +279,35 @@ services:
     networks:
       - backend
     restart: unless-stopped
+    # Runs as the image's own mysql user (uid/gid 999 in the pinned image)
+    # from the first process on, instead of starting as root and dropping
+    # privileges. The entrypoint then skips its chown step, so it needs no
+    # capabilities at all. The image's /var/lib/mysql is already owned by 999,
+    # so a fresh named volume is seeded with that owner and initialises fine;
+    # an existing volume was written by mysqld running as 999 all along.
+    user: "999:999"
     # Security hardening
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    cap_add:
-      - CHOWN
-      - SETUID
-      - SETGID
-      - DAC_OVERRIDE
+    read_only: true
+    tmpfs:
+      # Socket, mysqlx socket and pid file.
+      - /var/run/mysqld:uid=999,gid=999,mode=0755,size=1M
+      # tmpdir: filesort merge files and online-DDL sort files (innodb_tmpdir
+      # defaults to it). Its pages count toward DB_MEMORY_LIMIT. An ALTER TABLE
+      # that adds an index to a very large table can need more than this; see
+      # docs/DB_TUNING.md if one fails with "No space left on device".
+      - /tmp:uid=999,gid=999,mode=0700,size=256M
     deploy:
       resources:
         limits:
           cpus: '${DB_CPU_LIMIT:-0.5}'
           memory: ${DB_MEMORY_LIMIT:-1G}
+          # MySQL is one process with a thread per connection plus ~40 background
+          # threads; max-connections=50 keeps it far below this.
+          pids: 512
         reservations:
           cpus: '0.1'
           memory: 256M
@@ -296,15 +341,22 @@ services:
       context: _docker/typesense
     profiles:
       - search
-    # NOTE: TYPESENSE_API_KEY defaults to empty so plain `docker compose up -d`
-    # (without the search profile) never requires it. If you start the search
-    # profile without setting it, Typesense exits immediately with a clear
-    # "API key is not specified" error — set it in .env first.
     command:
       - "--data-dir=/data"
-      - "--api-key=${TYPESENSE_API_KEY:-}"
       - "--listen-port=8108"
       - "--enable-cors=false"
+    environment:
+      # Typesense reads any TYPESENSE_-prefixed variable as the matching
+      # option, so the key is passed here rather than as --api-key: command-line
+      # arguments are readable by every local user in the host's process list,
+      # a process's environment only by its owner and root. (`docker inspect`
+      # still shows it, but Docker access is root access anyway.)
+      #
+      # Defaults to empty so plain `docker compose up -d` (without the search
+      # profile) never requires it. If you start the search profile without
+      # setting it, Typesense exits immediately with a clear
+      # "API key is not specified" error — set it in .env first.
+      - TYPESENSE_API_KEY=${TYPESENSE_API_KEY:-}
     volumes:
       - typesense_data:/data:rw
     networks:
@@ -323,6 +375,9 @@ services:
         limits:
           cpus: '${SEARCH_CPU_LIMIT:-0.5}'
           memory: ${SEARCH_MEMORY_LIMIT:-512M}
+          # Typesense runs ~110 threads at idle (thread pools sized from the CPU
+          # count), so this leaves room for growth without being unlimited.
+          pids: 512
         reservations:
           cpus: '0.1'
           memory: 128M
@@ -357,4 +412,10 @@ volumes:
 
 networks:
   frontend: {}
-  backend: {}
+  # db and typesense only answer php; neither needs to reach anything else, so
+  # this network has no route out of the host. Only php joins it from the
+  # outside, and php keeps frontend for its own outbound traffic (module
+  # downloads, external media). A compromised database or search process can
+  # then neither phone home nor pull a payload in.
+  backend:
+    internal: true

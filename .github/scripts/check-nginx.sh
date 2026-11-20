@@ -6,13 +6,21 @@
 #   every variant  the access log carries no Omeka API key (key first, in the
 #                  middle, alone, both, URL-encoded values, PHP's alternative
 #                  spellings, repeated keys, in the referer, none at all);
+#   every variant  static caching (long-lived only with Omeka's ?v=, a year
+#                  for /application/asset/, a week for modules and themes;
+#                  under /files/ only Omeka's media directories are
+#                  long-lived), the sandbox CSP on HTML/SVG/XML uploads but
+#                  not on images or PDF, the deny rules still answering under
+#                  /files/, X-XSS-Protection: 0, and HSTS only when
+#                  NGINX_HSTS_MAX_AGE > 0 on a request a trusted proxy marked
+#                  HTTPS (in a second container with that set);
 #   amira          with no curator service, /curator/mcp answers 502 and nginx
 #                  still starts; with a stand-in upstream it proxies to /mcp
 #                  with Authorization passed through, X-Forwarded-For
 #                  overwritten and caching headers replaced by no-store; the
 #                  reserved OAuth well-known path stays denied.
 #
-# No stack is started: one nginx container, plus the stand-in for amira, on a
+# No stack is started: two nginx containers, plus the stand-in for amira, on a
 # throwaway network, all removed on exit. The Omeka, MCP and SPARQL upstreams
 # are absent on purpose, which is also what proves nginx boots without them.
 #
@@ -37,12 +45,13 @@ image="$(sed -nE 's/^FROM (nginx:[^[:space:]]+) AS web$/\1/p' Dockerfile)"
 suffix="${GITHUB_RUN_ID:-$$}-${variant}"
 network="nginx-check-${suffix}"
 web="nginx-check-web-${suffix}"
+web_hsts="nginx-check-web-hsts-${suffix}"
 stub="nginx-check-stub-${suffix}"
 workdir="$(mktemp -d)"
 failures=0
 
 cleanup() {
-    docker rm -f "$web" "$stub" >/dev/null 2>&1 || true
+    docker rm -f "$web" "$web_hsts" "$stub" >/dev/null 2>&1 || true
     docker network rm "$network" >/dev/null 2>&1 || true
     rm -rf -- "$workdir"
 }
@@ -57,8 +66,11 @@ fail() {
 # bind mounts (the templates), environment (the envsubst values and filter),
 # tmpfs mounts and capabilities. Named volumes (media, modules, the SPARQL
 # socket) are left out; nginx -t does not open them.
+# Rendered to a file first: a failure inside the process substitution below
+# would not stop the script, which would then test nginx's default config.
+docker compose -p nginx-check "${compose_files[@]}" config --format json > "$workdir/compose.json"
 mapfile -d '' run_args < <(
-    docker compose -p nginx-check "${compose_files[@]}" config --format json | python3 -c '
+    python3 -c '
 import json, sys
 
 web = json.load(sys.stdin)["services"]["web"]
@@ -71,12 +83,59 @@ for mount in web.get("volumes", []):
     if mount.get("type") == "bind":
         args += ["-v", mount["source"] + ":" + mount["target"] + (":ro" if mount.get("read_only") else "")]
 env = web.get("environment", {})
-pairs = env.items() if isinstance(env, dict) else (str(e).partition("=")[::2] for e in env)
-for key, value in pairs:
+env = dict(env.items() if isinstance(env, dict) else (str(e).partition("=")[::2] for e in env))
+# nginx-http-settings.conf needs NGINX_HSTS_MAX_AGE rendered, or nginx reads
+# the literal ${NGINX_HSTS_MAX_AGE} as an unknown variable and refuses to
+# start. Supply it (off) if this Compose file does not pass it yet, loudly, so
+# the check still exercises the templates.
+if "NGINX_HSTS_MAX_AGE" not in env:
+    sys.stderr.write("WARNING: the web service does not set NGINX_HSTS_MAX_AGE; using 0\n")
+    env["NGINX_HSTS_MAX_AGE"] = "0"
+filt = env.get("NGINX_ENVSUBST_FILTER", "")
+if filt and "NGINX_HSTS_MAX_AGE" not in filt:
+    sys.stderr.write("WARNING: NGINX_ENVSUBST_FILTER does not list NGINX_HSTS_MAX_AGE; adding it\n")
+    # compose config keeps the escaped "$$" of the YAML; grep -E reads it as $.
+    body = filt.rstrip("$")
+    if filt.startswith("^(") and body.endswith(")"):
+        env["NGINX_ENVSUBST_FILTER"] = body[:-1] + "|NGINX_HSTS_MAX_AGE)$"
+    else:
+        env["NGINX_ENVSUBST_FILTER"] = "(" + filt + ")|^NGINX_HSTS_MAX_AGE$"
+for key, value in env.items():
     args += ["-e", f"{key}={value}"]
 sys.stdout.write("".join(arg + "\0" for arg in args))
-'
+' < "$workdir/compose.json"
 )
+[[ "${#run_args[@]}" -gt 0 ]] || { echo "ERROR: could not read the web service from Compose" >&2; exit 1; }
+
+# A stand-in document root (in production the image's code layer plus the
+# media, module and theme volumes), with one file per caching / content-type
+# case the requests below probe. 0755/0644 so the nginx workers can read it.
+docroot="$workdir/docroot"
+storage_id=0123456789abcdef0123456789abcdef01234567
+for path in \
+    application/asset/css/style.css \
+    modules/Probe/asset/js/probe.js \
+    modules/Probe/asset/js/probe.mjs \
+    themes/probe/asset/css/style.css \
+    "files/original/$storage_id.jpg" \
+    "files/original/$storage_id.svg" \
+    "files/original/$storage_id.html" \
+    "files/original/$storage_id.xml" \
+    "files/original/$storage_id.pdf" \
+    "files/large/$storage_id.jpg" \
+    "files/asset/$storage_id.png" \
+    files/probe-module/dump.nt.gz \
+    files/probe-module/probe.jpg \
+    files/probe.php \
+    files/probe.sql \
+    files/backup/theme.zip \
+    files/iiif/3/1.manifest.json \
+    files/.htaccess; do
+    mkdir -p "$docroot/$(dirname "$path")"
+    echo probe > "$docroot/$path"
+done
+chmod -R a+rX "$docroot"
+run_args+=(-v "$docroot:/var/www/html:ro")
 
 docker network create "$network" >/dev/null
 
@@ -147,6 +206,119 @@ if ! grep -F '"check-no-key"' <<< "$access_log" \
     | grep -qE '^[0-9a-f.:]+ - - \[[^]]+\] "GET [^"]+" [0-9]{3} [0-9]+ "-" "check-no-key" "-"$'; then
     fail "the access log line no longer has the fields of nginx's main format"
 fi
+
+# Response headers of a GET, lower-cased names, CRs stripped. First argument:
+# the container.
+headers() {
+    local container="$1"
+    shift
+    docker exec "$container" curl -gsS -o /dev/null -D - "$@" | tr -d '\r' \
+        | sed -E 's/^([^:]+):/\L\1:/' || true
+}
+
+# expect_header <description> <headers> <grep -E pattern on a header line>
+expect_header() {
+    if grep -qE "$3" <<< "$2"; then echo "    ok  $1"; else fail "$1: no line matching '$3' in: $2"; fi
+}
+expect_no_header() {
+    if grep -qE "$3" <<< "$2"; then fail "$1: unexpected line matching '$3' in: $2"; else echo "    ok  $1"; fi
+}
+
+long='^cache-control: public, max-age=31536000, immutable$'
+week='^cache-control: public, max-age=604800$'
+revalidate='^cache-control: public, max-age=0, must-revalidate$'
+sandbox="^content-security-policy: sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:$"
+frame='^content-security-policy: frame-ancestors '
+
+echo "==> Static asset caching"
+h="$(headers "$web" 'http://127.0.0.1/application/asset/css/style.css?v=4.2.1')"
+expect_header "core asset with ?v= -> a year, immutable" "$h" "$long"
+h="$(headers "$web" http://127.0.0.1/application/asset/css/style.css)"
+expect_header "core asset without ?v= -> revalidate" "$h" "$revalidate"
+expect_header "ETag kept" "$h" '^etag: '
+expect_header "Last-Modified kept" "$h" '^last-modified: '
+h="$(headers "$web" 'http://127.0.0.1/application/asset/css/style.css?v=')"
+expect_header "core asset with empty ?v= -> revalidate" "$h" "$revalidate"
+h="$(headers "$web" 'http://127.0.0.1/modules/Probe/asset/js/probe.js?v=1.0.0')"
+expect_header "module asset with ?v= -> a week" "$h" "$week"
+h="$(headers "$web" http://127.0.0.1/modules/Probe/asset/js/probe.js)"
+expect_header "module asset without ?v= -> revalidate" "$h" "$revalidate"
+h="$(headers "$web" 'http://127.0.0.1/themes/probe/asset/css/style.css?v=2.0')"
+expect_header "theme asset with ?v= -> a week" "$h" "$week"
+h="$(headers "$web" 'http://127.0.0.1/modules/Probe/asset/js/probe.mjs?v=1.0.0')"
+expect_header ".mjs with ?v= -> a week" "$h" "$week"
+expect_header ".mjs served as JavaScript" "$h" '^content-type: application/javascript'
+h="$(headers "$web" http://127.0.0.1/modules/Probe/asset/js/probe.mjs)"
+expect_header ".mjs without ?v= -> revalidate" "$h" "$revalidate"
+
+echo "==> /files/"
+h="$(headers "$web" "http://127.0.0.1/files/original/$storage_id.jpg")"
+expect_header "original/ -> a year, immutable" "$h" "$long"
+expect_header "original/ keeps the frame-ancestors CSP" "$h" "$frame"
+expect_no_header "no sandbox CSP on a JPEG" "$h" '^content-security-policy: sandbox'
+expect_header "security headers on /files/" "$h" '^x-content-type-options: nosniff$'
+h="$(headers "$web" "http://127.0.0.1/files/asset/$storage_id.png")"
+expect_header "asset/ -> a year, immutable" "$h" "$long"
+h="$(headers "$web" "http://127.0.0.1/files/large/$storage_id.jpg")"
+expect_header "large/ -> a week" "$h" "$week"
+h="$(headers "$web" http://127.0.0.1/files/probe-module/dump.nt.gz)"
+expect_header "other /files/ directory -> revalidate" "$h" "$revalidate"
+h="$(headers "$web" 'http://127.0.0.1/files/probe-module/probe.jpg?v=1')"
+expect_header "other /files/ directory, image with ?v= -> still revalidate" "$h" "$revalidate"
+for ext in svg html xml; do
+    h="$(headers "$web" "http://127.0.0.1/files/original/$storage_id.$ext")"
+    expect_header "sandbox CSP on .$ext" "$h" "$sandbox"
+    expect_header "frame-ancestors CSP still sent with .$ext" "$h" "$frame"
+done
+h="$(headers "$web" "http://127.0.0.1/files/original/$storage_id.pdf")"
+expect_no_header "no sandbox CSP on a PDF" "$h" '^content-security-policy: sandbox'
+h="$(headers "$web" "http://127.0.0.1/application/asset/css/style.css")"
+expect_no_header "no sandbox CSP outside /files/" "$h" '^content-security-policy: sandbox'
+for probe in "files/probe.php|404" "files/original/$storage_id.jpg.php|404" \
+    "files/original/probe.php/x.jpg|404" "files/probe.sql|404" "files/.htaccess|403" \
+    "files/backup/theme.zip|404" "files/iiif/3/1.manifest.json|404" "files/import/|404"; do
+    IFS='|' read -r path expected <<< "$probe"
+    code="$(request "http://127.0.0.1/$path")"
+    [[ "$code" == "$expected" ]] && echo "    ok  /$path -> $expected" || fail "/$path -> $code, expected $expected"
+done
+# A missing file still goes to Omeka's router, absent here, hence 502.
+code="$(request "http://127.0.0.1/files/original/missing.jpg")"
+[[ "$code" == "502" ]] && echo "    ok  missing /files/ file -> index.php (502 without php)" \
+    || fail "missing /files/ file -> $code, expected 502 from the index.php fallback"
+
+echo "==> Security headers"
+h="$(headers "$web" http://127.0.0.1/config/)"
+expect_header "X-XSS-Protection: 0 (server level)" "$h" '^x-xss-protection: 0$'
+h="$(headers "$web" http://127.0.0.1/application/asset/css/style.css)"
+expect_header "X-XSS-Protection: 0 (snippet)" "$h" '^x-xss-protection: 0$'
+
+echo "==> HSTS"
+h="$(headers "$web" -H 'X-Forwarded-Proto: https' http://127.0.0.1/config/)"
+expect_no_header "absent by default" "$h" '^strict-transport-security:'
+# Second container: HSTS on, and the curl inside it (127.0.0.1) is the trusted
+# proxy. The later -e wins over the value from Compose.
+docker run -d --name "$web_hsts" --network "$network" "${run_args[@]}" \
+    -e NGINX_HSTS_MAX_AGE=31536000 -e NGINX_TRUSTED_PROXY_CIDR=127.0.0.1/32 "$image" >/dev/null
+for _ in $(seq 1 30); do
+    if [[ "$(docker exec "$web_hsts" curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1/config/ 2>/dev/null)" == "404" ]]; then
+        break
+    fi
+    sleep 1
+done
+hsts='^strict-transport-security: max-age=31536000$'
+h="$(headers "$web_hsts" -H 'X-Forwarded-Proto: https' http://127.0.0.1/config/)"
+expect_header "HTTPS via trusted proxy -> sent (server level)" "$h" "$hsts"
+h="$(headers "$web_hsts" -H 'X-Forwarded-Proto: https' 'http://127.0.0.1/application/asset/css/style.css?v=1')"
+expect_header "HTTPS via trusted proxy -> sent (snippet)" "$h" "$hsts"
+h="$(headers "$web_hsts" -H 'X-Forwarded-Proto: https' "http://127.0.0.1/files/original/$storage_id.svg")"
+expect_header "HTTPS via trusted proxy -> sent (/files/)" "$h" "$hsts"
+h="$(headers "$web_hsts" -H 'X-Forwarded-Proto: https' http://127.0.0.1/s/probe/page/about)"
+expect_header "HTTPS via trusted proxy -> sent (FastCGI location)" "$h" "$hsts"
+h="$(headers "$web_hsts" http://127.0.0.1/config/)"
+expect_no_header "plain HTTP -> absent" "$h" '^strict-transport-security:'
+h="$(headers "$web_hsts" -H 'X-Forwarded-Proto: http' http://127.0.0.1/application/asset/css/style.css)"
+expect_no_header "proxy said http -> absent (snippet)" "$h" '^strict-transport-security:'
+docker rm -f "$web_hsts" >/dev/null
 
 if [[ "$variant" == "amira" ]]; then
     echo "==> /curator/mcp with no curator service"
