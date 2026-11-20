@@ -337,19 +337,25 @@ omeka_modules_install() {
         fi
         mapfile -t modules <<< "$pending"
         log_info "Not installed yet: ${modules[*]}"
-        # --all installs exactly the not-installed modules in dependency
-        # order within one boot, and carries on past a module that fails. It
-        # exits 0 even then, so the result is checked by listing again.
+        # --all installs the not-installed modules in dependency order within
+        # one boot and carries on past a module that fails. It exits 0 even
+        # then, so the result is checked by listing again.
+        #
+        # A module that depends on one installed in that same boot does fail:
+        # the dependency's services were registered when the process started,
+        # before it was installed (EasyAdmin and Log need Common's
+        # "Common\DirectoryManager"). Those are installed one at a time below,
+        # each in a fresh boot that sees its dependency as installed.
         if omeka-s-cli module:install --base-path "$OMEKA_ROOT" --all \
             && pending=$(omeka_modules_not_installed); then
-            if [[ -n "$pending" ]]; then
-                while IFS= read -r mod; do
-                    log_error "Failed to install module $mod"
-                done <<< "$pending"
+            if [[ -z "$pending" ]]; then
+                return
             fi
-            return
+            mapfile -t modules <<< "$pending"
+            log_info "Installing in a second pass: ${modules[*]}"
+        else
+            log_warn "Bulk module install did not complete; retrying module by module."
         fi
-        log_warn "Bulk module install did not complete; retrying module by module."
     else
         # Never skip installs just because the listing changed shape: fall
         # back to the old behaviour (module:install on an installed module is

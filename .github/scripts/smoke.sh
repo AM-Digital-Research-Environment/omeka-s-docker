@@ -369,6 +369,12 @@ elif grep -qiE ';[[:space:]]*secure' <<< "$cookie"; then
 fi
 php_log=$(docker compose logs --no-color php)
 grep -qF 'Omeka S is installed and ready.' <<< "$php_log"
+# Every downloaded module must be installed by the first start, including the
+# ones that depend on a module installed in the same run (EasyAdmin, Log).
+if grep -F 'Failed to install module' <<< "$php_log"; then
+    echo "A module was left uninstalled by the first start." >&2
+    exit 1
+fi
 if [[ "$variant" == "amira" ]]; then
     grep -qF 'Admin user created: admin@example.com' <<< "$php_log"
     if grep -qF 'ci-admin-password' <<< "$php_log"; then
@@ -592,17 +598,20 @@ if [[ "$variant" == "secrets" ]]; then
             exit 1
         fi
     done
-    grep -qx 'OMEKA_SECRET_KEY=Y2ktc2VjcmV0LWtleS1mb3Itb21la2Etc21va2UtdGVzdA==' <<< "$fpm_env"
-    grep -qx 'TYPESENSE_API_KEY=ci-secret-typesense-key' <<< "$fpm_env"
+    grep -qx 'OMEKA_SECRET_KEY=Y2ktc2VjcmV0LWtleS1mb3Itb21la2Etc21va2UtdGVzdA==' <<< "$fpm_env" \
+        || { echo "php-fpm's environment lacks the Omeka secret key from its file (variables seen: $(cut -d= -f1 <<< "$fpm_env" | tr '\n' ' '))" >&2; exit 1; }
+    grep -qx 'TYPESENSE_API_KEY=ci-secret-typesense-key' <<< "$fpm_env" \
+        || { echo "php-fpm's environment lacks the Typesense key from its file" >&2; exit 1; }
     # The key Typesense loaded from its file is the one php sends.
     docker compose exec -T -e KEY=ci-secret-typesense-key php php -r '
         $context = stream_context_create(["http" => ["header" => "X-TYPESENSE-API-KEY: " . getenv("KEY") . "\r\n", "ignore_errors" => true]]);
         file_get_contents("http://typesense:8108/collections", false, $context);
         exit(str_contains($http_response_header[0] ?? "", " 200 ") ? 0 : 1);
-    '
+    ' || { echo "Typesense did not accept the key from its secret file" >&2; exit 1; }
     # The backup/restore helpers authenticate from the db container's file.
     docker compose exec -T db sh -eu -c '
-        exec mysql -u"$MYSQL_USER" -p"$(cat "$MYSQL_PASSWORD_FILE")" "$MYSQL_DATABASE" -e "SELECT 1"' >/dev/null
+        exec mysql -u"$MYSQL_USER" -p"$(cat "$MYSQL_PASSWORD_FILE")" "$MYSQL_DATABASE" -e "SELECT 1"' >/dev/null \
+        || { echo "db did not authenticate with the password from its secret file" >&2; exit 1; }
     echo "    no plain secret in any container configuration; files authenticate db, php and typesense: OK"
 
     log "Testing backup and restore of the secret files..."
