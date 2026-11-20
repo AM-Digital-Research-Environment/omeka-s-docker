@@ -589,19 +589,35 @@ if [[ "$variant" == "secrets" ]]; then
             fi
         done
     done
-    # php-fpm (PID 1) keeps only what Omeka and DRESearch read with getenv():
-    # the database and admin passwords must not be in its environment.
-    fpm_env=$(docker compose exec -T php sh -c 'tr "\0" "\n" < /proc/1/environ' | tr -d '\r')
-    for name in MYSQL_PASSWORD OMEKA_ADMIN_PASSWORD; do
-        if grep -q "^${name}=" <<< "$fpm_env"; then
-            echo "SECURITY: $name is in php-fpm's environment" >&2
-            exit 1
-        fi
-    done
-    grep -qx 'OMEKA_SECRET_KEY=Y2ktc2VjcmV0LWtleS1mb3Itb21la2Etc21va2UtdGVzdA==' <<< "$fpm_env" \
-        || { echo "php-fpm's environment lacks the Omeka secret key from its file (variables seen: $(cut -d= -f1 <<< "$fpm_env" | tr '\n' ' '))" >&2; exit 1; }
-    grep -qx 'TYPESENSE_API_KEY=ci-secret-typesense-key' <<< "$fpm_env" \
-        || { echo "php-fpm's environment lacks the Typesense key from its file" >&2; exit 1; }
+    # A php-fpm worker keeps only what Omeka and DRESearch read with getenv():
+    # the database and admin passwords must not be in its environment. Asked
+    # of a real worker over FastCGI, the way the healthcheck talks to the
+    # pool: /proc/1/environ is no use, because php-fpm overwrites that memory
+    # with its process title.
+    fpm_env=$(docker compose exec -T php sh -eu -c '
+        probe=/tmp/smoke-env-probe.php
+        trap "rm -f $probe" EXIT
+        cat > "$probe" <<"PHP"
+<?php
+header("Content-Type: text/plain");
+foreach (["MYSQL_PASSWORD", "OMEKA_ADMIN_PASSWORD", "OMEKA_SECRET_KEY", "TYPESENSE_API_KEY"] as $name) {
+    $value = getenv($name);
+    echo $name, "=", $value === false || $value === "" ? "<unset>" : hash("sha256", $value), "\n";
+}
+PHP
+        env -i REQUEST_METHOD=GET SCRIPT_NAME=/smoke-env-probe.php SCRIPT_FILENAME="$probe" \
+            cgi-fcgi -bind -connect 127.0.0.1:9000' | tr -d '\r')
+    expect_worker_env() {
+        local name="$1" expected="$2"
+        grep -qx "${name}=${expected}" <<< "$fpm_env" \
+            || { echo "php-fpm worker: ${name} is not ${3} ($(grep "^${name}=" <<< "$fpm_env" || echo 'no answer from the pool'))" >&2; exit 1; }
+    }
+    expect_worker_env MYSQL_PASSWORD '<unset>' 'absent'
+    expect_worker_env OMEKA_ADMIN_PASSWORD '<unset>' 'absent'
+    expect_worker_env OMEKA_SECRET_KEY \
+        "$(printf '%s' 'Y2ktc2VjcmV0LWtleS1mb3Itb21la2Etc21va2UtdGVzdA==' | sha256sum | cut -d' ' -f1)" 'the key from its file'
+    expect_worker_env TYPESENSE_API_KEY \
+        "$(printf '%s' 'ci-secret-typesense-key' | sha256sum | cut -d' ' -f1)" 'the key from its file'
     # The key Typesense loaded from its file is the one php sends.
     docker compose exec -T -e KEY=ci-secret-typesense-key php php -r '
         $context = stream_context_create(["http" => ["header" => "X-TYPESENSE-API-KEY: " . getenv("KEY") . "\r\n", "ignore_errors" => true]]);
