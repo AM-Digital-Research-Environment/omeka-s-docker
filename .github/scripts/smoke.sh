@@ -375,7 +375,7 @@ if [[ "$variant" == "amira" ]]; then
         echo "SECURITY: the admin password appeared in the php log!" >&2
         exit 1
     fi
-else
+elif [[ "$variant" != "secrets" ]]; then
     # No admin account configured: the installer must not fall back to
     # omeka-s-cli's published default (admin@example.com / "admin").
     grep -qF 'Generated admin password: ' <<< "$php_log"
