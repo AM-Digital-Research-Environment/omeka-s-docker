@@ -19,7 +19,7 @@ RUN apk add --no-cache curl \
 FROM ghcr.io/mlocati/php-extension-installer:2.13.2@sha256:4fd45396c16685266d32bf147a24ecd5e81029d3820295895bf4a90131190ac9 AS php-extension-installer
 FROM composer/composer:2.11.1-bin@sha256:56a1b0a72bacd78079e3fa49a49e7bf58326365753415c99385ea2b08bded0a5 AS composer-bin
 
-FROM php:8.5.12-fpm-trixie@sha256:baf3ea13a8207fa18e1011bad1016e8b5e59fc974c6966d0efa6f36a16f875f0 AS runtime
+FROM php:8.6.0RC5-fpm-trixie@sha256:553329af7cef79979dd162eda43fd498095c7c6b1e48d166a08475e3cc52ee58 AS runtime
 
 ARG OMEKA_ROOT=/var/www/html
 ARG OMEKA_VERSION=4.2.1
