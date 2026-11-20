@@ -160,23 +160,38 @@ omeka_install() {
         fresh_install=true
         if [[ -n "${OMEKA_ADMIN_EMAIL:-}" && -n "${OMEKA_ADMIN_PASSWORD:-}" && -n "${OMEKA_ADMIN_USERNAME:-}" ]]; then
             admin_created=true
-            log_info "Creating admin user"
-            omeka-s-cli core:install \
-                        --base-path "${OMEKA_ROOT}" \
-                        --locale "${OMEKA_LOCALE}" \
-                        --time-zone "${OMEKA_TZ:-UTC}" \
-                        --title "${OMEKA_TITLE}" \
-                        --admin-email "${OMEKA_ADMIN_EMAIL}" \
-                        --admin-name "${OMEKA_ADMIN_USERNAME}" \
-                        --admin-password "${OMEKA_ADMIN_PASSWORD}"
+            admin_email="${OMEKA_ADMIN_EMAIL}"
+            admin_name="${OMEKA_ADMIN_USERNAME}"
+            admin_password="${OMEKA_ADMIN_PASSWORD}"
+            log_info "Creating admin user ${admin_email}"
         else
-            log_info "Will not create admin user"
-            omeka-s-cli core:install \
-                        --base-path "${OMEKA_ROOT}" \
-                        --locale "${OMEKA_LOCALE}" \
-                        --time-zone "${OMEKA_TZ:-UTC}" \
-                        --title "${OMEKA_TITLE}"
+            # Omeka's installer always creates a first user. Left to itself,
+            # omeka-s-cli falls back to admin@example.com with the password
+            # "admin" — a published default on what may be a public site. So
+            # when no (complete) admin account is configured, create that
+            # placeholder account with a random password instead and show it
+            # once in the first-install summary, the way the MySQL image does
+            # for its generated root password.
+            admin_email="${OMEKA_ADMIN_EMAIL:-admin@example.com}"
+            admin_name="${OMEKA_ADMIN_USERNAME:-Admin}"
+            admin_password="$(php -r 'echo bin2hex(random_bytes(12));')"
+            generated_admin_password="$admin_password"
+            log_info "No complete OMEKA_ADMIN_* account configured; generating an admin password."
         fi
+        # omeka-s-cli echoes the options it was given, password included.
+        # Mask it: a container log is read by more people, and kept longer,
+        # than .env. pipefail keeps the installer's exit status.
+        omeka-s-cli core:install \
+                    --base-path "${OMEKA_ROOT}" \
+                    --locale "${OMEKA_LOCALE}" \
+                    --time-zone "${OMEKA_TZ:-UTC}" \
+                    --title "${OMEKA_TITLE}" \
+                    --admin-email "${admin_email}" \
+                    --admin-name "${admin_name}" \
+                    --admin-password "${admin_password}" 2>&1 \
+            | while IFS= read -r line; do
+                printf '%s\n' "${line//"$admin_password"/********}"
+            done >&2
     else
         log_info "Omeka S is already installed. Good!"
         # The admin credentials are only read by the first install above. Left
@@ -299,11 +314,12 @@ omeka_fresh_install_summary() {
     log_info "------------------------------------------------------------"
     log_info "Omeka S is installed and ready."
     if [[ "$admin_created" == true ]]; then
-        log_info "Admin user created: ${OMEKA_ADMIN_EMAIL} (password: the one from .env)."
+        log_info "Admin user created: ${admin_email} (password: the one from .env)."
     else
-        log_info "No admin user was created (OMEKA_ADMIN_EMAIL, OMEKA_ADMIN_USERNAME and"
-        log_info "OMEKA_ADMIN_PASSWORD must all be set). Create one with:"
-        log_info "  docker compose exec php omeka-s-cli user:add <email> <name> global_admin"
+        log_info "Admin user created: ${admin_email}"
+        log_info "Generated admin password: ${generated_admin_password}"
+        log_info "It is shown only here. Sign in and change it under your user's"
+        log_info "Password tab; set the e-mail address there too."
     fi
     log_info "Next steps:"
     log_info "  1. Open the site in a browser and sign in at /login."
@@ -317,6 +333,8 @@ omeka_fresh_install_summary() {
 
 fresh_install=false
 admin_created=false
+admin_email=""
+generated_admin_password=""
 
 fpm_pool_config
 

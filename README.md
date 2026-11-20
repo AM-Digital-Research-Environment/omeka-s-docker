@@ -62,7 +62,9 @@ as "healthy", visit `http://localhost` (or your server's address).
 
 If you set `OMEKA_ADMIN_EMAIL`, `OMEKA_ADMIN_USERNAME`, and
 `OMEKA_ADMIN_PASSWORD` in `.env`, your admin account already exists — just log
-in. Otherwise Omeka's setup wizard walks you through creating one.
+in. Otherwise the first start creates `admin@example.com` with a random
+password and prints it once in the log: run `docker compose logs php`, look for
+"Generated admin password", sign in, and change the e-mail and password.
 
 For a public site, put HTTPS in front of it next: see
 [Going public](#going-public).
