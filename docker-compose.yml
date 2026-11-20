@@ -66,7 +66,12 @@ services:
       # HTTP; 0 (the default) sends nothing. Set 31536000 once HTTPS is
       # confirmed working — or set HSTS on the TLS proxy instead, not both.
       - NGINX_HSTS_MAX_AGE=${NGINX_HSTS_MAX_AGE:-0}
-      - NGINX_ENVSUBST_FILTER=^(SERVER_NAME|FRAME_ANCESTORS|NGINX_TRUSTED_PROXY_CIDR|NGINX_HSTS_MAX_AGE)$$
+      # Per-client rate limit on /api: `on` enables it at NGINX_API_RATE
+      # (requests per second or minute, nginx limit_req syntax such as 10r/s);
+      # `off`, the default, leaves the API unthrottled as before.
+      - NGINX_API_RATE_LIMIT=${NGINX_API_RATE_LIMIT:-off}
+      - NGINX_API_RATE=${NGINX_API_RATE:-10r/s}
+      - NGINX_ENVSUBST_FILTER=^(SERVER_NAME|FRAME_ANCESTORS|NGINX_TRUSTED_PROXY_CIDR|NGINX_HSTS_MAX_AGE|NGINX_API_RATE_LIMIT|NGINX_API_RATE)$$
     depends_on:
       php:
         condition: service_healthy
@@ -154,22 +159,31 @@ services:
       # Persistent PHP session store (off tmpfs) so php restarts don't log
       # everyone out / invalidate CSRF tokens. See Dockerfile (92-sessions.ini).
       - php_sessions:/var/lib/php-sessions:rw
+    # A mapping rather than a list, so compose.secrets.yml can delete single
+    # keys with `!reset` (it cannot do that to list entries).
     environment:
-      - MYSQL_HOST=db
-      - MYSQL_DATABASE=${MYSQL_DATABASE:-omeka}
-      - MYSQL_USER=${MYSQL_USER:-omeka}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD:?You must set MYSQL_PASSWORD in .env}
-      - OMEKA_VERSION=${OMEKA_VERSION:-4.2.1}
-      # First-start only: with all three set, the entrypoint creates the first
-      # admin and skips the browser installer. Remove them from .env after the
-      # first start; the entrypoint warns while a password is still set on an
-      # installed site.
-      - OMEKA_ADMIN_EMAIL=${OMEKA_ADMIN_EMAIL:-}
-      - OMEKA_ADMIN_PASSWORD=${OMEKA_ADMIN_PASSWORD:-}
-      - OMEKA_ADMIN_USERNAME=${OMEKA_ADMIN_USERNAME:-}
-      - OMEKA_TZ=${OMEKA_TZ:-}
-      - OMEKA_LOCALE=${OMEKA_LOCALE:-}
-      - OMEKA_TITLE=${OMEKA_TITLE:-}
+      MYSQL_HOST: db
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-omeka}
+      MYSQL_USER: ${MYSQL_USER:-omeka}
+      # Required, unless SECRETS_DIR is set for compose.secrets.yml, which
+      # replaces it with a file. Compose interpolates this file before any
+      # overlay is merged, so the overlay cannot lift the requirement itself.
+      # Without that overlay the marker value below is what php receives, and
+      # the entrypoint refuses to start with it. Keep in sync with db.
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-compose.secrets.yml-is-not-loaded:${SECRETS_DIR:?You must set MYSQL_PASSWORD in .env (or SECRETS_DIR, with compose.secrets.yml)}}
+      OMEKA_VERSION: ${OMEKA_VERSION:-4.2.1}
+      # First-start only. The entrypoint always installs Omeka on the first
+      # start: with all three set it creates this admin, otherwise
+      # admin@example.com (or OMEKA_ADMIN_EMAIL) with a random password it
+      # prints once ("Generated admin password" in `docker compose logs php`).
+      # Remove them from .env after the first start; the entrypoint warns
+      # while a password is still set on an installed site.
+      OMEKA_ADMIN_EMAIL: ${OMEKA_ADMIN_EMAIL:-}
+      OMEKA_ADMIN_PASSWORD: ${OMEKA_ADMIN_PASSWORD:-}
+      OMEKA_ADMIN_USERNAME: ${OMEKA_ADMIN_USERNAME:-}
+      OMEKA_TZ: ${OMEKA_TZ:-}
+      OMEKA_LOCALE: ${OMEKA_LOCALE:-}
+      OMEKA_TITLE: ${OMEKA_TITLE:-}
       # Encrypts secrets at rest (module API keys and similar). Normally Omeka
       # generates config/secret_key.php on first boot, but config/ is immutable
       # image content here, so that write always fails and every admin page
@@ -177,33 +191,33 @@ services:
       # for exactly that case ("containers or managed hosting"). Generate once
       # with `openssl rand -base64 32` and then NEVER change it — anything
       # already encrypted with the old value becomes unreadable.
-      - OMEKA_SECRET_KEY=${OMEKA_SECRET_KEY:-}
+      OMEKA_SECRET_KEY: ${OMEKA_SECRET_KEY:-}
       # Session cookie flags. Secure must be true whenever visitors reach the
       # site over HTTPS (through a TLS proxy), so the cookie is never sent in
       # clear; it must stay false for plain-HTTP installs, where browsers would
       # drop a Secure cookie and nobody could log in.
-      - OMEKA_SESSION_COOKIE_SECURE=${OMEKA_SESSION_COOKIE_SECURE:-false}
-      - OMEKA_SESSION_COOKIE_SAMESITE=${OMEKA_SESSION_COOKIE_SAMESITE:-Lax}
+      OMEKA_SESSION_COOKIE_SECURE: ${OMEKA_SESSION_COOKIE_SECURE:-false}
+      OMEKA_SESSION_COOKIE_SAMESITE: ${OMEKA_SESSION_COOKIE_SAMESITE:-Lax}
       # At start the entrypoint installs modules that are on disk but not yet
       # installed in the database. false leaves that to the admin, so a module
       # an admin deliberately uninstalled stays uninstalled.
-      - OMEKA_AUTO_INSTALL_MODULES=${OMEKA_AUTO_INSTALL_MODULES:-true}
+      OMEKA_AUTO_INSTALL_MODULES: ${OMEKA_AUTO_INSTALL_MODULES:-true}
       # PHP-FPM pool tuning (defaults in entrypoint if unset).
       # Five workers fit typical traffic, NOT five simultaneous 512M requests.
       # OPcache/APCu and tmpfs also count toward the 1536M container limit.
       # Measure peak usage during imports before increasing concurrency.
-      - PHP_PM_MAX_CHILDREN=${PHP_PM_MAX_CHILDREN:-5}
-      - PHP_PM_START_SERVERS=${PHP_PM_START_SERVERS:-2}
-      - PHP_PM_MIN_SPARE_SERVERS=${PHP_PM_MIN_SPARE_SERVERS:-1}
-      - PHP_PM_MAX_SPARE_SERVERS=${PHP_PM_MAX_SPARE_SERVERS:-3}
-      - PHP_PM_MAX_REQUESTS=${PHP_PM_MAX_REQUESTS:-500}
+      PHP_PM_MAX_CHILDREN: ${PHP_PM_MAX_CHILDREN:-5}
+      PHP_PM_START_SERVERS: ${PHP_PM_START_SERVERS:-2}
+      PHP_PM_MIN_SPARE_SERVERS: ${PHP_PM_MIN_SPARE_SERVERS:-1}
+      PHP_PM_MAX_SPARE_SERVERS: ${PHP_PM_MAX_SPARE_SERVERS:-3}
+      PHP_PM_MAX_REQUESTS: ${PHP_PM_MAX_REQUESTS:-500}
       # Typesense connection for the DRESearch module (optional). The module
       # reads these when its admin settings are blank; leave TYPESENSE_API_KEY
       # unset to run without search (the module then no-ops gracefully).
-      - TYPESENSE_HOST=${TYPESENSE_HOST:-typesense}
-      - TYPESENSE_PORT=${TYPESENSE_PORT:-8108}
-      - TYPESENSE_PROTOCOL=${TYPESENSE_PROTOCOL:-http}
-      - TYPESENSE_API_KEY=${TYPESENSE_API_KEY:-}
+      TYPESENSE_HOST: ${TYPESENSE_HOST:-typesense}
+      TYPESENSE_PORT: ${TYPESENSE_PORT:-8108}
+      TYPESENSE_PROTOCOL: ${TYPESENSE_PROTOCOL:-http}
+      TYPESENSE_API_KEY: ${TYPESENSE_API_KEY:-}
     depends_on:
       db:
         condition: service_healthy
@@ -272,10 +286,11 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql:rw
     environment:
-      - MYSQL_DATABASE=${MYSQL_DATABASE:-omeka}
-      - MYSQL_USER=${MYSQL_USER:-omeka}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD:?You must set MYSQL_PASSWORD in .env}
-      - MYSQL_RANDOM_ROOT_PASSWORD=yes
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-omeka}
+      MYSQL_USER: ${MYSQL_USER:-omeka}
+      # See the php service: the same expression, so the two cannot differ.
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-compose.secrets.yml-is-not-loaded:${SECRETS_DIR:?You must set MYSQL_PASSWORD in .env (or SECRETS_DIR, with compose.secrets.yml)}}
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
     networks:
       - backend
     restart: unless-stopped
@@ -318,7 +333,15 @@ services:
       # succeeds against that temp server, marking db healthy before the real
       # server listens on 3306 — and php then races ahead into "connection
       # refused" during its install.
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u\"$$MYSQL_USER\" -p\"$$MYSQL_PASSWORD\" --silent"]
+      #
+      # The password comes from MYSQL_PASSWORD_FILE when compose.secrets.yml
+      # provides one, else from MYSQL_PASSWORD, so one test serves both modes.
+      test:
+        - CMD-SHELL
+        - >-
+          password="$${MYSQL_PASSWORD:-}";
+          if [ -n "$${MYSQL_PASSWORD_FILE:-}" ]; then password="$$(cat "$$MYSQL_PASSWORD_FILE")"; fi;
+          mysqladmin ping -h 127.0.0.1 -u"$$MYSQL_USER" -p"$$password" --silent
       interval: 30s
       timeout: 10s
       retries: 5
@@ -356,7 +379,9 @@ services:
       # profile) never requires it. If you start the search profile without
       # setting it, Typesense exits immediately with a clear
       # "API key is not specified" error — set it in .env first.
-      - TYPESENSE_API_KEY=${TYPESENSE_API_KEY:-}
+      # (compose.secrets.yml replaces it with TYPESENSE_API_KEY_FILE, which
+      # the image's entrypoint wrapper reads.)
+      TYPESENSE_API_KEY: ${TYPESENSE_API_KEY:-}
     volumes:
       - typesense_data:/data:rw
     networks:

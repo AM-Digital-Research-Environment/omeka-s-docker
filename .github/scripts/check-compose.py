@@ -144,8 +144,26 @@ def check_forwarded_for(service_name: str, template: str, path: str) -> None:
 
 
 variant = sys.argv[1] if len(sys.argv) > 1 else "base"
+# "<variant>-tls" (and plain "tls" for the base stack) is the same stack with
+# compose.tls.yml layered on last; see check_tls() below.
+is_tls = variant == "tls" or variant.endswith("-tls")
+variant = "base" if variant == "tls" else variant.removesuffix("-tls")
+# "<variant>-secrets" (and plain "secrets" for the base stack) is the same
+# stack with compose.secrets.yml layered on; see check_secrets() below.
+is_secrets = variant == "secrets" or variant.endswith("-secrets")
+variant = "base" if variant == "secrets" else variant.removesuffix("-secrets")
+usage = (
+    "usage: check-compose.py base|amira|amira-curator|immutable|amira-immutable,"
+    " optionally with -secrets appended (or just: secrets), then optionally -tls"
+    " for a non-AMIRA variant (or just: tls, secrets-tls, immutable-tls, ...)"
+)
 if variant not in {"base", "amira", "amira-curator", "immutable", "amira-immutable"}:
-    raise SystemExit("usage: check-compose.py base|amira|amira-curator|immutable|amira-immutable")
+    raise SystemExit(usage)
+# compose.tls.yml takes the host's ports 80/443 and stops publishing nginx on
+# the loopback, which is where the AMIRA host proxy expects it; the two are
+# alternatives, so there is no contract for the combination.
+if is_tls and variant.startswith("amira"):
+    raise SystemExit(usage)
 
 # Modules/themes are admin-managed volumes by default; compose.immutable.yml
 # drops them back into the image layer.
@@ -166,6 +184,8 @@ if is_amira:
     expected_services.update({"amira-mcp", "sparql"})
 if is_curator:
     expected_services.add("amira-mcp-curator")
+if is_tls:
+    expected_services.add("caddy")
 missing_services = expected_services - services.keys()
 require(not missing_services, f"required services are missing: {', '.join(sorted(missing_services))}")
 require(("amira-mcp" in services) == is_amira, "AMIRA overlay service mismatch")
@@ -175,6 +195,7 @@ require(
     ("amira-mcp-curator" in services) == is_curator,
     "amira-mcp-curator must start only with the curator profile",
 )
+require(("caddy" in services) == is_tls, "caddy must come from compose.tls.yml only")
 
 if missing_services:
     for error in errors:
@@ -184,7 +205,7 @@ if missing_services:
 if not errors:
     php_env = environment(services["php"])
     db_env = environment(services["db"])
-    for name in ("MYSQL_DATABASE", "MYSQL_USER", "MYSQL_PASSWORD"):
+    for name in ("MYSQL_DATABASE", "MYSQL_USER", "MYSQL_PASSWORD", "MYSQL_PASSWORD_FILE"):
         require(php_env.get(name) == db_env.get(name), f"php/db {name} values differ")
     require(
         php_env.get("MYSQL_DATABASE") == os.environ["MYSQL_DATABASE"],
@@ -216,7 +237,9 @@ for name, service in services.items():
         f"{name} must set deploy.resources.limits.pids (1-1024)",
     )
     require(not service.get("pids_limit"), f"{name} must set its pids limit in one place only")
-    if name != "web":
+    # One service faces the host: nginx, or Caddy in front of it with
+    # compose.tls.yml (check_tls asserts that web then publishes nothing).
+    if name != ("caddy" if is_tls else "web"):
         require(not service.get("ports"), f"{name} must not publish host ports")
     for mount in service.get("volumes", []):
         if not isinstance(mount, dict):
@@ -228,9 +251,10 @@ for name, service in services.items():
             f"{name} must not mount the Docker socket",
         )
 
-for name in ("web", "php", "db", "typesense"):
+for name in ("web", "php", "db", "typesense", *(("caddy",) if is_tls else ())):
     require(services[name].get("read_only") is True, f"{name} root filesystem must be read-only")
 # Only nginx needs capabilities (binding port 80, dropping to its worker user).
+# Caddy binds 80/443 through the namespaced unprivileged-port sysctl instead.
 for name, service in services.items():
     if name != "web":
         require(not service.get("cap_add"), f"{name} must not add capabilities")
@@ -254,10 +278,11 @@ require(
     not any("api-key" in str(argument) for argument in typesense.get("command") or []),
     "typesense must not receive its API key on the command line",
 )
-require(
-    environment(typesense).get("TYPESENSE_API_KEY") == environment(services["php"]).get("TYPESENSE_API_KEY"),
-    "typesense and php must share TYPESENSE_API_KEY",
-)
+for name in ("TYPESENSE_API_KEY", "TYPESENSE_API_KEY_FILE"):
+    require(
+        environment(typesense).get(name) == environment(services["php"]).get(name),
+        f"typesense and php must share {name}",
+    )
 
 # db and typesense have no business reaching the internet or the host's other
 # networks; php keeps frontend for its own outbound traffic.
@@ -275,9 +300,23 @@ require(
     php_env_all.get("OMEKA_SESSION_COOKIE_SECURE") in {"true", "false"},
     "OMEKA_SESSION_COOKIE_SECURE must default to true or false",
 )
+if not is_tls:
+    # The base stack speaks plain HTTP, where browsers drop a Secure cookie
+    # and nobody could log in. compose.tls.yml flips it (check_tls).
+    require(
+        php_env_all.get("OMEKA_SESSION_COOKIE_SECURE") == "false",
+        "OMEKA_SESSION_COOKIE_SECURE must default to false on the plain-HTTP stack",
+    )
 web_env = environment(services["web"])
 envsubst_filter = web_env.get("NGINX_ENVSUBST_FILTER", "").replace("$$", "$")
-for name in ("SERVER_NAME", "FRAME_ANCESTORS", "NGINX_TRUSTED_PROXY_CIDR", "NGINX_HSTS_MAX_AGE"):
+for name in (
+    "SERVER_NAME",
+    "FRAME_ANCESTORS",
+    "NGINX_TRUSTED_PROXY_CIDR",
+    "NGINX_HSTS_MAX_AGE",
+    "NGINX_API_RATE_LIMIT",
+    "NGINX_API_RATE",
+):
     require(name in web_env, f"web must pass {name} through")
     require(
         re.search(envsubst_filter, name) is not None if envsubst_filter else False,
@@ -295,11 +334,16 @@ if is_amira:
         )
 
 web_ports = services["web"].get("ports", [])
-require(len(web_ports) == 1, "web must publish exactly one port")
-if web_ports and isinstance(web_ports[0], dict):
-    require(web_ports[0].get("host_ip") == "127.0.0.1", "web must bind to loopback by default")
+if is_tls:
+    # Caddy owns 80/443 and reaches nginx over the frontend network; a
+    # published nginx port would collide with Caddy's or bypass HTTPS.
+    require(not web_ports, "web must not publish a port with compose.tls.yml")
+else:
+    require(len(web_ports) == 1, "web must publish exactly one port")
+    if web_ports and isinstance(web_ports[0], dict):
+        require(web_ports[0].get("host_ip") == "127.0.0.1", "web must bind to loopback by default")
 
-for name in ("web", "php", "db", "typesense"):
+for name in ("web", "php", "db", "typesense", *(("caddy",) if is_tls else ())):
     require("healthcheck" in services[name], f"{name} healthcheck is missing")
 
 db_image = str(services["db"].get("image", ""))
@@ -624,9 +668,212 @@ if is_curator:
         "amira-mcp-curator must build from the amira-mcp repository at an explicit ref",
     )
 
+
+# --- File-based secrets (compose.secrets.yml) ---------------------------------
+# Each secret and the services allowed to read it. Nothing else may mount it.
+SECRET_READERS = {
+    "mysql_password": {"php", "db"},
+    "omeka_secret_key": {"php"},
+    "typesense_api_key": {"php", "typesense"},
+    "omeka_admin_password": {"php"},
+}
+# The plain variable each secret replaces.
+SECRET_VARIABLES = {name.upper(): name for name in SECRET_READERS}
+
+
+def service_secrets(service: dict[str, Any]) -> dict[str, str]:
+    """source -> target of a service's secrets, with Compose's default target."""
+    result: dict[str, str] = {}
+    for entry in service.get("secrets") or []:
+        if isinstance(entry, str):
+            result[entry] = f"/run/secrets/{entry}"
+        else:
+            source = str(entry.get("source", ""))
+            target = str(entry.get("target") or source)
+            result[source] = target if target.startswith("/") else f"/run/secrets/{target}"
+    return result
+
+
+def check_secrets() -> None:
+    top_level = config.get("secrets") or {}
+    # The db healthcheck must work whichever way the password arrives, so it
+    # is checked in every mode: it has to read MYSQL_PASSWORD_FILE when set
+    # and must not require MYSQL_PASSWORD.
+    healthcheck = " ".join(str(part) for part in (services["db"].get("healthcheck") or {}).get("test") or [])
+    require(
+        "MYSQL_PASSWORD_FILE" in healthcheck and "MYSQL_PASSWORD:-" in healthcheck.replace("$$", "$"),
+        "the db healthcheck must read MYSQL_PASSWORD_FILE when set and not require MYSQL_PASSWORD",
+    )
+    if not is_secrets:
+        # The default stays exactly the .env-based setup.
+        require(not top_level, f"{variant} must not define secrets (that is compose.secrets.yml's job)")
+        for name, service in services.items():
+            service_env = environment(service)
+            require(not service.get("secrets"), f"{name} must not use secrets outside compose.secrets.yml")
+            for variable in SECRET_VARIABLES:
+                require(
+                    f"{variable}_FILE" not in service_env,
+                    f"{name} must not set {variable}_FILE outside compose.secrets.yml",
+                )
+        require(
+            not environment(services["php"]).get("MYSQL_PASSWORD", "").startswith("compose.secrets.yml-is-not-loaded:"),
+            "MYSQL_PASSWORD resolved to the compose.secrets.yml marker: set MYSQL_PASSWORD for this check",
+        )
+        return
+
+    for secret, readers in SECRET_READERS.items():
+        definition = top_level.get(secret) or {}
+        source = str(definition.get("file", ""))
+        require(
+            bool(source) and Path(source).name == secret and not definition.get("environment"),
+            f"secret {secret} must come from the file {secret} in SECRETS_DIR",
+        )
+        users = {name for name, service in services.items() if secret in service_secrets(service)}
+        require(users == readers, f"secret {secret} must be mounted into exactly {sorted(readers)}, not {sorted(users)}")
+    for name, service in services.items():
+        service_env = environment(service)
+        mounted = service_secrets(service)
+        # No plain value may reach any container configuration, not even empty.
+        for variable in SECRET_VARIABLES:
+            require(variable not in service_env, f"{name} must not receive {variable} in secrets mode")
+        # Every *_FILE a service reads must point under /run/secrets, and the
+        # four replaced variables at exactly their own mounted secret.
+        for key, value in service_env.items():
+            if not key.endswith("_FILE"):
+                continue
+            require(value.startswith("/run/secrets/"), f"{name} {key} must point under /run/secrets/")
+            secret = SECRET_VARIABLES.get(key.removesuffix("_FILE"))
+            if secret:
+                require(
+                    mounted.get(secret) == value == f"/run/secrets/{secret}",
+                    f"{name} {key} must be /run/secrets/{secret}, mounted from the {secret} secret",
+                )
+        for secret in mounted:
+            if secret in SECRET_READERS:
+                require(
+                    f"{secret.upper()}_FILE" in service_env,
+                    f"{name} mounts the {secret} secret but does not set {secret.upper()}_FILE",
+                )
+    php_env = environment(services["php"])
+    for variable in SECRET_VARIABLES:
+        require(f"{variable}_FILE" in php_env, f"php must read {variable}_FILE in secrets mode")
+    require(
+        "OMEKA_SECRETS_ALSO_IN_ENV" in php_env and not php_env["OMEKA_SECRETS_ALSO_IN_ENV"].strip(),
+        "secrets mode: these are still set in the environment/.env and would be ignored: "
+        + php_env.get("OMEKA_SECRETS_ALSO_IN_ENV", "(marker missing)"),
+    )
+
+
+check_secrets()
+
+
+# --- Bundled TLS (compose.tls.yml) --------------------------------------------
+CADDY_IMAGE = re.compile(r"^caddy:2\.[0-9.]+@sha256:[0-9a-f]{64}$")
+CADDY_PORTS = {(80, "80", "tcp"), (443, "443", "tcp"), (443, "443", "udp")}
+
+
+def check_tls() -> None:
+    caddy = services.get("caddy")
+    if caddy is None:
+        return  # reported above; nothing else to check
+    # The internet-facing edge: pinned, unprivileged, contained.
+    require(
+        CADDY_IMAGE.fullmatch(str(caddy.get("image", ""))) is not None,
+        "caddy image must be an exact caddy:2.x release pinned by digest",
+    )
+    require(caddy.get("cap_drop") == ["ALL"], "caddy must drop exactly ALL capabilities")
+    require(not caddy.get("cap_add"), "caddy must not add capabilities")
+    require(
+        "no-new-privileges:true" in (caddy.get("security_opt") or []),
+        "caddy must set no-new-privileges",
+    )
+    require(caddy.get("read_only") is True, "caddy root filesystem must be read-only")
+    # Binding 80/443 without CAP_NET_BIND_SERVICE relies on this namespaced
+    # sysctl; without it Caddy cannot start.
+    require(
+        str((caddy.get("sysctls") or {}).get("net.ipv4.ip_unprivileged_port_start")) == "80",
+        "caddy must set net.ipv4.ip_unprivileged_port_start=80 (it has no capabilities)",
+    )
+    # Root without capabilities, by design: the image's /data and /config are
+    # root-owned, and another user could not write the certificates.
+    require("user" not in caddy, "caddy must not override its user (see compose.tls.yml)")
+    require("/tmp" in tmpfs_targets(caddy), "caddy needs a /tmp tmpfs on its read-only root")
+    caddy_limits = limits(caddy)
+    for key in ("cpus", "memory", "pids"):
+        require(bool(caddy_limits.get(key)), f"caddy must set deploy.resources.limits.{key}")
+    require(not caddy.get("pids_limit"), "caddy must set its pids limit in deploy.resources only")
+    require("healthcheck" in caddy, "caddy healthcheck is missing")
+    logging = caddy.get("logging") or {}
+    require(
+        logging.get("driver") == "json-file"
+        and bool((logging.get("options") or {}).get("max-size"))
+        and bool((logging.get("options") or {}).get("max-file")),
+        "caddy must use rotated json-file logging (max-size and max-file)",
+    )
+    require(caddy.get("restart") == "unless-stopped", "caddy restart policy changed")
+    require("web" in (caddy.get("depends_on") or {}), "caddy must depend on web")
+    require(set(caddy.get("networks") or {}) == {"frontend"}, "caddy must sit on the frontend network only")
+
+    caddyfile = mounts_at(caddy, "/etc/caddy/Caddyfile")
+    require(
+        len(caddyfile) == 1
+        and caddyfile[0].get("type") == "bind"
+        and caddyfile[0].get("read_only") is True
+        and str(caddyfile[0].get("source", "")).endswith("_docker/caddy/Caddyfile"),
+        "caddy must bind-mount _docker/caddy/Caddyfile read-only at /etc/caddy/Caddyfile",
+    )
+    top_volumes = config.get("volumes") or {}
+    for source, target in (("caddy_data", "/data"), ("caddy_config", "/config")):
+        mount = mounts_at(caddy, target)
+        require(
+            len(mount) == 1 and mount[0].get("type") == "volume" and mount[0].get("source") == source,
+            f"caddy must mount the {source} volume at {target}",
+        )
+        require(source in top_volumes, f"the {source} volume must be defined at top level")
+
+    ports = {
+        (port.get("target"), str(port.get("published")), port.get("protocol", "tcp"))
+        for port in caddy.get("ports") or []
+        if isinstance(port, dict)
+    }
+    require(
+        ports == CADDY_PORTS and len(caddy.get("ports") or []) == len(CADDY_PORTS),
+        "caddy must publish exactly 80/tcp, 443/tcp and 443/udp on the same host ports",
+    )
+
+    caddy_env = environment(caddy)
+    server_name = caddy_env.get("SERVER_NAME", "").strip()
+    # nginx's "_" catch-all would make Caddy request a certificate for "_".
+    require(bool(server_name) and server_name != "_", "caddy SERVER_NAME must be the public name, not empty or _")
+    require(caddy_env.get("ACME_CA", "").startswith("https://"), "caddy ACME_CA must be an https:// URL")
+    require(caddy_env.get("CADDY_TLS") in {"acme", "internal"}, "CADDY_TLS must be acme or internal")
+    require(
+        re.fullmatch(r"\d+", caddy_env.get("CADDY_HSTS_MAX_AGE", "")) is not None,
+        "CADDY_HSTS_MAX_AGE must be a whole number of seconds",
+    )
+    # HTTPS-only behind Caddy: Secure cookie by default. HSTS comes from
+    # Caddy, so nginx's own header stays off rather than doubling it.
+    require(
+        environment(services["php"]).get("OMEKA_SESSION_COOKIE_SECURE") == "true",
+        "compose.tls.yml must default OMEKA_SESSION_COOKIE_SECURE to true",
+    )
+    require(
+        environment(services["web"]).get("NGINX_HSTS_MAX_AGE") == "0",
+        "with compose.tls.yml NGINX_HSTS_MAX_AGE must stay 0 (Caddy sends HSTS)",
+    )
+
+
+if is_tls:
+    check_tls()
+else:
+    require(
+        not any(name in (config.get("volumes") or {}) for name in ("caddy_data", "caddy_config")),
+        "caddy volumes must come from compose.tls.yml only",
+    )
+
 if errors:
     for error in errors:
         print(f"ERROR: {error}", file=sys.stderr)
     raise SystemExit(1)
 
-print(f"Compose security contract passed ({variant}).")
+print(f"Compose security contract passed ({variant}{'-secrets' if is_secrets else ''}{'-tls' if is_tls else ''}).")

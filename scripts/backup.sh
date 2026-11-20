@@ -39,6 +39,9 @@
 #   Search indexes are derived state and must be regenerated after recovery.
 #   - sideload.tar.gz    Sideload directory (if non-empty)
 #   - .env               Environment file copy
+#   - secrets/<name>     Secret files, when compose.secrets.yml is active
+#   - caddy_data.tar.gz  Caddy's certificates and ACME account key, when
+#                        compose.tls.yml is active
 #   - local.config.php   Read-only Omeka deployment configuration
 
 set -euo pipefail
@@ -97,6 +100,12 @@ if [[ "$KEEP" != 0 && "$DEFAULT_LAYOUT" != true ]]; then
     exit 2
 fi
 HELPER_IMAGE="alpine:3.24.4@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf"
+# Prefix for each shell run in the db container. The database password is
+# read there, from the container's own configuration: MYSQL_PASSWORD_FILE
+# when compose.secrets.yml is active, MYSQL_PASSWORD otherwise. It never
+# passes through this script or its arguments.
+# shellcheck disable=SC2016 # expanded by the container's shell, not here
+DB_PASSWORD_SH='pw="${MYSQL_PASSWORD:-}"; if [ -n "${MYSQL_PASSWORD_FILE:-}" ]; then pw="$(cat "$MYSQL_PASSWORD_FILE")"; fi; '
 
 # Resolve compose project name and volume prefix
 COMPOSE_CONFIG="$(cd "$PROJECT_DIR" && docker compose config --format json)"
@@ -106,6 +115,8 @@ MEDIA_VOLUME="$(volume_for php /var/www/html/files)"
 LOGS_VOLUME="$(volume_for php /var/www/html/logs)"
 MODULES_VOLUME="$(volume_for php /var/www/html/modules)"
 THEMES_VOLUME="$(volume_for php /var/www/html/themes)"
+# Empty unless compose.tls.yml (the bundled Caddy) is part of this stack.
+CADDY_VOLUME="$(volume_for caddy /data)"
 [[ -n "$MEDIA_VOLUME" && -n "$LOGS_VOLUME" ]] || { echo "Media/logs mounts are required." >&2; exit 1; }
 
 echo "==> Omeka S Backup (quiesce=$QUIESCE)"
@@ -176,7 +187,7 @@ fi
 echo "==> Waiting for database to be reachable..."
 TRIES=0
 until (cd "$PROJECT_DIR" && docker compose exec -T db sh -eu -c \
-    'exec mysql -h 127.0.0.1 -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" -e "SELECT 1"' >/dev/null 2>&1); do
+    "$DB_PASSWORD_SH"'exec mysql -h 127.0.0.1 -u"$MYSQL_USER" -p"$pw" "$MYSQL_DATABASE" -e "SELECT 1"' >/dev/null 2>&1); do
     TRIES=$((TRIES + 1))
     if [ "$TRIES" -ge 30 ]; then
         echo "ERROR: Database did not become ready."
@@ -206,10 +217,10 @@ if (cd "$PROJECT_DIR" && docker compose exec -T db mysqldump --help 2>/dev/null)
     | grep -- '--skip-masking-policies\|--masking-policies' >/dev/null; then
     MYSQLDUMP_EXTRA_OPTS="--skip-masking-policies"
 fi
-(cd "$PROJECT_DIR" && docker compose exec -T db sh -eu -c '
+(cd "$PROJECT_DIR" && docker compose exec -T db sh -eu -c "$DB_PASSWORD_SH"'
     exec mysqldump \
         -u"$MYSQL_USER" \
-        -p"$MYSQL_PASSWORD" \
+        -p"$pw" \
         --single-transaction --set-gtid-purged=OFF --routines --triggers --no-tablespaces \
         $1 \
         "$MYSQL_DATABASE"
@@ -260,6 +271,22 @@ for name in omeka_modules omeka_themes; do
     fi
 done
 
+# --- 3c. Caddy certificates (compose.tls.yml only, live) ---
+# Certificates can always be issued again, so this is not about losing data:
+# a restore onto a new host without them makes Caddy request fresh ones at
+# once, and a few such restores in a week run into Let's Encrypt's limit of
+# five identical certificates per week, leaving the site without HTTPS for
+# days. The volume also holds the ACME account key. A renewal racing this
+# live copy can leave one certificate half-written; Caddy then simply
+# obtains it again after a restore.
+if [[ -n "$CADDY_VOLUME" ]] && docker volume inspect "$CADDY_VOLUME" > /dev/null 2>&1; then
+    echo "==> Backing up Caddy certificates (caddy_data, live)..."
+    docker run --rm \
+        -v "$CADDY_VOLUME":/data:ro \
+        -v "$BACKUP_DIR":/backup \
+        "$HELPER_IMAGE" tar czf /backup/caddy_data.tar.gz -C /data .
+fi
+
 # --- 4. Search is derived state ---
 # A live tar of Typesense's database is not a supported snapshot. Re-index from
 # Omeka after disaster recovery instead of presenting it as a reliable backup.
@@ -279,6 +306,25 @@ if [ -f "$PROJECT_DIR/.env" ]; then
     cp "$PROJECT_DIR/.env" "$BACKUP_DIR/.env"
     chmod 600 "$BACKUP_DIR/.env"
     echo "==> Copied .env"
+fi
+
+# --- 6b. Secret files (compose.secrets.yml) ---
+# Under the secrets overlay the credentials live in files outside .env; a
+# backup without them could not be restored (OMEKA_SECRET_KEY in particular
+# must match the encrypted values in the database). Same care as .env: 0600
+# copies in a 0700 directory. Absent in the default, .env-based setup.
+SECRET_LINES="$(python3 "$SCRIPT_DIR/compose-settings.py" secrets <<< "$COMPOSE_CONFIG")"
+if [[ -n "$SECRET_LINES" ]]; then
+    mkdir -m 700 "$BACKUP_DIR/secrets"
+    while IFS=$'\t' read -r secret_name secret_path; do
+        if [[ ! -f "$secret_path" ]]; then
+            echo "ERROR: Secret file for $secret_name is missing: $secret_path" >&2
+            exit 1
+        fi
+        cp "$secret_path" "$BACKUP_DIR/secrets/$secret_name"
+        chmod 600 "$BACKUP_DIR/secrets/$secret_name"
+    done <<< "$SECRET_LINES"
+    echo "==> Copied secret files ($(wc -l <<< "$SECRET_LINES") from compose.secrets.yml)"
 fi
 
 LOCAL_CONFIG_SOURCE="$(cd "$PROJECT_DIR" && docker compose config --format json \
@@ -310,8 +356,11 @@ fi
 # This detects interrupted transfers and accidental corruption. It is not an
 # authenticity signature: store the backup off-host and encrypt it separately.
 CHECKSUM_FILES=(BACKUP_FORMAT omeka_db.sql)
-for file in omeka_media.tar.gz omeka_logs.tar.gz omeka_modules.tar.gz omeka_themes.tar.gz typesense_data.tar.gz sideload.tar.gz .env local.config.php images.json; do
+for file in omeka_media.tar.gz omeka_logs.tar.gz omeka_modules.tar.gz omeka_themes.tar.gz caddy_data.tar.gz typesense_data.tar.gz sideload.tar.gz .env local.config.php images.json; do
     [ ! -f "$BACKUP_DIR/$file" ] || CHECKSUM_FILES+=("$file")
+done
+for file in "$BACKUP_DIR"/secrets/*; do
+    [ ! -f "$file" ] || CHECKSUM_FILES+=("secrets/${file##*/}")
 done
 (cd "$BACKUP_DIR" && sha256sum "${CHECKSUM_FILES[@]}" > SHA256SUMS)
 

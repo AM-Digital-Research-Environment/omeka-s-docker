@@ -30,6 +30,21 @@ def resolve(config, args):
     if command == "external":
         return ["1" if any(v.get("name") == values[0] and v.get("external")
                            for v in config.get("volumes", {}).values()) else "0"]
+    if command == "secrets":
+        # File-based top-level secrets (compose.secrets.yml), one
+        # "name<TAB>host path" line each. Names become file names inside a
+        # backup, so only plain identifiers are accepted.
+        lines = []
+        for name, definition in sorted((config.get("secrets") or {}).items()):
+            path = (definition or {}).get("file")
+            if not path:
+                continue
+            if not re.fullmatch(r"[a-z0-9_]+", name):
+                raise ValueError(f"Unsupported secret name for backup/restore: {name!r}")
+            if "\t" in path or "\n" in path:
+                raise ValueError(f"Unsupported secret file path for {name}")
+            lines.append(f"{name}\t{path}")
+        return lines
     if command == "manifests":
         build = config["services"]["php"].get("build", {})
         settings = build.get("args", {})

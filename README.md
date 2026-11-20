@@ -58,7 +58,9 @@ docker compose logs -f php    # watch it install; Ctrl-C stops watching
 ```
 
 The first build takes several minutes. When `docker compose ps` shows everything
-as "healthy", visit `http://localhost` (or your server's address).
+as "healthy", visit `http://localhost` (or your server's address). If port 80
+is already taken on your machine, set `NGINX_PORT=8080` in `.env` and visit
+`http://localhost:8080` instead.
 
 If you set `OMEKA_ADMIN_EMAIL`, `OMEKA_ADMIN_USERNAME`, and
 `OMEKA_ADMIN_PASSWORD` in `.env`, your admin account already exists — just log
@@ -67,7 +69,13 @@ password and prints it once in the log: run `docker compose logs php`, look for
 "Generated admin password", sign in, and change the e-mail and password.
 
 For a public site, put HTTPS in front of it next: see
-[Going public](#going-public).
+[Going public](#going-public). Moving an existing Omeka S site into this
+stack? See [docs/MIGRATING.md](docs/MIGRATING.md).
+
+**Windows and macOS:** run it with Docker Desktop. On Windows, clone and run
+everything inside a WSL2 Linux distribution (not from PowerShell or a Windows
+folder): the helper scripts in `scripts/` are bash and assume a Linux shell
+and file system. `docker compose` itself works the same everywhere.
 
 ## How this template works
 
@@ -97,6 +105,7 @@ code folder were ever writable, you can
 | `omeka_logs` | Omeka's log files | Yes |
 | `php_sessions` | Who is logged in, so a restart doesn't log everyone out | No |
 | `typesense_data` | The optional search index | No — rebuilt from Omeka |
+| `caddy_data` | HTTPS certificates, only with the [bundled HTTPS](#going-public) | Yes |
 
 Your `.env` and your copy of `local.config.php` are ordinary files in this
 folder, and the backup script copies them too.
@@ -104,7 +113,8 @@ folder, and the backup script copies them too.
 The site runs as a few small services: **web** (nginx 1.30), **php** (PHP 8.5,
 running Omeka), **db** (MySQL 9.7), and optionally **typesense** for search.
 Only `web` is reachable, and by default only from the machine itself, expecting
-an HTTPS proxy in front. More detail in
+an HTTPS proxy in front (or the bundled one, see [Going public](#going-public)).
+More detail in
 [docs/IMMUTABLE_CODE.md](docs/IMMUTABLE_CODE.md).
 
 ## Modules and themes
@@ -250,27 +260,38 @@ module such as [DRESearch](https://github.com/AM-Digital-Research-Environment/DR
 set its directory to `/var/www/html/sideload` under **Modules > FileSideload >
 Configure**, and import from the admin interface as normal.
 
+**Overlays** are optional Compose files switched on with one `COMPOSE_FILE`
+line in `.env`, in this order: `compose.immutable.yml` (modules and themes
+locked into the image), `compose.secrets.yml` (credentials in files instead of
+`.env`), then your own deployment overlay or `compose.tls.yml` (bundled HTTPS,
+below). See [the overlay order](docs/INSTITUTION_SETUP.md#overlay-order).
+
 Every setting is listed in [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
 ## Going public
 
 The site speaks plain HTTP and, by default, answers only on the machine itself.
-For a public site, put an HTTPS proxy in front — Caddy is the least work, and the
-one-command setup script configures it for you. By hand, with Caddy installed:
 
+**HTTPS in one step.** On a server with a public DNS name pointing at it and
+ports 80 and 443 free, add three lines to `.env` and run `docker compose up -d`:
+
+```bash
+COMPOSE_FILE=docker-compose.yml:compose.tls.yml
+SERVER_NAME=omeka.example.org
+ACME_EMAIL=admin@example.org   # optional
 ```
-omeka.example.edu {
-    reverse_proxy 127.0.0.1:8080
-}
-```
 
-Then set `NGINX_PORT=8080` and `SERVER_NAME=omeka.example.edu` in `.env`, run
-`docker compose up -d --force-recreate web`, and start Caddy.
-[docs/PRODUCTION.md](docs/PRODUCTION.md) covers Traefik and host nginx, the
-firewall, certificates, and what the template already hardens for you.
+A bundled Caddy container then obtains and renews a Let's Encrypt certificate,
+redirects HTTP to HTTPS and marks the login cookie Secure. Walkthrough, testing
+without hitting rate limits, and where the certificates live:
+[Bundled HTTPS](docs/PRODUCTION.md#bundled-https-caddy).
 
-Once HTTPS works, set `OMEKA_SESSION_COOKIE_SECURE=true` in `.env` (see
-[HTTPS settings](docs/PRODUCTION.md#https-settings-in-env)).
+With existing institutional certificates, several sites on one server, or a
+proxy you already run, use a host proxy instead:
+[docs/PRODUCTION.md](docs/PRODUCTION.md) covers host nginx, Caddy and Traefik,
+the firewall, certificates, and what the template already hardens for you.
+Behind your own proxy, set `OMEKA_SESSION_COOKIE_SECURE=true` once HTTPS works
+(see [HTTPS settings](docs/PRODUCTION.md#https-settings-in-env)).
 
 Three things are left to you: keep `.env` out of Git (it already is ignored),
 remove the three `OMEKA_ADMIN_*` values from `.env` once the first account
@@ -352,7 +373,8 @@ docker compose up -d --force-recreate php web
 | [COMMANDS.md](docs/COMMANDS.md) | Everyday commands: logs, restarts, shells, rebuilds |
 | [CONFIGURATION.md](docs/CONFIGURATION.md) | Every `.env` setting, and what's tuned out of the box |
 | [CUSTOMISING.md](docs/CUSTOMISING.md) | Module and theme lists, in-house code, vocabularies, deployment overlays |
-| [PRODUCTION.md](docs/PRODUCTION.md) | HTTPS, firewall, certificates, server hardening |
+| [PRODUCTION.md](docs/PRODUCTION.md) | HTTPS (bundled or host proxy), firewall, certificates, server hardening |
+| [MIGRATING.md](docs/MIGRATING.md) | Moving an existing Omeka S site into this stack |
 | [BACKUP_RESTORE.md](docs/BACKUP_RESTORE.md) | Backups, restores, moving to another server |
 | [OMEKA_CLI.md](docs/OMEKA_CLI.md) | Users, vocabularies, and settings from the command line |
 | [IMMUTABLE_CODE.md](docs/IMMUTABLE_CODE.md) | How code and data are stored; locking modules and themes down |

@@ -95,7 +95,10 @@ alone, so removing the line again brings it all back.
 That file must come directly after `docker-compose.yml`: Docker Compose cannot
 remove one setting during a merge, so it replaces the whole storage list for the
 web and PHP services, and a deployment file listed before it would lose its own
-settings. CI checks the supported order and rejects the other.
+settings. CI checks the supported order and rejects the other. The other
+overlays (`compose.secrets.yml`, then a deployment file or `compose.tls.yml`)
+follow it; the full order is in
+[institution setup](INSTITUTION_SETUP.md#overlay-order).
 
 ## Updating Omeka
 
@@ -126,7 +129,10 @@ check `docker compose config`, or restore from a backup.
 
 ## What the automated tests cover
 
-Every change to this repository starts a real site three ways and checks it.
+Every change to this repository starts a real site five ways and checks it:
+default storage, `compose.immutable.yml`, the AMIRA deployment,
+`compose.secrets.yml` (every credential in a file) and `compose.tls.yml`
+(HTTPS through the bundled Caddy, with its own test CA).
 
 With the default storage, the tests confirm that the module and theme folders
 are filled from the image, that Omeka's own writeability check passes so the

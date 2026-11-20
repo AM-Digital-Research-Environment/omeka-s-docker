@@ -10,38 +10,103 @@ nginx all do). Set `SERVER_NAME` in `.env` to your public hostname.
 
 ## Choosing a proxy
 
-**Caddy (easiest — certificates handled for you).** The
-[one-command setup script](https://github.com/AM-Digital-Research-Environment/am-omeka-s-docker-bootstrap)
-sets it up for you. By hand: install [Caddy](https://caddyserver.com/) on the
-server and create a Caddyfile:
+| Your situation | Use |
+|---|---|
+| One server with a public DNS name, nothing else on ports 80/443, "I just want HTTPS" | [Bundled HTTPS (Caddy)](#bundled-https-caddy) — three lines in `.env` |
+| Existing institutional certificates, central ACME, several sites on one host, or a proxy you already run | [Host nginx](#1-architecture) (sections 1–5 below), or your own Caddy/Traefik |
 
+### Bundled HTTPS (Caddy)
+
+`compose.tls.yml` adds a Caddy container in front of the site. It obtains a
+Let's Encrypt certificate for your hostname, renews it on its own, redirects
+HTTP to HTTPS and sends HSTS. Nothing is installed on the host.
+
+1. **DNS.** Point an `A` record (and `AAAA` if the server has IPv6) for your
+   hostname at the server. Check: `dig +short omeka.example.org`.
+2. **Ports.** 80 and 443 must reach the server from the internet (firewall:
+   [section 4](#4-firewall), plus `443/udp` for HTTP/3 if you like; browsers
+   fall back to TCP without it) and nothing else on the host may listen on
+   them. Port 80 stays open after setup: Caddy answers renewal challenges and
+   redirects there.
+3. **`.env`.** Add:
+
+   ```bash
+   COMPOSE_FILE=docker-compose.yml:compose.tls.yml
+   SERVER_NAME=omeka.example.org
+   ACME_EMAIL=admin@example.org   # optional: expiry warnings from Let's Encrypt
+   ```
+
+   With other overlays, `compose.tls.yml` comes last, e.g.
+   `docker-compose.yml:compose.immutable.yml:compose.secrets.yml:compose.tls.yml`
+   ([overlay order](INSTITUTION_SETUP.md#overlay-order)). It replaces a host
+   proxy, so it does not go together with a deployment that has one, such as
+   `compose.amira.yml`.
+4. **Start.** `docker compose up -d`, then watch the certificate arrive:
+   `docker compose logs -f caddy` (look for `certificate obtained successfully`).
+5. **Check** from another machine:
+
+   ```bash
+   curl -sI http://omeka.example.org/ | head -3    # 308 to https://
+   curl -sI https://omeka.example.org/ | grep -iE '^HTTP|^strict-transport'
+   echo | openssl s_client -connect omeka.example.org:443 -servername omeka.example.org 2>/dev/null \
+       | openssl x509 -noout -issuer -dates
+   ```
+
+What the overlay sets for you: the web container is no longer published on the
+host (only Caddy is), the login cookie is `Secure`
+(`OMEKA_SESSION_COOKIE_SECURE=true`, unless `.env` still says `false` — remove
+that line), and HSTS comes from Caddy (`CADDY_HSTS_MAX_AGE`), so leave
+`NGINX_HSTS_MAX_AGE` at 0: the [HTTPS settings](#https-settings-in-env) below
+are for a host proxy. Real visitor addresses reach Omeka and the rate
+limits because nginx trusts Caddy's `X-Forwarded-*` headers through
+`NGINX_TRUSTED_PROXY_CIDR`; its default covers Docker's usual 172.16–31.x
+networks. If `docker network inspect <project>_frontend` (e.g.
+`omeka-s-docker_frontend`) shows a different subnet (192.168.x on hosts with many networks), set that subnet
+there, or every visitor appears as Caddy and Omeka builds `http://` links.
+
+**Certificates** live in the `caddy_data` volume (project prefix in front, e.g.
+`omeka-s-docker_caddy_data`), which `scripts/backup.sh` saves and
+`scripts/restore.sh` puts back. Renewal is automatic, well before expiry, as
+long as the stack runs and port 80 stays reachable. Do not delete
+that volume: a fresh one makes Caddy request new certificates, and Let's
+Encrypt allows only five identical ones per week. While experimenting, use the
+staging CA (untrusted certificates, generous limits), then remove the line:
+
+```bash
+ACME_CA=https://acme-staging-v02.api.letsencrypt.org/directory
 ```
-omeka.example.edu {
-    reverse_proxy 127.0.0.1:8080
-}
-```
 
-Then set `NGINX_PORT=8080` in `.env` so Caddy can take port 80, apply it with
-`docker compose up -d --force-recreate web`, and start Caddy. Certificates are
-obtained and renewed automatically from then on.
+**No public DNS name** (a lab machine, a LAN name): `CADDY_TLS=internal`
+makes Caddy issue the certificate from its own local CA. Browsers warn until
+you trust its root, `docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt .`.
 
-**Traefik (Docker-native).** Add labels to the `web` service in a
-`docker-compose.override.yml`:
+The other knobs are `CADDY_HSTS_MAX_AGE` and `CADDY_CPU_LIMIT`/
+`CADDY_MEMORY_LIMIT` ([CONFIGURATION.md](CONFIGURATION.md)); the Caddy
+configuration itself is `_docker/caddy/Caddyfile`.
 
-```yaml
-services:
-  web:
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.omeka.rule=Host(`omeka.example.edu`)"
-      - "traefik.http.routers.omeka.tls.certresolver=letsencrypt"
-```
+**Moving to a host proxy later:** remove `compose.tls.yml` from
+`COMPOSE_FILE`, then `docker compose up -d --remove-orphans` stops Caddy and
+publishes the web container on the loopback again. Set `NGINX_PORT=8080`
+([section 2](#2-free-port-80-on-the-host)) and `OMEKA_SESSION_COOKIE_SECURE=true`
+in `.env` first: the overlay no longer supplies the latter. Continue with
+section 3. To reuse the
+certificate meanwhile, copy it out of `caddy_data`
+(`/data/caddy/certificates/`) before removing the volume.
 
-**Standalone nginx on the host.** The rest of this guide walks through it, with
+### Host nginx, or your own Caddy/Traefik
+
+The rest of this guide walks through a standalone nginx on the host, with
 everything around it: firewall, certificate provisioning, host hardening,
-verification. If you use Caddy or Traefik instead, only sections **2** and **6**
-(and onward) are still relevant — those proxies handle TLS and the HTTPS
-redirect themselves.
+verification. It suits institutional setups: certificates pushed by central
+IT, several sites behind one proxy, an ACME client you already run.
+
+Your own Caddy on the host works the same way with a two-line Caddyfile
+(`omeka.example.edu { reverse_proxy 127.0.0.1:8080 }`) after section 2; so
+does Traefik, with labels on the `web` service in a
+`docker-compose.override.yml`. With either, only sections **2** and **6**
+onward still apply; they handle TLS and the redirect themselves. Whatever
+proxy you use must forward `X-Forwarded-Proto` (all three do), and then
+set the [HTTPS settings](#https-settings-in-env) in `.env`.
 
 ## What the template already hardens
 
@@ -57,9 +122,10 @@ redirect themselves.
 | **Private files aren't served** | Configuration, logs, source code, and dependency lists all return 404 |
 | **Resource limits** | Each service has a CPU and memory cap, so one misbehaving part can't take the machine down |
 | **Login is rate-limited** | 5 attempts per minute on the admin login page |
+| **API rate limit, if you want it** | `NGINX_API_RATE_LIMIT=on` caps each client on the REST API; see [below](#api-rate-limit) |
 | **Versions are locked** | Every image is pinned to an exact published build, so a rebuild can't silently pull something different |
 
-What is left to you: HTTPS (this guide, including the [HTTPS settings](#https-settings-in-env)
+What is left to you: HTTPS (the [bundled overlay](#bundled-https-caddy) or this guide, including the [HTTPS settings](#https-settings-in-env)
 in `.env`), keeping `.env` out of Git and encrypting backups (they contain it),
 removing the three `OMEKA_ADMIN_*` values from `.env` once the first account
 exists (the site logs a warning at every start until you do), scheduled
@@ -358,6 +424,25 @@ Both leave running containers, volumes and their data alone. `image prune -a`
 also deletes images of services that are currently stopped (an opt-in profile
 you switched off, say); they are rebuilt or pulled the next time they start.
 Never add `--volumes` to a prune: volumes hold the database and the media.
+
+### API rate limit
+
+The public REST API (`/api/…`, and `/api-local/…`, the same data without key
+authentication that the admin forms also call) is not rate-limited by default:
+harvesters, IIIF viewers and sites that read from each other differ too much
+for one number. To cap it per client address, set in `.env` and apply with
+`docker compose up -d web`:
+
+```bash
+NGINX_API_RATE_LIMIT=on
+NGINX_API_RATE=10r/s     # the default; nginx syntax, e.g. 300r/m
+```
+
+A client may burst 20 requests at once, then gets `429 Too Many Requests`
+above the rate. The admin interface stays far below it. Before turning it on,
+check who calls the API (`docker compose logs web | grep ' /api'`): an
+in-stack client, such as a crawler or indexer container calling `http://web/api`,
+is one address and is throttled like any visitor. Keys do not exempt a client.
 
 ### Host settings
 

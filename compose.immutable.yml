@@ -24,6 +24,7 @@
 #
 #   COMPOSE_FILE=docker-compose.yml:compose.immutable.yml
 #   COMPOSE_FILE=docker-compose.yml:compose.immutable.yml:compose.amira.yml
+#   COMPOSE_FILE=docker-compose.yml:compose.immutable.yml:compose.secrets.yml:compose.amira.yml
 #
 # ORDER MATTERS. Compose cannot delete a single mount during a merge, so this
 # file replaces the whole volume list of php and web with `!override`. Listing

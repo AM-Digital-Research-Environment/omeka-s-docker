@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # CI smoke test: boots the stack, waits for health, probes HTTP behaviour,
-# and tears down (including volumes). Three variants:
+# and tears down (including volumes). Variants:
 #
 #   smoke.sh base      — generic template with its defaults, no admin env vars
 #                        (the same path the one-click bootstrap produces).
@@ -21,14 +21,38 @@
 #                        the image layer. Checks that nothing under the document
 #                        root is writable, plus the backup/restore round trip
 #                        and the A/B image rebuild on retained volumes.
+#   smoke.sh secrets   — base + compose.secrets.yml with the search profile:
+#                        all four credentials come from files in ./secrets
+#                        (special characters, trailing newline, admin
+#                        password included). Checks that no plain value is in
+#                        any container configuration or in php-fpm's
+#                        environment where it is not needed, that db, php and
+#                        typesense authenticate with the files, and that
+#                        backup/restore carries the secret files.
+#   smoke.sh tls       — base + compose.tls.yml with CADDY_TLS=internal (Caddy's
+#                        own CA, so no DNS or ACME). Every probe goes through
+#                        Caddy on ports 80/443 (curl --resolve -k): HTTP
+#                        redirects to HTTPS, exactly one HSTS header, the
+#                        session cookie is Secure, Omeka builds https:// URLs
+#                        (nginx trusts Caddy's X-Forwarded-Proto), and
+#                        backup/restore carries the certificates in caddy_data.
 #
-# Honours SMOKE_HTTP_PORT (default 80) for hosts where 80 is taken.
+# Honours SMOKE_HTTP_PORT (default 80) for hosts where 80 is taken; the tls
+# variant always needs 80 and 443.
 
 set -Eeuo pipefail
 
-variant="${1:?usage: smoke.sh base|amira|immutable}"
+variant="${1:?usage: smoke.sh base|amira|immutable|secrets|tls}"
 port="${SMOKE_HTTP_PORT:-80}"
 url="http://127.0.0.1:${port}"
+tls_host=ci.example.org
+if [[ "$variant" == tls ]]; then
+    # Caddy answers only for SERVER_NAME, with a certificate from its internal
+    # CA: point the name at this machine and accept that certificate. Every
+    # curl below, probe() included, then goes through Caddy.
+    url="https://${tls_host}"
+    curl() { command curl --resolve "${tls_host}:443:127.0.0.1" --resolve "${tls_host}:80:127.0.0.1" -k "$@"; }
+fi
 created_env=false
 stack_started=false
 backup_dir=""
@@ -57,12 +81,15 @@ cleanup() {
     rm -f -- _docker/restored-local.config.php
     if [[ "$created_env" == true ]]; then
         rm -f .env
+        # Only ever created by this script (the guard below refuses to run
+        # over an existing one).
+        [[ "$variant" != secrets ]] || rm -rf -- secrets
     fi
     exit "$status"
 }
 # Guard before installing cleanup: even a refused run must not delete a real
 # restored configuration or a developer's module. Use a disposable checkout.
-if [[ -e .env || -e "$probe_module_dir" || -e _docker/restored-local.config.php ]]; then
+if [[ -e .env || -e secrets || -e "$probe_module_dir" || -e _docker/restored-local.config.php ]]; then
     echo "Refusing to run smoke tests over existing environment/configuration/fixtures. Use a clean, disposable checkout." >&2
     exit 1
 fi
@@ -106,6 +133,43 @@ OMEKA_ADMIN_PASSWORD=ci-admin-password
 OMEKA_TITLE=CI Smoke Test
 EOF
         ;;
+    secrets)
+        cat > .env <<EOF
+COMPOSE_PROJECT_NAME=omeka-smoke-secrets-${GITHUB_RUN_ID:-$$}
+MYSQL_DATABASE=omeka_ci
+MYSQL_USER=omeka_ci
+NGINX_PORT=${port}
+COMPOSE_FILE=docker-compose.yml:compose.secrets.yml
+COMPOSE_PROFILES=search
+SECRETS_DIR=./secrets
+OMEKA_ADMIN_EMAIL=admin@example.com
+OMEKA_ADMIN_USERNAME=ci-admin
+OMEKA_TITLE=CI Smoke Test
+EOF
+        # As documented in compose.secrets.yml: 0700 directory, 0644 files,
+        # read by uid 999 (db), 33 (php) and 10002 (typesense).
+        install -d -m 0700 secrets
+        (
+            umask 022
+            # Trailing newline on purpose: every reader must strip it.
+            printf '%s\n' 'ci-secret-db-password-#=chars' > secrets/mysql_password
+            printf '%s' 'Y2ktc2VjcmV0LWtleS1mb3Itb21la2Etc21va2UtdGVzdA==' > secrets/omeka_secret_key
+            printf '%s' 'ci-secret-typesense-key' > secrets/typesense_api_key
+            printf '%s' 'ci-secret-admin-password' > secrets/omeka_admin_password
+        )
+        ;;
+    tls)
+        # No NGINX_PORT: the overlay stops publishing nginx; Caddy takes 80/443.
+        cat > .env <<EOF
+COMPOSE_PROJECT_NAME=omeka-smoke-tls-${GITHUB_RUN_ID:-$$}
+MYSQL_DATABASE=omeka_ci
+MYSQL_USER=omeka_ci
+MYSQL_PASSWORD="ci-mysql-password-with-special-#=chars"
+COMPOSE_FILE=docker-compose.yml:compose.tls.yml
+SERVER_NAME=${tls_host}
+CADDY_TLS=internal
+EOF
+        ;;
     *)
         echo "Unknown variant: $variant" >&2
         exit 1
@@ -140,9 +204,24 @@ wait_healthy() {
     done
 }
 
+# Caddy is healthy once its admin API answers; the certificate (internal CA,
+# no network involved) follows within moments.
+wait_https() {
+    local tries
+    for tries in $(seq 30); do
+        [[ "$(curl -s -o /dev/null -w '%{http_code}' "$url/application/asset/css/style.css")" != 200 ]] || return 0
+        sleep 2
+    done
+    echo "HTTPS did not answer through Caddy after $tries tries" >&2
+    return 1
+}
+
 log "Waiting for services to become healthy..."
-if [[ "$variant" == "amira" ]]; then
+if [[ "$variant" == "amira" || "$variant" == "secrets" ]]; then
     wait_healthy db php web typesense
+elif [[ "$variant" == "tls" ]]; then
+    wait_healthy db php web caddy
+    wait_https
 else
     wait_healthy db php web
 fi
@@ -159,12 +238,21 @@ done
 for svc in php db; do
     [[ -z "$(docker port "$(docker compose ps -q "$svc")")" ]]
 done
-if [[ "$variant" == "amira" ]]; then
+if [[ "$variant" == "amira" || "$variant" == "secrets" ]]; then
     cid=$(docker compose ps -q typesense)
     docker inspect -f '{{json .HostConfig.SecurityOpt}}' "$cid" | grep -F 'no-new-privileges:true'
     docker inspect -f '{{json .HostConfig.CapDrop}}' "$cid" | grep -F 'ALL'
     [[ "$(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' "$cid")" == "true" ]]
     [[ -z "$(docker port "$cid")" ]]
+fi
+if [[ "$variant" == "tls" ]]; then
+    cid=$(docker compose ps -q caddy)
+    docker inspect -f '{{json .HostConfig.SecurityOpt}}' "$cid" | grep -F 'no-new-privileges:true'
+    [[ "$(docker inspect -f '{{json .HostConfig.CapDrop}}' "$cid")" == '["ALL"]' ]]
+    [[ "$(docker inspect -f '{{json .HostConfig.CapAdd}}' "$cid")" == null ]]
+    [[ "$(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' "$cid")" == "true" ]]
+    # Only Caddy faces the host; nginx is reached over the frontend network.
+    [[ -z "$(docker port "$(docker compose ps -q web)")" ]]
 fi
 docker compose exec -T php sh -eu -c '
     test -f /var/www/html/files/.immutable-layout-v1
@@ -267,12 +355,15 @@ echo "    GET /admin (followed) -> $code"
 
 log "Checking the session cookie flags and first-install summary..."
 # Defaults: plain HTTP, so not Secure, but SameSite=Lax from the FPM pool.
+# compose.tls.yml serves HTTPS only and defaults the cookie to Secure.
 cookie=$(curl -s -D - -o /dev/null "$url/login" | grep -i '^set-cookie:' | head -n 1)
 echo "    ${cookie%%=*}=… $(grep -oiE '(; *(httponly|secure|samesite=[a-z]+))+' <<< "$cookie" || true)"
 grep -qi 'samesite=lax' <<< "$cookie"
 grep -qi 'httponly' <<< "$cookie"
+if [[ "$variant" == "tls" ]]; then
+    grep -qiE ';[[:space:]]*secure' <<< "$cookie"
 # `! cmd` never trips set -e, so negative checks use an explicit if.
-if grep -qiE ';[[:space:]]*secure' <<< "$cookie"; then
+elif grep -qiE ';[[:space:]]*secure' <<< "$cookie"; then
     echo "Session cookie is Secure although OMEKA_SESSION_COOKIE_SECURE defaults to false." >&2
     exit 1
 fi
@@ -288,6 +379,13 @@ else
     # No admin account configured: the installer must not fall back to
     # omeka-s-cli's published default (admin@example.com / "admin").
     grep -qF 'Generated admin password: ' <<< "$php_log"
+fi
+if [[ "$variant" == "secrets" ]]; then
+    grep -qF 'Admin user created: admin@example.com' <<< "$php_log"
+    if grep -qF 'ci-secret-admin-password' <<< "$php_log"; then
+        echo "SECURITY: the admin password appeared in the php log!" >&2
+        exit 1
+    fi
 fi
 
 log "Checking CSP frame-ancestors header..."
@@ -463,6 +561,107 @@ if [[ "$variant" == "base" ]]; then
     code=$(probe "$url/")
     [[ "$code" =~ ^(200|30[123])$ ]]
     echo "    backup includes module/theme volumes; restore brought them back: OK"
+fi
+
+if [[ "$variant" == "secrets" ]]; then
+    log "Checking file-based secrets (compose.secrets.yml)..."
+    secret_values=(ci-secret-db-password ci-secret-typesense-key ci-secret-admin-password
+        Y2ktc2VjcmV0LWtleS1mb3Itb21la2Etc21va2UtdGVzdA==)
+    for svc in php db typesense; do
+        cid=$(docker compose ps -q "$svc")
+        config_env=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$cid")
+        for name in MYSQL_PASSWORD OMEKA_SECRET_KEY TYPESENSE_API_KEY OMEKA_ADMIN_PASSWORD; do
+            if grep -q "^${name}=" <<< "$config_env"; then
+                echo "SECURITY: $svc configuration still carries $name" >&2
+                exit 1
+            fi
+        done
+        for value in "${secret_values[@]}"; do
+            if grep -qF -- "$value" <<< "$config_env"; then
+                echo "SECURITY: a secret value is visible in docker inspect of $svc" >&2
+                exit 1
+            fi
+        done
+    done
+    # php-fpm (PID 1) keeps only what Omeka and DRESearch read with getenv():
+    # the database and admin passwords must not be in its environment.
+    fpm_env=$(docker compose exec -T php sh -c 'tr "\0" "\n" < /proc/1/environ' | tr -d '\r')
+    for name in MYSQL_PASSWORD OMEKA_ADMIN_PASSWORD; do
+        if grep -q "^${name}=" <<< "$fpm_env"; then
+            echo "SECURITY: $name is in php-fpm's environment" >&2
+            exit 1
+        fi
+    done
+    grep -qx 'OMEKA_SECRET_KEY=Y2ktc2VjcmV0LWtleS1mb3Itb21la2Etc21va2UtdGVzdA==' <<< "$fpm_env"
+    grep -qx 'TYPESENSE_API_KEY=ci-secret-typesense-key' <<< "$fpm_env"
+    # The key Typesense loaded from its file is the one php sends.
+    docker compose exec -T -e KEY=ci-secret-typesense-key php php -r '
+        $context = stream_context_create(["http" => ["header" => "X-TYPESENSE-API-KEY: " . getenv("KEY") . "\r\n", "ignore_errors" => true]]);
+        file_get_contents("http://typesense:8108/collections", false, $context);
+        exit(str_contains($http_response_header[0] ?? "", " 200 ") ? 0 : 1);
+    '
+    # The backup/restore helpers authenticate from the db container's file.
+    docker compose exec -T db sh -eu -c '
+        exec mysql -u"$MYSQL_USER" -p"$(cat "$MYSQL_PASSWORD_FILE")" "$MYSQL_DATABASE" -e "SELECT 1"' >/dev/null
+    echo "    no plain secret in any container configuration; files authenticate db, php and typesense: OK"
+
+    log "Testing backup and restore of the secret files..."
+    backup_dir=$(mktemp -d -t omeka-smoke-backup.XXXXXX)
+    bash scripts/backup.sh "$backup_dir"
+    [[ "$(stat -c '%a' "$backup_dir/secrets")" == "700" ]]
+    for name in mysql_password omeka_secret_key typesense_api_key omeka_admin_password; do
+        [[ "$(stat -c '%a' "$backup_dir/secrets/$name")" == "600" ]]
+        cmp -s "secrets/$name" "$backup_dir/secrets/$name"
+    done
+    grep -q ' secrets/omeka_secret_key$' "$backup_dir/SHA256SUMS"
+    (cd "$backup_dir" && sha256sum --check SHA256SUMS)
+    # A lost key file is put back from the backup with the documented mode.
+    rm secrets/omeka_secret_key
+    bash scripts/restore.sh --force "$backup_dir"
+    [[ "$(stat -c '%a' secrets/omeka_secret_key)" == "644" ]]
+    cmp -s secrets/omeka_secret_key "$backup_dir/secrets/omeka_secret_key"
+    wait_healthy db php web typesense
+    code=$(probe "$url/")
+    [[ "$code" =~ ^(200|30[123])$ ]]
+    echo "    backup carries the secret files (0600); restore puts a missing one back (0644): OK"
+fi
+
+if [[ "$variant" == "tls" ]]; then
+    log "Checking the bundled HTTPS edge (compose.tls.yml)..."
+    redirect=$(curl -sS -D - -o /dev/null "http://${tls_host}/admin?x=1")
+    grep -qE '^HTTP/[0-9.]+ 30[18]' <<< "$redirect"
+    grep -qi "^location: https://${tls_host}/admin?x=1" <<< "$redirect"
+    headers=$(curl -sS -D - -o /dev/null "$url/application/asset/css/style.css")
+    grep -qE '^HTTP/[0-9.]+ 200' <<< "$headers"
+    # Caddy sets it; nginx's NGINX_HSTS_MAX_AGE stays 0. One header, not two.
+    [[ "$(grep -ci '^strict-transport-security:' <<< "$headers")" == 1 ]]
+    grep -qi '^strict-transport-security: max-age=31536000' <<< "$headers"
+    # Omeka builds absolute links from what nginx passes on: https only if
+    # nginx trusted Caddy's X-Forwarded-Proto (NGINX_TRUSTED_PROXY_CIDR).
+    curl -fsS "$url/api/vocabularies?per_page=1" \
+        | jq -e --arg prefix "https://${tls_host}/" '.[0]["@id"] | startswith($prefix)'
+    echo "    HTTP->HTTPS redirect, one HSTS header, Secure cookie, https:// URLs from Omeka: OK"
+
+    log "Testing backup and restore of the certificates (caddy_data)..."
+    cert_fingerprint() {
+        openssl s_client -connect 127.0.0.1:443 -servername "$tls_host" < /dev/null 2>/dev/null \
+            | openssl x509 -noout -fingerprint -sha256
+    }
+    before=$(cert_fingerprint)
+    [[ -n "$before" ]]
+    backup_dir=$(mktemp -d -t omeka-smoke-backup.XXXXXX)
+    bash scripts/backup.sh "$backup_dir"
+    [[ -f "$backup_dir/caddy_data.tar.gz" ]]
+    grep -q ' caddy_data.tar.gz$' "$backup_dir/SHA256SUMS"
+    (cd "$backup_dir" && sha256sum --check SHA256SUMS)
+    # Lose the certificates: without the restore Caddy would mint new ones
+    # from a new internal CA, so an identical fingerprint proves the restore.
+    docker compose exec -T caddy rm -rf /data/caddy
+    bash scripts/restore.sh --force "$backup_dir"
+    wait_healthy db php web caddy
+    wait_https
+    [[ "$(cert_fingerprint)" == "$before" ]]
+    echo "    certificates backed up and restored, not re-issued: OK"
 fi
 
 if [[ "$variant" == "immutable" ]]; then

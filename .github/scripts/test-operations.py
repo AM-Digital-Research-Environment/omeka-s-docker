@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Exercise operation failure paths with a fake Docker CLI; no real data touched."""
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -242,6 +243,7 @@ esac
         self.assertFalse((backup / "BACKUP_INCOMPLETE").exists())
         self.assertFalse((backup / "omeka_modules.tar.gz").exists())
         self.assertFalse((backup / "typesense_data.tar.gz").exists())
+        self.assertFalse((backup / "caddy_data.tar.gz").exists())
 
     def test_retention_keeps_newest_and_spares_unfinished(self):
         # Pruning deletes real backups, so pin down exactly which directories it
@@ -345,6 +347,243 @@ esac
         self.assertFalse(self.log.exists())
 
 
+class SecretFiles(unittest.TestCase):
+    """compose.secrets.yml: backup.sh and restore.sh carry the secret files."""
+
+    # Same fixture as Operations, without inheriting (and re-running) its tests.
+    setUp = Operations.setUp
+    write_executable = Operations.write_executable
+    run_script = Operations.run_script
+    archive = Operations.archive
+
+    NAMES = ("mysql_password", "omeka_secret_key", "typesense_api_key", "omeka_admin_password")
+
+    def use_secrets(self):
+        directory = self.root / "secrets"
+        self.config["secrets"] = {
+            name: {"name": "test_" + name, "file": (directory / name).as_posix()} for name in self.NAMES
+        }
+        return directory
+
+    def permissive_docker(self):
+        # restore.sh runs many containers; accept them all, log every call.
+        self.write_executable("docker", '#!/bin/bash\nprintf "%s\\n" "$*" >> "$TEST_LOG"\n'
+                              'if [[ "$*" == compose*"config --format json" ]]; then printf "%s\\n" "$TEST_CONFIG"; fi\n'
+                              'exit 0\n')
+
+    def test_backup_copies_secret_files_privately(self):
+        directory = self.use_secrets()
+        directory.mkdir(mode=0o700)
+        for name in self.NAMES:
+            (directory / name).write_text("value-of-" + name)
+            (directory / name).chmod(0o644)
+        (directory / "omeka_admin_password").write_text("")
+        self.env["TEST_ARCHIVE_SUCCESS"] = "1"
+        result = self.run_script("backup.sh", "new-backup")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        backup = self.root / "new-backup"
+        self.assertEqual((backup / "secrets").stat().st_mode & 0o777, 0o700)
+        sums = (backup / "SHA256SUMS").read_text()
+        for name in self.NAMES:
+            copy = backup / "secrets" / name
+            self.assertEqual(copy.read_text(), (directory / name).read_text())
+            self.assertEqual(copy.stat().st_mode & 0o777, 0o600)
+            self.assertIn("  secrets/" + name + "\n", sums)
+
+    def test_backup_fails_on_a_missing_secret_file(self):
+        self.use_secrets().mkdir()
+        self.env["TEST_ARCHIVE_SUCCESS"] = "1"
+        result = self.run_script("backup.sh", "new-backup")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Secret file for mysql_password is missing", result.stderr)
+        self.assertTrue((self.root / "new-backup/BACKUP_INCOMPLETE").exists())
+
+    def checksummed_archive_with_secrets(self):
+        backup = self.archive()
+        (backup / "secrets").mkdir(mode=0o700)
+        for name in self.NAMES:
+            (backup / "secrets" / name).write_text("backed-up-" + name)
+        names = ["BACKUP_FORMAT", "omeka_db.sql", "omeka_media.tar.gz", "local.config.php"]
+        names += ["secrets/" + name for name in self.NAMES]
+        (backup / "SHA256SUMS").write_text("".join(
+            hashlib.sha256((backup / name).read_bytes()).hexdigest() + "  " + name + "\n" for name in names))
+        return backup
+
+    def test_restore_puts_back_missing_secrets_and_keeps_existing_ones(self):
+        backup = self.checksummed_archive_with_secrets()
+        directory = self.use_secrets()
+        directory.mkdir(mode=0o700)
+        (directory / "mysql_password").write_text("current-db-password")
+        self.permissive_docker()
+        result = self.run_script("restore.sh", "--force", "backup")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        # The database user's password lives in the existing volume: keep it.
+        self.assertEqual((directory / "mysql_password").read_text(), "current-db-password")
+        self.assertIn("differs from the backup", result.stderr)
+        for name in self.NAMES[1:]:
+            self.assertEqual((directory / name).read_text(), (backup / "secrets" / name).read_text())
+            self.assertEqual((directory / name).stat().st_mode & 0o777, 0o644)
+
+    def test_restore_refuses_a_secret_it_cannot_supply(self):
+        self.archive()
+        self.use_secrets().mkdir()
+        self.permissive_docker()
+        result = self.run_script("restore.sh", "--force", "backup")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("backup has no copy", result.stderr)
+        self.assertNotIn("volume create", self.log.read_text())
+
+    def test_restore_rejects_an_unlisted_secret_file(self):
+        backup = self.checksummed_archive_with_secrets()
+        (backup / "secrets" / "extra").write_text("not in the manifest")
+        self.permissive_docker()
+        result = self.run_script("restore.sh", "--force", "backup")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("secrets/extra exists but is not covered", result.stderr)
+
+
+class CaddyCertificates(unittest.TestCase):
+    """compose.tls.yml: the caddy_data volume travels with the backup."""
+
+    setUp = Operations.setUp
+    write_executable = Operations.write_executable
+    run_script = Operations.run_script
+    archive = Operations.archive
+    permissive_docker = SecretFiles.permissive_docker
+
+    def use_tls(self):
+        self.config["services"]["caddy"] = {"volumes": [
+            {"type": "volume", "source": "caddy_data", "target": "/data"},
+            {"type": "volume", "source": "caddy_config", "target": "/config"}]}
+        self.config["volumes"]["caddy_data"] = {"name": "test_caddy_data"}
+        self.config["volumes"]["caddy_config"] = {"name": "test_caddy_config"}
+
+    def test_backup_includes_caddy_data_only_with_the_overlay(self):
+        self.use_tls()
+        self.env["TEST_ARCHIVE_SUCCESS"] = "1"
+        result = self.run_script("backup.sh", "new-backup")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        backup = self.root / "new-backup"
+        self.assertTrue((backup / "caddy_data.tar.gz").is_file())
+        self.assertIn("  caddy_data.tar.gz\n", (backup / "SHA256SUMS").read_text())
+        self.assertIn("test_caddy_data:/data:ro", self.log.read_text())
+        # Caddy's autosaved running config is regenerated at start: not backed up.
+        self.assertNotIn("test_caddy_config", self.log.read_text())
+
+    def test_backup_skips_a_caddy_volume_that_was_never_created(self):
+        self.use_tls()
+        self.env["TEST_ARCHIVE_SUCCESS"] = "1"
+        self.env["TEST_MISSING_VOLUME"] = "test_caddy_data"
+        result = self.run_script("backup.sh", "new-backup")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertFalse((self.root / "new-backup/caddy_data.tar.gz").exists())
+
+    def checksummed_archive_with_caddy(self):
+        backup = self.archive()
+        (backup / "caddy_data.tar.gz").write_text("caddy fixture")
+        names = ["BACKUP_FORMAT", "omeka_db.sql", "omeka_media.tar.gz", "local.config.php", "caddy_data.tar.gz"]
+        (backup / "SHA256SUMS").write_text("".join(
+            hashlib.sha256((backup / name).read_bytes()).hexdigest() + "  " + name + "\n" for name in names))
+        return backup
+
+    def test_restore_puts_caddy_data_back_with_the_overlay(self):
+        self.checksummed_archive_with_caddy()
+        self.use_tls()
+        self.permissive_docker()
+        result = self.run_script("restore.sh", "--force", "backup")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        log = self.log.read_text()
+        self.assertIn("volume create test_caddy_data", log)
+        self.assertIn("-v test_caddy_data:/data", log)
+        self.assertIn("caddy_data volume restored", result.stdout)
+
+    def test_restore_skips_caddy_data_without_the_overlay(self):
+        self.checksummed_archive_with_caddy()
+        self.permissive_docker()
+        result = self.run_script("restore.sh", "--force", "backup")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("compose.tls.yml is not active", result.stdout)
+        self.assertNotIn("caddy", self.log.read_text())
+
+
+class RestorePreflight(unittest.TestCase):
+    """restore.sh refuses dumps MySQL 9 cannot import before changing anything."""
+
+    setUp = Operations.setUp
+    write_executable = Operations.write_executable
+    run_script = Operations.run_script
+    archive = Operations.archive
+
+    # What backup.sh's mysqldump writes, abridged: header, conditional
+    # comments, tables in this server's collations, data, trailer.
+    OWN_DUMP = "\n".join([
+        "-- MySQL dump 10.13  Distrib 9.7.0, for Linux (x86_64)",
+        "--",
+        "-- Host: localhost    Database: omeka",
+        "-- ------------------------------------------------------",
+        "-- Server version\t9.7.0",
+        "/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;",
+        "/*!50503 SET NAMES utf8mb4 */;",
+        "DROP TABLE IF EXISTS `setting`;",
+        "CREATE TABLE `setting` (`id` varchar(190) COLLATE utf8mb4_unicode_ci NOT NULL)"
+        " ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+        # Data may mention anything, including the patterns refused below.
+        "INSERT INTO `setting` VALUES ('note','\\\"USE `x`; utf8mb4_uca1400_ai_ci\\\"');",
+        "/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;",
+        "-- Dump completed on 2026-11-20 10:00:00",
+        ""])
+
+    def restore_with(self, dump):
+        backup = self.archive()
+        (backup / "omeka_db.sql").write_text(dump)
+        # Declined at the prompt: the pre-flight must have run by then.
+        return self.run_script("restore.sh", "backup", input="n\n")
+
+    def assert_refused(self, result, *hints):
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("cannot be imported into this stack", result.stderr)
+        for hint in ("import-external.sh", "docs/MIGRATING.md", *hints):
+            self.assertIn(hint, result.stderr)
+        # Before Compose, volumes or containers were even looked at.
+        self.assertFalse(self.log.exists())
+
+    def test_own_backup_dump_passes_silently(self):
+        result = self.restore_with(self.OWN_DUMP)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("Aborted", result.stdout)
+        self.assertNotIn("trailer", result.stderr)
+        self.assertNotIn("ERROR", result.stderr)
+
+    def test_mariadb_sandbox_line_is_refused(self):
+        result = self.restore_with("/*M!999999\\- enable the sandbox mode */\n" + self.OWN_DUMP)
+        self.assert_refused(result, "sandbox", "--fix-mariadb")
+
+    def test_uca1400_collation_is_refused(self):
+        result = self.restore_with(self.OWN_DUMP.replace("COLLATE=utf8mb4_unicode_ci", "COLLATE=utf8mb4_uca1400_ai_ci"))
+        self.assert_refused(result, "uca1400", "--fix-mariadb")
+
+    def test_use_statement_is_refused(self):
+        result = self.restore_with(self.OWN_DUMP.replace("DROP TABLE", "USE `old_omeka`;\nDROP TABLE", 1))
+        self.assert_refused(result, "USE `old_omeka`", "--fix-portability")
+
+    def test_create_database_is_refused(self):
+        result = self.restore_with(self.OWN_DUMP.replace(
+            "DROP TABLE", "CREATE DATABASE /*!32312 IF NOT EXISTS*/ `old_omeka`;\nDROP TABLE", 1))
+        self.assert_refused(result, "CREATE DATABASE", "--fix-portability")
+
+    def test_missing_trailer_warns_but_continues(self):
+        result = self.restore_with(self.OWN_DUMP.replace("-- Dump completed on 2026-11-20 10:00:00\n", ""))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("no '-- Dump completed' trailer", result.stderr)
+        self.assertIn("Aborted", result.stdout)
+
+    def test_headerless_dump_without_trailer_is_not_flagged(self):
+        # Not every exporter writes the mysqldump header/trailer pair.
+        result = self.restore_with("CREATE TABLE `setting` (`id` int);\n")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("trailer", result.stderr)
+
+
 class PinnedImages(unittest.TestCase):
     """The alpine pin is repeated outside any Dependabot ecosystem."""
 
@@ -393,6 +632,232 @@ class PinnedImages(unittest.TestCase):
         self.assertEqual(
             len(set(found.values())), 1, f"OMEKA_VERSION defaults disagree: {found}"
         )
+
+
+class ImportExternal(unittest.TestCase):
+    """scripts/import-external.sh must write what restore.sh, unchanged, accepts.
+
+    Self-contained: builds a fake classic Omeka S tree (paths with spaces) and
+    a fake Docker CLI that runs restore.sh's helper-container scripts against
+    local directories, so the real restore.sh validation and extraction run.
+    """
+
+    TABLES = ("resource", "item", "media", "setting", "module", "user", "site", "vocabulary")
+
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory(prefix="omeka import ")
+        self.addCleanup(temp.cleanup)
+        self.base = Path(temp.name)
+        self.root = self.base / "project"
+        shutil.copytree(REPO / "scripts", self.root / "scripts")
+        (self.root / "_docker").mkdir()
+        shutil.copyfile(REPO / "_docker/local.config.php", self.root / "_docker/local.config.php")
+        (self.root / "_docker/default-modules.txt").write_text(
+            "# comment\nActivityLog\ngh:Daniel-KM/Omeka-S-module-Common\n")
+        (self.root / "Dockerfile").write_text("ARG OMEKA_VERSION=4.2.1\n")
+        (self.root / ".env").write_text("MYSQL_PASSWORD=test-only\n")
+        self.old = self.base / "old site"
+        for sub in ("application", "config", "files/original", "files/large", "files/asset",
+                    "modules/Mapping/config", "themes/default/config"):
+            (self.old / sub).mkdir(parents=True)
+        (self.old / "application/Module.php").write_text("<?php\nclass Module {\n    const VERSION = '4.1.1';\n}\n")
+        (self.old / "config/database.ini").write_text(
+            'user = "olduser"\npassword = "never-print-me"\ndbname = "old_omeka"\nhost = "db.local"\n')
+        (self.old / "config/local.config.php").write_text("<?php\nreturn ['cli' => ['phpcli_path' => null]];\n")
+        (self.old / "files/original/photo one.jpg").write_text("original")
+        (self.old / "files/large/photo one.jpg").write_text("large")
+        (self.old / "modules/Mapping/config/module.ini").write_text('[info]\nversion = "1.9.0"\n')
+        (self.old / "themes/default/config/theme.ini").write_text("[info]\n")
+        self.dump = self.base / "old dump.sql"
+        self.dump.write_text(self.sql())
+        # The fake Docker splices these paths into helper scripts, so keep them
+        # free of spaces; the backup itself still lives under a spaced path.
+        volumes = tempfile.TemporaryDirectory(prefix="omeka-import-volumes-")
+        self.addCleanup(volumes.cleanup)
+        self.volumes = Path(volumes.name)
+        (self.base / "bin").mkdir()
+        docker = self.base / "bin/docker"
+        docker.write_text(r'''#!/bin/bash
+printf '%s\n' "$*" >> "$TEST_LOG"
+case "$1 $2" in
+  'compose config') printf '%s\n' "$TEST_CONFIG"; exit 0 ;;
+  'compose ps'|'compose up'|'compose down') exit 0 ;;
+  'volume inspect') exit 1 ;;
+  'volume create') mkdir -p "$TEST_VOLUMES/$3"; exit 0 ;;
+  'compose exec')
+    case "$*" in
+      *'SELECT 1'*|*'DROP DATABASE'*) exit 0 ;;
+      *) cat > "$TEST_VOLUMES/imported.sql"; exit 0 ;;
+    esac ;;
+esac
+[[ "$1" == run ]] || { echo "Unexpected fake Docker command: $*" >&2; exit 93; }
+shift
+envs=() data="" backup="" script=""
+while (($#)); do
+  case "$1" in
+    -e) envs+=("$2"); shift ;;
+    -v) case "$2" in
+          *:/data) data="$TEST_VOLUMES/${2%:/data}" ;;
+          *:/backup:ro) ln -sfn "${2%:/backup:ro}" "$TEST_VOLUMES/backup-link"; backup="$TEST_VOLUMES/backup-link" ;;
+        esac
+        shift ;;
+    -c) script="$2"; break ;;
+  esac
+  shift
+done
+script="${script//\/data/$data}"
+script="${script//\/backup/$backup}"
+exec env "${envs[@]}" sh -eu -c "$script"
+''', newline="\n")
+        docker.chmod(0o755)
+        self.config = {"name": "test", "services": {
+            "php": {"volumes": [
+                {"type": "volume", "source": name, "target": "/var/www/html/" + name}
+                for name in ("files", "logs", "modules", "themes")]},
+            "db": {"volumes": [{"type": "volume", "source": "db", "target": "/var/lib/mysql"}]}},
+            "volumes": {name: {"name": "vol-" + name} for name in ("files", "logs", "modules", "themes", "db")}}
+        self.env = dict(os.environ, PATH=str(self.base / "bin") + os.pathsep + os.environ["PATH"],
+                        TEST_LOG=(self.base / "docker.log").as_posix(), TEST_VOLUMES=self.volumes.as_posix(),
+                        TEST_CONFIG=json.dumps(self.config), MSYS_NO_PATHCONV="1")
+        self.output = self.root / "backups/imported one"
+
+    def sql(self, header="-- MySQL dump 10.13  Distrib 8.0.36", extra="", tables=TABLES):
+        lines = [header] + ["CREATE TABLE `%s` (`id` int) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;" % t for t in tables]
+        lines += ["INSERT INTO `setting` VALUES ('administrator_email','\\\"a@example.org\\\"'),('version','\\\"4.1.1\\\"');",
+                  extra, "-- Dump completed on 2026-11-20 10:00:00", ""]
+        return "\n".join(lines)
+
+    def run_script(self, name, *args):
+        return subprocess.run([BASH, "scripts/" + name, *args], cwd=self.root, env=self.env,
+                              text=True, capture_output=True, timeout=60)
+
+    def run_import(self, *args):
+        return self.run_script("import-external.sh", "--database", str(self.dump),
+                               "--output", str(self.output), *args)
+
+    def snapshot(self, path):
+        return sorted((str(p.relative_to(path)), p.stat().st_mode, p.stat().st_size, p.stat().st_mtime_ns)
+                      for p in path.rglob("*"))
+
+    def test_output_passes_the_real_restore(self):
+        before = self.snapshot(self.old)
+        result = self.run_import("--omeka-root", str(self.old))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.snapshot(self.old), before, "the source must not be modified")
+        self.assertEqual(sorted(p.name for p in self.output.iterdir()), sorted([
+            "BACKUP_FORMAT", "SHA256SUMS", "local.config.php", "omeka_db.sql",
+            "omeka_media.tar.gz", "omeka_modules.tar.gz", "omeka_themes.tar.gz"]))
+        self.assertEqual((self.output / "BACKUP_FORMAT").read_text(), "omeka-docker-backup-v2\nlayout=immutable\n")
+        self.assertIn("OMEKA_VERSION=4.2.1", result.stdout)
+        self.assertIn("core:migrate", result.stdout)
+        self.assertIn("ActivityLog", result.stderr)  # template default missing from the old modules
+        import tarfile
+        for name, expected in (("omeka_media.tar.gz", "./original/photo one.jpg"),
+                               ("omeka_modules.tar.gz", "./Mapping/config/module.ini"),
+                               ("omeka_themes.tar.gz", "./default/config/theme.ini")):
+            with tarfile.open(self.output / name) as archive:
+                members = archive.getmembers()
+            names = [m.name for m in members]
+            self.assertIn(expected, names)
+            self.assertTrue(all(n == "." or n.startswith("./") for n in names), names)
+            self.assertTrue(all((m.uid, m.gid) == (33, 33) for m in members), name)
+            self.assertTrue(all(m.mode & 0o044 == 0o044 for m in members), name)
+            if name == "omeka_media.tar.gz":
+                self.assertIn("./.immutable-layout-v1", names)
+
+        restore = self.run_script("restore.sh", "--force", "backups/imported one")
+        self.assertEqual(restore.returncode, 0, restore.stdout + restore.stderr)
+        self.assertIn("Verifying backup checksums", restore.stdout)
+        self.assertIn("Backup layout: immutable", restore.stdout)
+        self.assertNotIn("WARNING: No SHA256SUMS", restore.stderr)
+        media = self.volumes / "vol-files"
+        self.assertTrue((media / ".immutable-layout-v1").is_file())
+        self.assertEqual((media / "original/photo one.jpg").read_text(), "original")
+        self.assertTrue((self.volumes / "vol-modules/Mapping/config/module.ini").is_file())
+        self.assertTrue((self.volumes / "vol-themes/default/config/theme.ini").is_file())
+        self.assertEqual((self.volumes / "imported.sql").read_text(), self.dump.read_text())
+        self.assertEqual((self.root / "_docker/restored-local.config.php").read_text(),
+                         (self.old / "config/local.config.php").read_text())
+        self.assertIn("OMEKA_LOCAL_CONFIG=./_docker/restored-local.config.php", (self.root / ".env").read_text())
+
+    def test_archives_and_gzipped_dump_are_accepted(self):
+        import gzip
+        files_archive = self.base / "files backup.tar.gz"
+        subprocess.run(["tar", "czf", str(files_archive), "-C", str(self.old), "files"], check=True)
+        gz = self.base / "old dump.sql.gz"
+        gz.write_bytes(gzip.compress(self.dump.read_bytes()))
+        self.dump = gz
+        result = self.run_import("--files", str(files_archive))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual((self.output / "omeka_db.sql").read_text(), self.sql())
+        listing = subprocess.run(["tar", "tzf", str(self.output / "omeka_media.tar.gz")],
+                                 check=True, capture_output=True, text=True).stdout.splitlines()
+        self.assertIn("./original/photo one.jpg", listing)
+        self.assertFalse(any("files/" in n for n in listing), listing)
+        self.assertFalse((self.output / ".import-staging").exists())
+        # No --config: the template default is used, as restore.sh requires one.
+        self.assertEqual((self.output / "local.config.php").read_text(),
+                         (self.root / "_docker/local.config.php").read_text())
+
+    def test_missing_original_is_rejected(self):
+        shutil.rmtree(self.old / "files/original")
+        result = self.run_import("--omeka-root", str(self.old))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("No original/", result.stderr)
+        self.assertFalse(self.output.exists())
+
+    def test_non_omeka_dump_is_rejected(self):
+        self.dump.write_text(self.sql(tables=("wp_posts", "wp_options")))
+        result = self.run_import("--omeka-root", str(self.old))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("does not look like an Omeka S database", result.stderr)
+        self.assertFalse(self.output.exists())
+
+    def test_existing_output_is_not_overwritten(self):
+        self.output.mkdir(parents=True)
+        (self.output / "keep").write_text("mine")
+        result = self.run_import("--omeka-root", str(self.old))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("already exists", result.stderr)
+        self.assertEqual([p.name for p in self.output.iterdir()], ["keep"])
+
+    def test_dry_run_writes_nothing(self):
+        result = self.run_import("--omeka-root", str(self.old), "--dry-run")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("nothing was written", result.stdout)
+        self.assertFalse(self.output.exists())
+        self.assertFalse((self.root / "backups").exists())
+
+    def test_missing_database_prints_dump_command_without_password(self):
+        result = self.run_script("import-external.sh", "--omeka-root", str(self.old))
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        for fragment in ("--single-transaction --routines --triggers --no-tablespaces",
+                         "--default-character-set=utf8mb4", "-u olduser -p", "old_omeka", "db.local"):
+            self.assertIn(fragment, result.stdout)
+        self.assertNotIn("never-print-me", result.stdout + result.stderr)
+
+    def test_fix_mariadb_rewrites_only_when_asked(self):
+        mariadb = ("/*!999999\\- enable the sandbox mode */\n"
+                   + self.sql(header="-- MariaDB dump 10.19-11.4.2-MariaDB",
+                              extra="CREATE TABLE `x` (`id` int) ENGINE=Aria PAGE_CHECKSUM=1 "
+                                    "DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;\n"
+                                    "USE `old_omeka`;\n"
+                                    "/*!50003 CREATE*/ /*!50017 DEFINER=`root`@`localhost`*/ /*!50003 TRIGGER t */;;"))
+        self.dump.write_text(mariadb)
+        plain = self.run_import("--omeka-root", str(self.old), "--dry-run")
+        self.assertEqual(plain.returncode, 0, plain.stderr)
+        for hint in ("sandbox mode", "--fix-mariadb", "DEFINER", "CREATE DATABASE/USE", "--fix-portability"):
+            self.assertIn(hint, plain.stderr)
+        result = self.run_import("--omeka-root", str(self.old), "--fix-mariadb", "--fix-portability")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        sql = (self.output / "omeka_db.sql").read_text()
+        for gone in ("sandbox mode", "uca1400", "ENGINE=Aria", "PAGE_CHECKSUM", "DEFINER=", "USE `old_omeka`"):
+            self.assertNotIn(gone, sql)
+        self.assertIn("COLLATE=utf8mb4_unicode_ci", sql)
+        self.assertIn("ENGINE=InnoDB", sql)
+        self.assertIn("/*!50017*/", sql)
+        self.assertIn("('version','\\\"4.1.1\\\"')", sql, "data rows must be left alone")
+        self.assertEqual(self.dump.read_text(), mariadb, "the source dump must not be modified")
 
 
 if __name__ == "__main__":

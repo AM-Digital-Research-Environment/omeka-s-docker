@@ -23,6 +23,70 @@ fi
 
 OMEKA_ROOT="/var/www/html"
 
+# Conventional *_FILE support, as in the official mysql and postgres images:
+# VAR may instead come from the file named by VAR_FILE (compose.secrets.yml
+# points these at /run/secrets/<name>). Setting both is an error rather than a
+# silent precedence rule. Trailing newlines are dropped, so a file written
+# with `echo` works. The value lands in a shell variable only; whether it is
+# exported to php-fpm is decided per variable before the final exec below.
+file_env() {
+    local var="$1"
+    local file_var="${var}_FILE"
+    local file="${!file_var:-}"
+    [[ -n "$file" ]] || return 0
+    if [[ -n "${!var:-}" ]]; then
+        log_error "Both ${var} and ${file_var} are set; set only one of them."
+        exit 1
+    fi
+    if [[ ! -f "$file" || ! -r "$file" ]]; then
+        log_error "${file_var}=${file} is missing or not readable by uid $(id -u)."
+        log_error "Secret files must exist and be world-readable (0644) inside a 0700"
+        log_error "directory; see compose.secrets.yml."
+        exit 1
+    fi
+    printf -v "$var" '%s' "$(< "$file")"
+}
+
+load_secrets() {
+    # compose.secrets.yml lists here the names (never the values) of the four
+    # variables that are still set in .env or the shell. It deletes them from
+    # the container configuration, so they would otherwise be ignored without
+    # a word while .env keeps holding the secret.
+    local leftover="${OMEKA_SECRETS_ALSO_IN_ENV:-}"
+    if [[ -n "${leftover// /}" ]]; then
+        log_error "compose.secrets.yml is active, but these are still set in .env (or the shell):"
+        log_error "  ${leftover}"
+        log_error "Their values now come from the files in SECRETS_DIR. Delete them from .env"
+        log_error "and recreate the containers: docker compose up -d"
+        exit 1
+    fi
+    # docker-compose.yml lets SECRETS_DIR stand in for MYSQL_PASSWORD so the
+    # overlay can work; without the overlay this marker is what arrives.
+    if [[ "${MYSQL_PASSWORD:-}" == compose.secrets.yml-is-not-loaded:* ]]; then
+        log_error "SECRETS_DIR is set but compose.secrets.yml is not in COMPOSE_FILE."
+        log_error "Add it (COMPOSE_FILE=docker-compose.yml:compose.secrets.yml, see .env.example),"
+        log_error "or remove SECRETS_DIR and set MYSQL_PASSWORD in .env."
+        log_error "If the database was first initialised by this start, its user now has a"
+        log_error "placeholder password: remove that fresh mysql_data volume before retrying."
+        exit 1
+    fi
+    file_env MYSQL_PASSWORD
+    file_env OMEKA_SECRET_KEY
+    file_env TYPESENSE_API_KEY
+    file_env OMEKA_ADMIN_PASSWORD
+    if [[ -n "${MYSQL_PASSWORD_FILE:-}" && -z "${MYSQL_PASSWORD:-}" ]]; then
+        log_error "${MYSQL_PASSWORD_FILE} is empty; it must hold the database password."
+        exit 1
+    fi
+    # Omeka (the Common module) and DRESearch read these with getenv() in
+    # every request, and php-fpm passes its environment to the workers
+    # (clear_env = no), so they must stay exported. With *_FILE they are thus
+    # still in php-fpm's environment; what the file mode removes is their
+    # presence in .env, `docker inspect` and `docker compose config`.
+    export OMEKA_SECRET_KEY="${OMEKA_SECRET_KEY:-}"
+    export TYPESENSE_API_KEY="${TYPESENSE_API_KEY:-}"
+}
+
 fpm_pool_config() {
     # Generate PHP-FPM pool configuration (supports runtime tuning via
     # env vars)
@@ -106,7 +170,9 @@ omeka_create_db_config() {
     # database.ini is a symlink into /run/omeka (tmpfs). Generate it directly:
     # omeka-s-cli deliberately requires the immutable config directory itself
     # to be writable, even when its output path is a symlink.
-    php <<'PHP'
+    # MYSQL_PASSWORD is passed to this one command explicitly: read from a
+    # file it is a shell variable only, never exported (see load_secrets).
+    MYSQL_PASSWORD="${MYSQL_PASSWORD:-}" php <<'PHP'
 <?php
 $values = [];
 foreach (['MYSQL_USER', 'MYSQL_PASSWORD', 'MYSQL_DATABASE', 'MYSQL_HOST'] as $name) {
@@ -138,7 +204,7 @@ wait_for_db() {
     # TCP connections yet (e.g. after a db restart while php stayed up).
     log_step "Waiting for the database to accept connections..."
     local tries=0
-    until php -r 'new mysqli(getenv("MYSQL_HOST"), getenv("MYSQL_USER"), getenv("MYSQL_PASSWORD"), getenv("MYSQL_DATABASE"));' >/dev/null 2>&1; do
+    until MYSQL_PASSWORD="${MYSQL_PASSWORD:-}" php -r 'new mysqli(getenv("MYSQL_HOST"), getenv("MYSQL_USER"), getenv("MYSQL_PASSWORD"), getenv("MYSQL_DATABASE"));' >/dev/null 2>&1; do
         tries=$((tries + 1))
         if (( tries >= 30 )); then
             log_error "Database not reachable after ${tries} attempts, giving up."
@@ -200,8 +266,14 @@ omeka_install() {
         # later does not change the real password either.
         if [[ -n "${OMEKA_ADMIN_PASSWORD:-}" ]]; then
             log_warn "OMEKA_ADMIN_PASSWORD is set, but it is only used by the first install."
-            log_warn "Remove OMEKA_ADMIN_EMAIL, OMEKA_ADMIN_USERNAME and OMEKA_ADMIN_PASSWORD from .env"
-            log_warn "and recreate the php container; change passwords in the Omeka admin instead."
+            if [[ -n "${OMEKA_ADMIN_PASSWORD_FILE:-}" ]]; then
+                log_warn "Empty ${OMEKA_ADMIN_PASSWORD_FILE} on the host (secrets/omeka_admin_password),"
+                log_warn "remove OMEKA_ADMIN_EMAIL and OMEKA_ADMIN_USERNAME from .env, and recreate"
+                log_warn "the php container; change passwords in the Omeka admin instead."
+            else
+                log_warn "Remove OMEKA_ADMIN_EMAIL, OMEKA_ADMIN_USERNAME and OMEKA_ADMIN_PASSWORD from .env"
+                log_warn "and recreate the php container; change passwords in the Omeka admin instead."
+            fi
         fi
     fi
 }
@@ -314,7 +386,7 @@ omeka_fresh_install_summary() {
     log_info "------------------------------------------------------------"
     log_info "Omeka S is installed and ready."
     if [[ "$admin_created" == true ]]; then
-        log_info "Admin user created: ${admin_email} (password: the one from .env)."
+        log_info "Admin user created: ${admin_email} (password: the one from ${OMEKA_ADMIN_PASSWORD_FILE:-.env})."
     else
         log_info "Admin user created: ${admin_email}"
         log_info "Generated admin password: ${generated_admin_password}"
@@ -322,11 +394,20 @@ omeka_fresh_install_summary() {
         log_info "Password tab; set the e-mail address there too."
     fi
     log_info "Next steps:"
-    log_info "  1. Open the site in a browser and sign in at /login."
-    log_info "  2. Put HTTPS in front of it (a reverse proxy or load balancer)."
-    log_info "  3. Once it is served over HTTPS, set OMEKA_SESSION_COOKIE_SECURE=true."
+    log_info "  - Open the site in a browser and sign in at /login."
+    # compose.tls.yml (bundled Caddy) already serves HTTPS and makes the cookie
+    # Secure; only a plain-HTTP stack still has these two steps ahead of it.
+    if [[ "${OMEKA_SESSION_COOKIE_SECURE:-false}" != true ]]; then
+        log_info "  - Put HTTPS in front of it: compose.tls.yml, or your own reverse proxy"
+        log_info "    (docs/PRODUCTION.md). Then set OMEKA_SESSION_COOKIE_SECURE=true."
+    fi
     if [[ -n "${OMEKA_ADMIN_PASSWORD:-}" ]]; then
-        log_info "  4. Remove OMEKA_ADMIN_* from .env; they are not needed after this install."
+        if [[ -n "${OMEKA_ADMIN_PASSWORD_FILE:-}" ]]; then
+            log_info "  - Empty secrets/omeka_admin_password and remove OMEKA_ADMIN_* from .env;"
+            log_info "    they are not needed after this install."
+        else
+            log_info "  - Remove OMEKA_ADMIN_* from .env; they are not needed after this install."
+        fi
     fi
     log_info "------------------------------------------------------------"
 }
@@ -336,6 +417,7 @@ admin_created=false
 admin_email=""
 generated_admin_password=""
 
+load_secrets
 fpm_pool_config
 
 # The DB config must be written first, as it is used during
@@ -371,5 +453,13 @@ omeka_import_vocabularies
 if [[ "$fresh_install" == true ]]; then
     omeka_fresh_install_summary
 fi
+
+# Nothing in php-fpm needs these: the database credentials are in
+# /run/omeka/database.ini now, and the admin password was only for the first
+# install. php-fpm hands its environment to every worker (clear_env = no), so
+# dropping them keeps them out of getenv(), phpinfo() and the error pages of
+# every request, in both modes. `docker compose exec php ...` sessions are
+# unaffected: they get the container's configured environment, not this one.
+unset MYSQL_PASSWORD OMEKA_ADMIN_PASSWORD
 
 exec "$@"

@@ -104,12 +104,15 @@ updates:
     cooldown:
       default-days: 7
 
-  # Monitor the image tag pinned in docker-compose.yml: mysql. (typesense is
-  # built from _docker/typesense, tracked above.)
-  # (nginx is built from the Dockerfile's web target, so the ecosystem above
-  # owns it.) This ecosystem only matches conventional Compose filenames, so
-  # the compose.<name>.yml overlays are NOT scanned — neither pins an `image:`
-  # today, and one added there would need its own tracking.
+  # Monitor the image tags pinned in the Compose files of the repository root:
+  # mysql in docker-compose.yml and caddy in compose.tls.yml. (typesense is
+  # built from _docker/typesense, tracked above; nginx is built from the
+  # Dockerfile's web target, so the first ecosystem owns it.)
+  # The overlays are scanned too: Dependabot picks Compose files by the
+  # unanchored pattern /(docker-)?compose(-[\w]+)?(?>\.[\w-]+)?\.ya?ml/i
+  # (dependabot-core, docker/lib/dependabot/docker_compose/file_fetcher.rb),
+  # which matches compose.<name>.yml. Only files in this directory, though: an
+  # `image:` pinned in a Compose file under a subdirectory needs its own entry.
   - package-ecosystem: "docker-compose"
     directory: "/"
     schedule:
@@ -133,8 +136,14 @@ updates:
     # rather than moving the version forward. This deployment follows LTS, so
     # block majors — 9.7.x patches and 9.x minors still flow, and adopting a
     # future LTS stays a deliberate change.
+    #
+    # Caddy: 2.x minors and patches flow; a Caddy 3 would change the Caddyfile
+    # and defaults compose.tls.yml relies on, so moving to it stays deliberate.
     ignore:
       - dependency-name: "mysql"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "caddy"
         update-types:
           - "version-update:semver-major"
 

@@ -229,6 +229,30 @@ docker compose config --services
 Once `COMPOSE_FILE` and `COMPOSE_PROFILES` are in `.env`, every command on this
 page picks them up automatically. Nothing else changes.
 
+The template's own overlays, in the order they go into `COMPOSE_FILE`
+([details](INSTITUTION_SETUP.md#overlay-order)):
+
+| Overlay | What it does |
+|---|---|
+| `compose.immutable.yml` | Modules and themes become image content ([IMMUTABLE_CODE.md](IMMUTABLE_CODE.md#locking-modules-and-themes-down)) |
+| `compose.secrets.yml` | Credentials in files instead of `.env` ([CONFIGURATION.md](CONFIGURATION.md#file-based-secrets-optional)) |
+| `compose.tls.yml` | HTTPS through a bundled Caddy; not with a host proxy ([PRODUCTION.md](PRODUCTION.md#bundled-https-caddy)) |
+
+With `compose.tls.yml`:
+
+```bash
+docker compose logs -f caddy      # certificate requests and renewals
+docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+                                  # apply an edit of _docker/caddy/Caddyfile
+```
+
+Moving in a site that does not come from this template:
+
+```bash
+bash scripts/import-external.sh --omeka-root /var/www/omeka-s --database dump.sql
+bash scripts/restore.sh backups/imported-<date>     # see docs/MIGRATING.md
+```
+
 ## Modules
 
 On the running site — the same thing the Easy Admin module does in the browser:

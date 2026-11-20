@@ -21,6 +21,15 @@
 #   COMPOSE_PROFILES=search
 #   FRAME_ANCESTORS="'self' https://www.frederickmadore.com https://slides.frederickmadore.com"
 #
+# With file-based secrets (compose.secrets.yml) or compose.immutable.yml, list
+# those first; this overlay comes last:
+#
+#   COMPOSE_FILE=docker-compose.yml:compose.secrets.yml:compose.amira.yml
+#   COMPOSE_FILE=docker-compose.yml:compose.immutable.yml:compose.secrets.yml:compose.amira.yml
+#
+# Its MCP services use none of those four secrets; the curator endpoint keeps
+# its own key in AMIRA_CURATOR_SECRETS_DIR (below), mounted as a directory.
+#
 # Plain `docker compose up -d` then behaves exactly as before. Without these
 # lines the base stack runs standalone — this file also serves as the worked
 # example of extending the template with deployment-specific services.

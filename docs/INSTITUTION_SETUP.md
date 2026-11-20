@@ -8,7 +8,11 @@ You can then adopt upstream fixes without editing the shared Dockerfile.
 
 Copy `.env.example` to `.env`, set a strong `MYSQL_PASSWORD`, and set your
 `SERVER_NAME`. Keep the default loopback web binding when a host reverse proxy
-terminates TLS. Start with `docker compose up -d --build`.
+terminates TLS. Start with `docker compose up -d --build`. On a single server
+with a public DNS name and no proxy of its own, `compose.tls.yml` adds HTTPS
+instead (see [Overlay order](#overlay-order) and
+[PRODUCTION.md](PRODUCTION.md#bundled-https-caddy)). An existing Omeka S site
+moves in with `scripts/import-external.sh`; see [MIGRATING.md](MIGRATING.md).
 
 For a deliberately direct HTTP installation without a proxy:
 
@@ -60,6 +64,30 @@ Both services must use identical build arguments. If extensions should be
 immutable, put `compose.immutable.yml` immediately after the base file and
 before your institutional overlay. Otherwise extensions remain admin-managed
 on persistent volumes. Rebuilds alone do not update existing extension volumes.
+
+## Overlay order
+
+The template's own overlays and yours go into one `COMPOSE_FILE` line, in this
+order. Leave out what you do not use.
+
+| Position | File | Why there |
+|---|---|---|
+| 1 | `docker-compose.yml` | The base stack |
+| 2 | `compose.immutable.yml` | Replaces the web and php volume lists wholesale, so anything listed before it loses its mounts. CI rejects the other order |
+| 3 | `compose.secrets.yml` | Swaps the four credentials for files; deployment overlays build on the result |
+| 4 | Your deployment overlay (`compose.example.yml`, `compose.amira.yml`) | Builds on everything above |
+| 5 | `compose.tls.yml` | Last by convention; it only adds Caddy, unpublishes nginx and sets one php variable |
+
+```dotenv
+COMPOSE_FILE=docker-compose.yml:compose.immutable.yml:compose.secrets.yml:compose.example.yml
+COMPOSE_FILE=docker-compose.yml:compose.immutable.yml:compose.secrets.yml:compose.tls.yml
+```
+
+`compose.tls.yml` (bundled Caddy on ports 80/443) replaces a host reverse
+proxy: it stops publishing nginx on the loopback, where a host proxy (such as
+the one `compose.amira.yml` expects) would connect. Use one or the other; a
+deployment overlay of your own that needs no host proxy can go before it. CI
+checks the supported combinations (`.github/scripts/check-compose.py`).
 
 `scripts/update-module.sh` checks only generic and selected deployment
 manifests, including custom file paths. `scripts/update-extensions.sh` also

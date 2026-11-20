@@ -3,6 +3,9 @@
 .env.*
 !.env.example
 
+# File-based secrets for compose.secrets.yml (the default SECRETS_DIR).
+/secrets/
+
 # Docker volumes (managed by Docker)
 mysql_data/
 omeka_files/

@@ -16,6 +16,8 @@ storage layout the site was on when it was taken.
 | `images.json` | Which images the site was running, for the record |
 | `sideload.tar.gz` | The sideload folder, if it has anything in it |
 | `.env` | All your settings — **including passwords** |
+| `secrets/<name>` | Only with `compose.secrets.yml`: the secret files (`mysql_password`, `omeka_secret_key`, `typesense_api_key`, `omeka_admin_password`), copied from `SECRETS_DIR` |
+| `caddy_data.tar.gz` | Only with `compose.tls.yml`: Caddy's certificates, their private keys and the ACME account key |
 | `SHA256SUMS` | A checksum for every file above |
 
 Modules and themes are included because the running site owns them: they can be
@@ -24,6 +26,14 @@ what a site actually has. A site that has only ever run with
 `compose.immutable.yml` keeps them in the image and has no such storage, so
 those two archives are simply absent from its backups.
 
+Certificates could always be requested again, but not as often as you like:
+Let's Encrypt issues only five identical certificates a week, so a few
+restores onto fresh hosts while testing could leave the site without HTTPS for
+days. That is why `caddy_data` is saved when `compose.tls.yml` is active. Like
+`.env`, it holds private keys: one more reason to encrypt backups. A restore
+puts it back only where `compose.tls.yml` is active; elsewhere it is skipped,
+and Caddy obtains new certificates if you switch the overlay on later.
+
 ### What is deliberately left out
 
 | Not backed up | Why |
@@ -31,6 +41,7 @@ those two archives are simply absent from its backups.
 | Omeka itself and its libraries | They come from the image. The repository, at the revision you built from, is the record of them; deployment configuration is backed up separately |
 | Typesense search index | Derived from Omeka; a live filesystem copy is not a supported database snapshot |
 | Login sessions | Nothing worth keeping; people simply log in again |
+| `caddy_config` (with `compose.tls.yml`) | Caddy's autosaved running configuration, rewritten from the Caddyfile at every start |
 | `dre_visualizations_private` (AMIRA only) | Rebuilt from the database by the admin "Regenerate" action |
 | `sparql_data`, `sparql_socket` (AMIRA only) | The SPARQL endpoint reloads its store from the Linked Data dump, which is in `omeka_media` |
 | `deploy/amira/curator-secrets/` (AMIRA only) | The curator endpoint's Omeka key and token hashes. A lost key is replaced by a new one in Omeka and tokens are re-issued; keep your own copy of the tokens file if re-issuing every token would be a nuisance. Its cache is a tmpfs and holds nothing durable |
@@ -93,11 +104,14 @@ Volume names are resolved from active Compose mounts, including custom names.
 Old, unmounted extension volumes are ignored. Bind mounts for media, logs or
 the database are not supported by these helpers and fail before data operations.
 
-The backup folder is readable only by the user who made it, and `.env` and
-`local.config.php` more tightly still. The checksums tell you whether a copy
-arrived intact — they are not encryption. **A backup contains your `.env`, and
-therefore your passwords, so encrypt it before it goes anywhere else**, and keep
-at least one copy off this server that you have actually tried restoring.
+The backup folder is readable only by the user who made it, and `.env`,
+`local.config.php` and the `secrets/` files (mode `0600`, in a `0700` folder)
+more tightly still. The checksums tell you whether a copy arrived intact — they
+are not encryption. **A backup contains your `.env` (or, with
+`compose.secrets.yml`, its `secrets/` folder), and therefore your passwords and
+the key that decrypts secrets stored in the database, so encrypt it before it
+goes anywhere else**, and keep at least one copy off this server that you have
+actually tried restoring.
 
 ## Restoring
 
@@ -109,9 +123,24 @@ bash scripts/restore.sh --force backups/20260731-120000
 ```
 
 Restore checks every checksum before it changes anything, and warns you if it is
-about to overwrite storage that already has something in it. It puts the
+about to overwrite storage that already has something in it. It also reads the
+database dump first and refuses one that this stack's MySQL would reject half-way
+through: MariaDB's sandbox-mode first line, `utf8mb4_uca1400` collations, or
+`CREATE DATABASE`/`USE` statements. Dumps made by `scripts/backup.sh` never have
+these; a dump from another site goes through `scripts/import-external.sh`
+first ([MIGRATING.md](MIGRATING.md)). A dump with a `mysqldump` header but
+without its `-- Dump completed` trailer was probably cut off, and restore warns. It puts the
 configuration file back as `_docker/restored-local.config.php` for you to review
 rather than overwriting yours, recreates the database, and starts the site.
+
+With `compose.secrets.yml`, restore puts back any secret file that is missing
+from `SECRETS_DIR` (mode `0644`, in a `0700` folder it creates if needed) and
+keeps the ones already there, like an existing `.env`: the database user's
+password lives in the database volume, which a restore does not replace. It
+warns when a kept file differs from the backup's copy; for `omeka_secret_key`
+that matters, because values Omeka encrypted with the backup's key stay
+unreadable until that key is back. A restore that would need a secret file the
+backup does not have stops before changing anything.
 
 **Restoring replaces what is there, and it cannot be half-done.** If it is
 interrupted, fix whatever stopped it and run it again from the same backup.
@@ -129,6 +158,14 @@ interrupted, fix whatever stopped it and run it again from the same backup.
 
 Step 2 matters as much as the backup: the backup holds your data, and the
 repository at that commit is what rebuilds the same Omeka around it.
+
+With `compose.tls.yml`, the certificates come along in the backup, and Caddy
+serves them as soon as DNS points at the new server; until then it cannot renew
+them there, which is fine for weeks.
+
+This is for sites that already run from this template. A site from a classic
+install, shared hosting or another Docker image moves in through
+`scripts/import-external.sh` instead: see [MIGRATING.md](MIGRATING.md).
 
 ## A retention schedule to copy
 

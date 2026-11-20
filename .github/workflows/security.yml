@@ -70,12 +70,16 @@ jobs:
           - name: sparql
             service: sparql
             compose: --profile sparql -f docker-compose.yml -f compose.amira.yml
+          - name: caddy
+            service: caddy
+            compose: -f docker-compose.yml -f compose.tls.yml
     env:
       # Placeholders so `docker compose config` resolves; nothing is started.
       MYSQL_DATABASE: scan
       MYSQL_USER: scan
       MYSQL_PASSWORD: scan-placeholder
       TYPESENSE_API_KEY: scan-placeholder
+      # compose.tls.yml refuses to render without it.
       SERVER_NAME: scan.example.org
       COMPOSE_PROJECT_NAME: scan
       COMPOSE_ARGS: ${{ matrix.compose }}
@@ -268,7 +272,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          EXPECTED_IMAGES: "7"
+          EXPECTED_IMAGES: "8"
           # Assigned, and so notified. Override with the ISSUE_ASSIGNEE
           # repository variable.
           ISSUE_ASSIGNEE: ${{ vars.ISSUE_ASSIGNEE || (github.repository == 'AM-Digital-Research-Environment/omeka-s-docker' && 'fmadore' || '') }}

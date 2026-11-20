@@ -32,12 +32,12 @@ jobs:
 
       - name: Shell script syntax
         run: |
-          for script in docker-entrypoint.sh scripts/*.sh deploy/amira/*.sh deploy/amira/sparql/*.sh .github/scripts/*.sh; do
+          for script in docker-entrypoint.sh _docker/typesense/entrypoint.sh scripts/*.sh deploy/amira/*.sh deploy/amira/sparql/*.sh .github/scripts/*.sh; do
             bash -n "$script"
           done
 
       - name: ShellCheck
-        run: shellcheck --severity=warning docker-entrypoint.sh scripts/*.sh deploy/amira/*.sh deploy/amira/sparql/*.sh .github/scripts/*.sh
+        run: shellcheck --severity=warning docker-entrypoint.sh _docker/typesense/entrypoint.sh scripts/*.sh deploy/amira/*.sh deploy/amira/sparql/*.sh .github/scripts/*.sh
 
       - name: Operation failure paths (no containers)
         run: python3 .github/scripts/test-operations.py
@@ -83,6 +83,79 @@ jobs:
           fi
           echo "Unsupported ordering correctly rejected."
 
+      # compose.secrets.yml: the same contracts with the four credentials read
+      # from files. The plain variables are removed from the environment, as
+      # an operator removes them from .env; SECRETS_DIR stands in for
+      # MYSQL_PASSWORD (see docker-compose.yml). The files need not exist for
+      # `config`. Supported order: base, [immutable], secrets, [deployment].
+      - name: Validate Compose security contract (secrets overlay variants)
+        run: |
+          set -euo pipefail
+          check() {
+            local mode="$1"; shift
+            env -u MYSQL_PASSWORD -u TYPESENSE_API_KEY SECRETS_DIR=./secrets \
+              docker compose "$@" config --format json | python3 .github/scripts/check-compose.py "$mode"
+          }
+          check secrets --profile search -f docker-compose.yml -f compose.secrets.yml
+          check immutable-secrets --profile search -f docker-compose.yml -f compose.immutable.yml -f compose.secrets.yml
+          check amira-secrets --profile search --profile sparql -f docker-compose.yml -f compose.secrets.yml -f compose.amira.yml
+          check amira-curator-secrets --profile search --profile sparql --profile curator -f docker-compose.yml -f compose.secrets.yml -f compose.amira.yml
+          check amira-immutable-secrets --profile search --profile sparql -f docker-compose.yml -f compose.immutable.yml -f compose.secrets.yml -f compose.amira.yml
+
+      # A credential left in .env next to its secret file would be dropped by
+      # the overlay without a word; the contract (and the php entrypoint)
+      # must refuse it instead.
+      - name: Reject a plain credential left beside compose.secrets.yml
+        run: |
+          if SECRETS_DIR=./secrets docker compose --profile search -f docker-compose.yml -f compose.secrets.yml config --format json | python3 .github/scripts/check-compose.py secrets; then
+            echo "ERROR: MYSQL_PASSWORD/TYPESENSE_API_KEY set beside compose.secrets.yml, but the contract accepted it." >&2
+            exit 1
+          fi
+          echo "Leftover plain credentials correctly rejected."
+
+      # compose.tls.yml: bundled Caddy in front of nginx. Listed last, after
+      # the immutable and secrets overlays; not combined with compose.amira.yml
+      # (a host-proxy deployment). SERVER_NAME comes from the job env.
+      - name: Validate Compose security contract (TLS overlay variants)
+        run: |
+          set -euo pipefail
+          docker compose --profile search -f docker-compose.yml -f compose.tls.yml config --format json \
+            | python3 .github/scripts/check-compose.py tls
+          docker compose --profile search -f docker-compose.yml -f compose.immutable.yml -f compose.tls.yml config --format json \
+            | python3 .github/scripts/check-compose.py immutable-tls
+          env -u MYSQL_PASSWORD -u TYPESENSE_API_KEY SECRETS_DIR=./secrets \
+            docker compose --profile search -f docker-compose.yml -f compose.secrets.yml -f compose.tls.yml config --format json \
+            | python3 .github/scripts/check-compose.py secrets-tls
+          env -u MYSQL_PASSWORD -u TYPESENSE_API_KEY SECRETS_DIR=./secrets \
+            docker compose --profile search -f docker-compose.yml -f compose.immutable.yml -f compose.secrets.yml -f compose.tls.yml config --format json \
+            | python3 .github/scripts/check-compose.py immutable-secrets-tls
+
+      # Caddy would ask the CA for a certificate for "" or for nginx's "_"
+      # catch-all and keep failing: Compose must refuse an unset SERVER_NAME,
+      # and the contract an explicit "_".
+      - name: Reject compose.tls.yml without a real SERVER_NAME
+        run: |
+          if env -u SERVER_NAME docker compose -f docker-compose.yml -f compose.tls.yml config -q 2>/dev/null; then
+            echo "ERROR: compose.tls.yml rendered without SERVER_NAME." >&2
+            exit 1
+          fi
+          if SERVER_NAME=_ docker compose --profile search -f docker-compose.yml -f compose.tls.yml config --format json \
+              | python3 .github/scripts/check-compose.py tls; then
+            echo "ERROR: compose.tls.yml with SERVER_NAME=_ passed the contract." >&2
+            exit 1
+          fi
+          echo "Missing or catch-all SERVER_NAME correctly rejected."
+
+      # The base stack must still demand MYSQL_PASSWORD when neither it nor
+      # SECRETS_DIR is set: plain `cp .env.example .env` users rely on it.
+      - name: Base stack still requires MYSQL_PASSWORD
+        run: |
+          if env -u MYSQL_PASSWORD docker compose config -q 2>/dev/null; then
+            echo "ERROR: docker compose config succeeded without MYSQL_PASSWORD." >&2
+            exit 1
+          fi
+          echo "Missing MYSQL_PASSWORD correctly rejected."
+
       # Renders the nginx templates as Compose mounts them and runs nginx -t in
       # a throwaway container from the web target's nginx image, with every
       # upstream absent. Then checks with real requests that the access log
@@ -104,7 +177,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [base, amira, immutable]
+        variant: [base, amira, immutable, secrets, tls]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -118,5 +191,11 @@ jobs:
       # Immutable checks the hardened overlay: nothing under the document root
       # writable, backup/restore, and an A/B image rebuild proving code changes
       # while database/media volumes remain intact.
+      # Secrets runs the base stack plus compose.secrets.yml and the search
+      # profile with every credential in a file: nothing in docker inspect,
+      # db/php/typesense authenticate, backup/restore carry the files.
+      # TLS runs base + compose.tls.yml with Caddy's internal CA on the
+      # runner's free ports 80/443: redirect, HSTS, Secure cookie, https://
+      # URLs from Omeka, and the certificates surviving backup/restore.
       - name: Smoke test — ${{ matrix.variant }}
         run: bash .github/scripts/smoke.sh "${{ matrix.variant }}"

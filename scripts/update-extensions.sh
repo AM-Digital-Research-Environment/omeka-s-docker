@@ -59,6 +59,24 @@ sys.exit(0 if any(
 ) else 1)
 ' <<< "$compose_config" && volume_layout=true
 
+# Module install/update/upgrade code runs inside omeka-s-cli and may encrypt
+# or decrypt settings with OMEKA_SECRET_KEY (the Common module) or reach
+# Typesense. With compose.secrets.yml, `docker compose exec` sessions see only
+# the *_FILE paths, not the values the entrypoint exported to php-fpm, so load
+# them for those commands exactly as the .env-based setup would provide them.
+php_cli=(docker compose exec -T php)
+if python3 -c '
+import json, sys
+env = json.load(sys.stdin)["services"]["php"].get("environment") or {}
+sys.exit(0 if "OMEKA_SECRET_KEY_FILE" in env or "TYPESENSE_API_KEY_FILE" in env else 1)
+' <<< "$compose_config"; then
+    # shellcheck disable=SC2016 # expanded by the container's shell, not here
+    php_cli+=(sh -c '
+        if [ -n "${OMEKA_SECRET_KEY_FILE:-}" ]; then OMEKA_SECRET_KEY="$(cat "$OMEKA_SECRET_KEY_FILE")"; export OMEKA_SECRET_KEY; fi
+        if [ -n "${TYPESENSE_API_KEY_FILE:-}" ]; then TYPESENSE_API_KEY="$(cat "$TYPESENSE_API_KEY_FILE")"; export TYPESENSE_API_KEY; fi
+        exec "$@"' sh)
+fi
+
 if [[ "$backup" == true ]]; then
     echo "Backing up before extension updates..."
     bash scripts/backup.sh
@@ -128,7 +146,7 @@ while IFS= read -r module_id; do
         continue
     fi
     # Migrations run once at the end, for every module that needs them.
-    docker compose exec -T php omeka-s-cli module:update \
+    "${php_cli[@]}" omeka-s-cli module:update \
         --base-path /var/www/html "$module_id" </dev/null
 done < <(printf '%s\n' "$registry_list" | awk -F '|' '$8 ~ /yes/ {
         gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2
@@ -143,7 +161,7 @@ read_module_manifest() {
         case "$uri" in
             gh:*|http://*|https://*|git://*)
                 echo "Refreshing live module: $uri"
-                docker compose exec -T php omeka-s-cli module:download \
+                "${php_cli[@]}" omeka-s-cli module:download \
                     --force --upgrade --base-path /var/www/html "$uri" </dev/null
                 ;;
         esac
@@ -204,7 +222,7 @@ module_list="$(docker compose exec -T php omeka-s-cli module:list --base-path /v
 while IFS= read -r module_id; do
     [[ -n "$module_id" ]] || continue
     echo "Applying pending module migration: $module_id"
-    docker compose exec -T php omeka-s-cli module:upgrade \
+    "${php_cli[@]}" omeka-s-cli module:upgrade \
         --base-path /var/www/html "$module_id" </dev/null
 done < <(printf '%s\n' "$module_list" | awk -F '|' '$4 ~ /needs_upgrade/ {
         gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2

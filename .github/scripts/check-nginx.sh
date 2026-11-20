@@ -14,13 +14,20 @@
 #                  /files/, X-XSS-Protection: 0, and HSTS only when
 #                  NGINX_HSTS_MAX_AGE > 0 on a request a trusted proxy marked
 #                  HTTPS (in a second container with that set);
+#   every variant  the /api rate limit: off by default (a burst to /api never
+#                  answers 429); with NGINX_API_RATE_LIMIT=on and a tiny rate
+#                  (a third container) /api and /api-local answer 429 past the
+#                  burst while ordinary pages and /api-context do not, clients
+#                  a trusted proxy names by X-Forwarded-For get their own
+#                  budget, limited requests still reach index.php and keep the
+#                  deny rules, and the access log stays redacted;
 #   amira          with no curator service, /curator/mcp answers 502 and nginx
 #                  still starts; with a stand-in upstream it proxies to /mcp
 #                  with Authorization passed through, X-Forwarded-For
 #                  overwritten and caching headers replaced by no-store; the
 #                  reserved OAuth well-known path stays denied.
 #
-# No stack is started: two nginx containers, plus the stand-in for amira, on a
+# No stack is started: three nginx containers, plus the stand-in for amira, on a
 # throwaway network, all removed on exit. The Omeka, MCP and SPARQL upstreams
 # are absent on purpose, which is also what proves nginx boots without them.
 #
@@ -46,12 +53,13 @@ suffix="${GITHUB_RUN_ID:-$$}-${variant}"
 network="nginx-check-${suffix}"
 web="nginx-check-web-${suffix}"
 web_hsts="nginx-check-web-hsts-${suffix}"
+web_api="nginx-check-web-api-${suffix}"
 stub="nginx-check-stub-${suffix}"
 workdir="$(mktemp -d)"
 failures=0
 
 cleanup() {
-    docker rm -f "$web" "$web_hsts" "$stub" >/dev/null 2>&1 || true
+    docker rm -f "$web" "$web_hsts" "$web_api" "$stub" >/dev/null 2>&1 || true
     docker network rm "$network" >/dev/null 2>&1 || true
     rm -rf -- "$workdir"
 }
@@ -71,7 +79,7 @@ fail() {
 docker compose -p nginx-check "${compose_files[@]}" config --format json > "$workdir/compose.json"
 mapfile -d '' run_args < <(
     python3 -c '
-import json, sys
+import json, re, sys
 
 web = json.load(sys.stdin)["services"]["web"]
 args = ["--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges"]
@@ -84,22 +92,27 @@ for mount in web.get("volumes", []):
         args += ["-v", mount["source"] + ":" + mount["target"] + (":ro" if mount.get("read_only") else "")]
 env = web.get("environment", {})
 env = dict(env.items() if isinstance(env, dict) else (str(e).partition("=")[::2] for e in env))
-# nginx-http-settings.conf needs NGINX_HSTS_MAX_AGE rendered, or nginx reads
-# the literal ${NGINX_HSTS_MAX_AGE} as an unknown variable and refuses to
-# start. Supply it (off) if this Compose file does not pass it yet, loudly, so
-# the check still exercises the templates.
-if "NGINX_HSTS_MAX_AGE" not in env:
-    sys.stderr.write("WARNING: the web service does not set NGINX_HSTS_MAX_AGE; using 0\n")
-    env["NGINX_HSTS_MAX_AGE"] = "0"
+# nginx-http-settings.conf needs these rendered, or nginx reads the literal
+# ${NAME} as an unknown variable (or an invalid rate) and refuses to start.
+# Supply each one (at its Compose default) if this Compose file does not pass
+# it yet, loudly, so the check still exercises the templates.
+defaults = {"NGINX_HSTS_MAX_AGE": "0", "NGINX_API_RATE_LIMIT": "off", "NGINX_API_RATE": "10r/s"}
 filt = env.get("NGINX_ENVSUBST_FILTER", "")
-if filt and "NGINX_HSTS_MAX_AGE" not in filt:
-    sys.stderr.write("WARNING: NGINX_ENVSUBST_FILTER does not list NGINX_HSTS_MAX_AGE; adding it\n")
-    # compose config keeps the escaped "$$" of the YAML; grep -E reads it as $.
-    body = filt.rstrip("$")
-    if filt.startswith("^(") and body.endswith(")"):
-        env["NGINX_ENVSUBST_FILTER"] = body[:-1] + "|NGINX_HSTS_MAX_AGE)$"
-    else:
-        env["NGINX_ENVSUBST_FILTER"] = "(" + filt + ")|^NGINX_HSTS_MAX_AGE$"
+for name, default in defaults.items():
+    if name not in env:
+        sys.stderr.write(f"WARNING: the web service does not set {name}; using {default}\n")
+        env[name] = default
+    # Whole names: NGINX_API_RATE is a prefix of NGINX_API_RATE_LIMIT.
+    if filt and not re.search(r"(?:^|[(|^])" + name + r"(?:[)|$]|$)", filt):
+        sys.stderr.write(f"WARNING: NGINX_ENVSUBST_FILTER does not list {name}; adding it\n")
+        # compose config keeps the escaped "$$" of the YAML; grep -E reads it as $.
+        body = filt.rstrip("$")
+        if filt.startswith("^(") and body.endswith(")"):
+            filt = body[:-1] + "|" + name + ")$"
+        else:
+            filt = "(" + filt + ")|^" + name + "$"
+if filt:
+    env["NGINX_ENVSUBST_FILTER"] = filt
 for key, value in env.items():
     args += ["-e", f"{key}={value}"]
 sys.stdout.write("".join(arg + "\0" for arg in args))
@@ -154,6 +167,12 @@ done
 # curl inside the nginx container: -g so [ ] in a URL are literal.
 request() {
     docker exec "$web" curl -gsS -o /dev/null -w '%{http_code}' "$@" || true
+}
+# Same, in another container: request_in <container> <curl args...>.
+request_in() {
+    local container="$1"
+    shift
+    docker exec "$container" curl -gsS -o /dev/null -w '%{http_code}' "$@" || true
 }
 
 echo "==> Access log redaction"
@@ -319,6 +338,84 @@ expect_no_header "plain HTTP -> absent" "$h" '^strict-transport-security:'
 h="$(headers "$web_hsts" -H 'X-Forwarded-Proto: http' http://127.0.0.1/application/asset/css/style.css)"
 expect_no_header "proxy said http -> absent (snippet)" "$h" '^strict-transport-security:'
 docker rm -f "$web_hsts" >/dev/null
+
+# wait_ready <container>: until nginx answers (the deny rule's 404).
+wait_ready() {
+    for _ in $(seq 1 30); do
+        if [[ "$(docker exec "$1" curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1/config/ 2>/dev/null)" == "404" ]]; then
+            return 0
+        fi
+        sleep 1
+    done
+}
+
+# burst_codes <container> <count> <curl args...>: the status codes of <count>
+# back-to-back requests, one per line, from one curl process (so the burst is
+# really back to back).
+burst_codes() {
+    local container="$1" count="$2"
+    shift 2
+    local urls=()
+    for _ in $(seq 1 "$count"); do urls+=("$@"); done
+    docker exec "$container" curl -gsS -o /dev/null -w '%{http_code}\n' "${urls[@]}" || true
+}
+
+echo "==> /api rate limit"
+codes="$(burst_codes "$web" 40 http://127.0.0.1/api/items)"
+if grep -q '^429$' <<< "$codes"; then
+    fail "default (off): a burst to /api answered 429: $(sort <<< "$codes" | uniq -c | tr '\n' ' ')"
+else
+    echo "    ok  off by default: 40 requests to /api, no 429"
+fi
+# Third container: limit on at one request a minute, so everything past the
+# burst of 20 (plus the first request) is refused; the curl inside it
+# (127.0.0.1) is the trusted proxy so X-Forwarded-For can name other clients.
+docker run -d --name "$web_api" --network "$network" "${run_args[@]}" \
+    -e NGINX_API_RATE_LIMIT=on -e NGINX_API_RATE=1r/m -e NGINX_TRUSTED_PROXY_CIDR=127.0.0.1/32 \
+    "$image" >/dev/null
+wait_ready "$web_api"
+codes="$(burst_codes "$web_api" 30 -A check-api-burst 'http://127.0.0.1/api/items?key_identity=SECRETAPIID&key_credential=SECRETAPICRED')"
+passed="$(grep -c '^502$' <<< "$codes" || true)"
+limited="$(grep -c '^429$' <<< "$codes" || true)"
+if [[ "$passed" == "21" && "$limited" == "9" ]]; then
+    echo "    ok  on: burst of 20 + 1 reached index.php (502 without php), the other 9 -> 429"
+else
+    fail "on: expected 21 x 502 then 9 x 429 for /api/items, got: $(sort <<< "$codes" | uniq -c | tr '\n' ' ')"
+fi
+for path in /api /api/ /api/items/1 /api-local /api-local/resource_templates/1 /api/items/1.css; do
+    code="$(request_in "$web_api" "http://127.0.0.1$path")"
+    [[ "$code" == "429" ]] && echo "    ok  $path -> 429 once the budget is spent" \
+        || fail "$path -> $code, expected 429 once the budget is spent"
+done
+for probe in "/s/probe/page/about|502" "/api-context|502" "/apix|502" \
+    "/admin/login|502" "/application/asset/css/style.css|200"; do
+    IFS='|' read -r path expected <<< "$probe"
+    code="$(request_in "$web_api" "http://127.0.0.1$path")"
+    [[ "$code" == "$expected" ]] && echo "    ok  $path not limited ($code)" \
+        || fail "$path -> $code, expected $expected (not rate-limited)"
+done
+# Deny rules keep winning over the API location.
+for probe in "/api/.env|403" "/api/x.php|404" "/api/dump.sql|404"; do
+    IFS='|' read -r path expected <<< "$probe"
+    code="$(request_in "$web_api" "http://127.0.0.1$path")"
+    [[ "$code" == "$expected" ]] && echo "    ok  $path -> $expected (deny rule first)" \
+        || fail "$path -> $code, expected $expected"
+done
+# Keyed on the real client: another visitor behind the trusted proxy has a
+# full budget.
+code="$(request_in "$web_api" -H 'X-Forwarded-For: 203.0.113.7' http://127.0.0.1/api/items)"
+[[ "$code" == "502" ]] && echo "    ok  another client (X-Forwarded-For via trusted proxy) not limited" \
+    || fail "another client behind the trusted proxy -> $code, expected 502 (own budget)"
+sleep 1
+api_log="$(docker logs "$web_api" 2>/dev/null)"
+if grep -q 'SECRET' <<< "$api_log"; then
+    fail "a key value reached the access log of rate-limited requests"
+elif grep -F '"check-api-burst"' <<< "$api_log" | grep -qE '" 429 [0-9]+ '; then
+    echo "    ok  429s logged, keys redacted"
+else
+    fail "no redacted 429 line for the burst in the access log"
+fi
+docker rm -f "$web_api" >/dev/null
 
 if [[ "$variant" == "amira" ]]; then
     echo "==> /curator/mcp with no curator service"

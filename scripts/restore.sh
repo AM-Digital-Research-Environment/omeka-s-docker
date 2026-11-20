@@ -3,6 +3,11 @@
 # Usage: bash scripts/restore.sh [--force] <backup-directory>
 # Example: bash scripts/restore.sh backups/20260617-082740
 #
+# Reads backups made by scripts/backup.sh. A site that does not come from this
+# template (a classic Apache/PHP install, shared hosting, another image) is
+# converted into this format first with scripts/import-external.sh; see
+# docs/MIGRATING.md.
+#
 # Expects the backup directory to contain:
 #   - omeka_db.sql       MySQL database dump (required)
 #   - omeka_media.tar.gz Omeka media volume (current format), or
@@ -12,6 +17,10 @@
 #   - typesense_data.tar.gz Typesense search index (optional)
 #   - sideload.tar.gz    Sideload directory (optional)
 #   - .env               Environment file (optional, used if no .env exists)
+#   - secrets/<name>     Secret files (compose.secrets.yml; optional, each used
+#                        if that file does not exist yet)
+#   - caddy_data.tar.gz  Caddy certificates (compose.tls.yml; optional, restored
+#                        only while compose.tls.yml is active)
 
 set -euo pipefail
 umask 077
@@ -22,6 +31,10 @@ BACKUP_DIR=""
 FORCE=false
 RESTORE_SEARCH=false
 HELPER_IMAGE="alpine:3.24.4@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf"
+# Prefix for each shell run in the db container: the password comes from the
+# container's MYSQL_PASSWORD_FILE (compose.secrets.yml) or MYSQL_PASSWORD.
+# shellcheck disable=SC2016 # expanded by the container's shell, not here
+DB_PASSWORD_SH='pw="${MYSQL_PASSWORD:-}"; if [ -n "${MYSQL_PASSWORD_FILE:-}" ]; then pw="$(cat "$MYSQL_PASSWORD_FILE")"; fi; '
 
 for arg in "$@"; do
     case "$arg" in
@@ -35,6 +48,9 @@ for arg in "$@"; do
             echo "Usage: bash scripts/restore.sh [--force] <backup-directory>"
             echo "  --force  overwrite existing volumes without an interactive prompt"
             echo "  --restore-search  also restore a legacy Typesense archive (best-effort)"
+            echo "Restores a backup made by scripts/backup.sh. To move in a site that was not"
+            echo "run from this template, convert it first: scripts/import-external.sh"
+            echo "(see docs/MIGRATING.md)."
             exit 0
             ;;
         -*)
@@ -102,14 +118,18 @@ if [ -f "$BACKUP_DIR/SHA256SUMS" ]; then
     # making sha256sum read paths outside the backup directory.
     if ! awk '
         NF != 2 || length($1) != 64 || $1 !~ /^[0-9A-Fa-f]+$/ ||
-        $2 !~ /^(BACKUP_FORMAT|omeka_db[.]sql|omeka_media[.]tar[.]gz|omeka_logs[.]tar[.]gz|omeka_modules[.]tar[.]gz|omeka_themes[.]tar[.]gz|omeka_files[.]tar[.]gz|typesense_data[.]tar[.]gz|sideload[.]tar[.]gz|local[.]config[.]php|images[.]json|[.]env)$/ ||
+        $2 !~ /^(BACKUP_FORMAT|omeka_db[.]sql|omeka_media[.]tar[.]gz|omeka_logs[.]tar[.]gz|omeka_modules[.]tar[.]gz|omeka_themes[.]tar[.]gz|omeka_files[.]tar[.]gz|caddy_data[.]tar[.]gz|typesense_data[.]tar[.]gz|sideload[.]tar[.]gz|local[.]config[.]php|images[.]json|[.]env|secrets[/][a-z0-9_]+)$/ ||
         seen[$2]++ { exit 1 }
         END { if (!seen["omeka_db.sql"]) exit 1 }
     ' "$BACKUP_DIR/SHA256SUMS"; then
         echo "ERROR: SHA256SUMS is malformed, incomplete, or contains unsafe paths." >&2
         exit 1
     fi
-    for artifact in BACKUP_FORMAT omeka_db.sql omeka_media.tar.gz omeka_logs.tar.gz omeka_modules.tar.gz omeka_themes.tar.gz omeka_files.tar.gz typesense_data.tar.gz sideload.tar.gz local.config.php images.json .env; do
+    secret_artifacts=()
+    for file in "$BACKUP_DIR"/secrets/*; do
+        [ ! -e "$file" ] || secret_artifacts+=("secrets/${file##*/}")
+    done
+    for artifact in BACKUP_FORMAT omeka_db.sql omeka_media.tar.gz omeka_logs.tar.gz omeka_modules.tar.gz omeka_themes.tar.gz omeka_files.tar.gz caddy_data.tar.gz typesense_data.tar.gz sideload.tar.gz local.config.php images.json .env "${secret_artifacts[@]}"; do
         if [ -f "$BACKUP_DIR/$artifact" ] \
             && ! awk -v name="$artifact" '$2 == name { found = 1 } END { exit !found }' "$BACKUP_DIR/SHA256SUMS"; then
             echo "ERROR: $artifact exists but is not covered by SHA256SUMS." >&2
@@ -121,6 +141,49 @@ else
     echo "WARNING: No SHA256SUMS found; integrity cannot be verified." >&2
 fi
 echo "    Backup layout: $LAYOUT"
+
+# --- Pre-flight: can this stack's MySQL import the dump as it is? ---
+# A dump from somewhere else (MariaDB, another server's mysqldump options)
+# can fail half-way through the import below, after the old database has
+# already been dropped. Catch the known cases now, before anything changes;
+# scripts/import-external.sh rewrites them. Dumps written by backup.sh have
+# none of them (mysqldump without --databases writes no CREATE DATABASE/USE).
+# Cost: one sequential read. The first grep only tests a fixed prefix and
+# drops the data lines (INSERT ...), which are nearly all of a dump; the
+# little that remains is searched for the patterns.
+DUMP_FILE="$BACKUP_DIR/omeka_db.sql"
+# Bounded, so a dump without line breaks is not read whole here.
+dump_head="$(head -c 4096 "$DUMP_FILE" | head -n 5)"
+dump_problems=()
+if head -n 1 <<< "$dump_head" | grep -q '^/\*M\{0,1\}!999999\\- enable the sandbox mode'; then
+    dump_problems+=("line 1 is MariaDB's sandbox-mode marker; the MySQL client stops on it (--fix-mariadb)")
+fi
+dump_statements="$(LC_ALL=C grep -v '^INSERT INTO ' "$DUMP_FILE" \
+    | LC_ALL=C grep -E '^(USE |CREATE (DATABASE|SCHEMA) )|uca1400_' | head -n 50 || true)"
+if grep -q 'uca1400_' <<< "$dump_statements"; then
+    dump_problems+=("it uses MariaDB's utf8mb4_uca1400 collations, which MySQL 9 does not have (--fix-mariadb)")
+fi
+dump_usedb="$(LC_ALL=C grep -E -m 1 '^(USE |CREATE (DATABASE|SCHEMA) )' <<< "$dump_statements" || true)"
+if [[ -n "$dump_usedb" ]]; then
+    dump_problems+=("it switches databases (${dump_usedb:0:60}); the import must go into MYSQL_DATABASE (--fix-portability)")
+fi
+if ((${#dump_problems[@]})); then
+    echo "ERROR: omeka_db.sql cannot be imported into this stack as it is:" >&2
+    for problem in "${dump_problems[@]}"; do
+        echo "       - $problem" >&2
+    done
+    echo "       It does not look like a dump made by scripts/backup.sh. Convert the site" >&2
+    echo "       with scripts/import-external.sh and the options named above, then restore" >&2
+    echo "       its output; see docs/MIGRATING.md. Nothing has been changed." >&2
+    exit 1
+fi
+# mysqldump writes this trailer after its last statement (backup.sh insists on
+# it); a dump with the header but without it was cut off.
+if grep -qE '^-- (MySQL|MariaDB) dump' <<< "$dump_head" \
+    && ! tail -c 200 "$DUMP_FILE" | grep -q '^-- Dump completed'; then
+    echo "WARNING: omeka_db.sql has a mysqldump header but no '-- Dump completed' trailer;" >&2
+    echo "         it is probably truncated. Check it before relying on this restore." >&2
+fi
 
 echo "==> Omeka S Restore"
 echo "    Project:      $PROJECT_DIR"
@@ -148,6 +211,8 @@ LOGS_VOLUME="$(volume_for php /var/www/html/logs)"
 MYSQL_VOLUME="$(volume_for db /var/lib/mysql)"
 MODULES_VOLUME="$(volume_for php /var/www/html/modules)"
 THEMES_VOLUME="$(volume_for php /var/www/html/themes)"
+# Empty unless compose.tls.yml (the bundled Caddy) is active here.
+CADDY_VOLUME="$(volume_for caddy /data)"
 TYPESENSE_VOLUME=""
 if [[ "$RESTORE_SEARCH" == true && -f "$BACKUP_DIR/typesense_data.tar.gz" ]]; then
     TYPESENSE_VOLUME="$(volume_for typesense /data)"
@@ -157,10 +222,45 @@ fi
     echo "Media, logs and database mounts must be configured named volumes." >&2; exit 1;
 }
 
+# --- 0b. Secret files (compose.secrets.yml) ---
+# Compose refuses to start a service whose secret file is missing, so check
+# now, before anything is stopped or overwritten. A missing file is taken from
+# the backup (the files are placed after the confirmation below); an existing
+# one is kept, like an existing .env: the database user's password lives in
+# the mysql_data volume, which a restore does not replace.
+SECRET_LINES="$(python3 "$SCRIPT_DIR/compose-settings.py" secrets <<< "$COMPOSE_CONFIG")"
+SECRETS_TO_PLACE=()
+if [[ -n "$SECRET_LINES" ]]; then
+    while IFS=$'\t' read -r secret_name secret_path; do
+        if [[ -f "$secret_path" ]]; then
+            if [[ -f "$BACKUP_DIR/secrets/$secret_name" ]] \
+                && ! cmp -s "$secret_path" "$BACKUP_DIR/secrets/$secret_name"; then
+                echo "WARNING: $secret_path differs from the backup's copy; keeping the existing file." >&2
+                if [[ "$secret_name" == omeka_secret_key ]]; then
+                    echo "         Values Omeka encrypted with the backup's key stay unreadable until" >&2
+                    echo "         that key is restored: $BACKUP_DIR/secrets/$secret_name" >&2
+                fi
+            fi
+        elif [[ -f "$BACKUP_DIR/secrets/$secret_name" ]]; then
+            SECRETS_TO_PLACE+=("$secret_name"$'\t'"$secret_path")
+        else
+            echo "ERROR: Secret file $secret_path is missing and the backup has no copy." >&2
+            echo "       Create it first (see compose.secrets.yml); an empty file means unset." >&2
+            exit 1
+        fi
+    done <<< "$SECRET_LINES"
+elif [[ -d "$BACKUP_DIR/secrets" ]]; then
+    echo "NOTE: This backup was taken with compose.secrets.yml; its secret files are in" >&2
+    echo "      $BACKUP_DIR/secrets/. compose.secrets.yml is not active here, so they are" >&2
+    echo "      not restored. OMEKA_SECRET_KEY in .env must match secrets/omeka_secret_key." >&2
+fi
+
 # --- 1. Confirm any destructive overwrite and stop running services ---
 RUNNING="$(cd "$PROJECT_DIR" && docker compose ps --status running --format '{{.Service}}' 2>/dev/null | wc -l)"
 DATA_EXISTS=false
-for volume in "$MEDIA_VOLUME" "$LOGS_VOLUME" "$MYSQL_VOLUME" "$MODULES_VOLUME" "$THEMES_VOLUME" "$TYPESENSE_VOLUME"; do
+RESTORE_CADDY_VOLUME=""
+[[ ! -f "$BACKUP_DIR/caddy_data.tar.gz" ]] || RESTORE_CADDY_VOLUME="$CADDY_VOLUME"
+for volume in "$MEDIA_VOLUME" "$LOGS_VOLUME" "$MYSQL_VOLUME" "$MODULES_VOLUME" "$THEMES_VOLUME" "$RESTORE_CADDY_VOLUME" "$TYPESENSE_VOLUME"; do
     if [[ -n "$volume" ]] && docker volume inspect "$volume" >/dev/null 2>&1; then
         DATA_EXISTS=true
     elif [[ -n "$volume" ]] && [[ "$(python3 "$SCRIPT_DIR/compose-settings.py" external "$volume" <<< "$COMPOSE_CONFIG")" == 1 ]]; then
@@ -181,6 +281,22 @@ if [ "$RUNNING" -gt 0 ]; then
     echo "==> Stopping $RUNNING running service(s)..."
     (cd "$PROJECT_DIR" && docker compose down)
 fi
+
+for entry in "${SECRETS_TO_PLACE[@]}"; do
+    secret_name="${entry%%$'\t'*}"
+    secret_path="${entry#*$'\t'}"
+    # 0700 directory, 0644 files: the containers read them as different uids
+    # (see compose.secrets.yml), while other host users cannot reach them.
+    # Only a directory created here gets its mode set; an existing one is the
+    # operator's, and is left as it is.
+    secret_dir="$(dirname "$secret_path")"
+    if [[ ! -d "$secret_dir" ]]; then
+        mkdir -p "$secret_dir"
+        chmod 700 "$secret_dir"
+    fi
+    install -m 0644 "$BACKUP_DIR/secrets/$secret_name" "$secret_path"
+    echo "==> Restored secret file $secret_path"
+done
 
 # Restore the exact read-only deployment config separately from the image. The
 # database secret remains ephemeral under /run and is never written here.
@@ -288,6 +404,28 @@ for name in omeka_modules omeka_themes; do
     fi
 done
 
+# --- 3c. Restore Caddy certificates (compose.tls.yml) ---
+# Put back before Caddy starts, so it reuses the certificates and ACME
+# account instead of requesting new ones (see backup.sh for why that
+# matters). Without compose.tls.yml there is nowhere to put them; Caddy
+# obtains new ones if the overlay is switched on later.
+if [ -f "$BACKUP_DIR/caddy_data.tar.gz" ]; then
+    if [[ -z "$CADDY_VOLUME" ]]; then
+        echo "==> Skipping caddy_data archive: compose.tls.yml is not active here."
+    else
+        echo "==> Restoring Caddy certificates (caddy_data)..."
+        docker volume create "$CADDY_VOLUME" > /dev/null 2>&1 || true
+        docker run --rm \
+            -v "$CADDY_VOLUME":/data \
+            -v "$BACKUP_DIR":/backup:ro \
+            "$HELPER_IMAGE" sh -eu -c '
+                rm -rf /data/* /data/..?* /data/.[!.]* 2>/dev/null || true
+                tar xzf /backup/caddy_data.tar.gz -C /data
+            '
+        echo "    caddy_data volume restored."
+    fi
+fi
+
 # --- 4. Restore Typesense data volume (optional search backend) ---
 TYPESENSE_RESTORED=false
 if [[ -f "$BACKUP_DIR/typesense_data.tar.gz" && "$RESTORE_SEARCH" == true ]]; then
@@ -318,7 +456,7 @@ echo "    Waiting for database to be healthy..."
 TRIES=0
 MAX_TRIES=30
 until (cd "$PROJECT_DIR" && docker compose exec -T db sh -eu -c \
-    'exec mysql -h 127.0.0.1 -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" -e "SELECT 1"' >/dev/null 2>&1); do
+    "$DB_PASSWORD_SH"'exec mysql -h 127.0.0.1 -u"$MYSQL_USER" -p"$pw" "$MYSQL_DATABASE" -e "SELECT 1"' >/dev/null 2>&1); do
     TRIES=$((TRIES + 1))
     if [ "$TRIES" -ge "$MAX_TRIES" ]; then
         echo "ERROR: Database did not become ready after ${MAX_TRIES} attempts."
@@ -331,19 +469,19 @@ echo "    Database is ready."
 # --- 7. Import database dump ---
 echo "==> Importing database dump..."
 # Drop and recreate to ensure clean state. Restrict the identifier before
-# interpolating it into SQL; credentials stay in the container environment.
-(cd "$PROJECT_DIR" && docker compose exec -T db sh -eu -c '
+# interpolating it into SQL; credentials stay inside the db container.
+(cd "$PROJECT_DIR" && docker compose exec -T db sh -eu -c "$DB_PASSWORD_SH"'
     case "$MYSQL_DATABASE" in
         ""|*[!A-Za-z0-9_]*)
             echo "ERROR: MYSQL_DATABASE must contain only letters, digits, and underscores." >&2
             exit 1
             ;;
     esac
-    exec mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -e \
+    exec mysql -u"$MYSQL_USER" -p"$pw" -e \
         "DROP DATABASE IF EXISTS \`$MYSQL_DATABASE\`; CREATE DATABASE \`$MYSQL_DATABASE\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 ')
 (cd "$PROJECT_DIR" && docker compose exec -T db sh -eu -c \
-    'exec mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"') \
+    "$DB_PASSWORD_SH"'exec mysql -u"$MYSQL_USER" -p"$pw" "$MYSQL_DATABASE"') \
     < "$BACKUP_DIR/omeka_db.sql"
 echo "    Database imported."
 if [[ "$TYPESENSE_RESTORED" != true ]]; then

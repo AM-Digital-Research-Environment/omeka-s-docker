@@ -1,0 +1,161 @@
+# Bundled TLS overlay — HTTPS with automatic certificates, no host proxy.
+#
+# The base stack serves plain HTTP and expects a reverse proxy on the host for
+# HTTPS (docs/PRODUCTION.md). This overlay puts Caddy in the stack instead: it
+# obtains and renews a certificate for SERVER_NAME (Let's Encrypt by default),
+# redirects HTTP to HTTPS, sends HSTS, and passes every request to nginx over
+# the frontend network. For a single server with a public DNS name it replaces
+# the whole host-proxy setup with three lines in .env:
+#
+#   COMPOSE_FILE=docker-compose.yml:compose.tls.yml
+#   SERVER_NAME=omeka.example.org
+#   ACME_EMAIL=admin@example.org        # optional, for expiry warnings
+#
+# then `docker compose up -d`. The host's ports 80 and 443 must be free and
+# reachable from the internet, and SERVER_NAME's A/AAAA records must point at
+# this host. Walkthrough: docs/PRODUCTION.md, "Bundled HTTPS (Caddy)".
+#
+# ORDER: list this file after compose.immutable.yml (which must come directly
+# after the base) and, by convention, last:
+#   COMPOSE_FILE=docker-compose.yml:compose.tls.yml
+#   COMPOSE_FILE=docker-compose.yml:compose.immutable.yml:compose.tls.yml
+#   COMPOSE_FILE=docker-compose.yml:compose.immutable.yml:compose.secrets.yml:compose.tls.yml
+# It only adds a service, drops web's published port and sets one php
+# variable, so it replaces no list another overlay contributes to.
+# It is not meant to be combined with compose.amira.yml, which sits behind a
+# host proxy (and expects nginx on the host's loopback, which this file stops
+# publishing).
+#
+# CERTIFICATES live in the caddy_data volume. Keep it: deleting it makes Caddy
+# request new certificates on the next start, and Let's Encrypt allows only a
+# few duplicate certificates per week for the same names — recreate it a few
+# times while debugging and the site can be stuck without HTTPS for days. Use
+# ACME_CA (below) with the staging CA for experiments.
+#
+# Settings (all in .env, see docs/CONFIGURATION.md):
+#   SERVER_NAME         required; one or more names, space-separated
+#   ACME_EMAIL          optional contact address for the ACME account
+#   ACME_CA             ACME directory; default Let's Encrypt production. For a
+#                       dry run: https://acme-staging-v02.api.letsencrypt.org/directory
+#   CADDY_TLS           acme (default) or internal: a certificate from Caddy's
+#                       own CA, for a machine without a public DNS name
+#   CADDY_HSTS_MAX_AGE  Strict-Transport-Security max-age, default one year
+#   CADDY_CPU_LIMIT, CADDY_MEMORY_LIMIT
+
+services:
+  caddy:
+    image: caddy:2.11.9@sha256:4851e54a46b206517c574821bb5cc67f170d2156041e9fbc4c9193b45e84a75b
+    # Refuse to start with no usable site name: the base stack's "_" catch-all
+    # means "any name" to nginx, but Caddy would try to obtain a certificate
+    # for a host literally called "_" and keep failing against the CA. Compose
+    # itself already stops on an unset SERVER_NAME (the :? below); this catches
+    # an explicit "_".
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        case "$$SERVER_NAME" in
+          ""|_) echo "compose.tls.yml: set SERVER_NAME in .env to this site's public DNS name (not \"_\")." >&2; exit 1 ;;
+        esac
+        exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+    environment:
+      - SERVER_NAME=${SERVER_NAME:?compose.tls.yml needs SERVER_NAME in .env, the DNS name the certificate is for (e.g. omeka.example.org)}
+      - ACME_EMAIL=${ACME_EMAIL:-}
+      - ACME_CA=${ACME_CA:-https://acme-v02.api.letsencrypt.org/directory}
+      - CADDY_TLS=${CADDY_TLS:-acme}
+      - CADDY_HSTS_MAX_AGE=${CADDY_HSTS_MAX_AGE:-31536000}
+    ports:
+      # Both on every interface: 80 for the ACME HTTP challenge and the
+      # redirect to HTTPS, 443 for the site. 443/udp carries HTTP/3, which
+      # Caddy enables by default and advertises with Alt-Svc; if a firewall
+      # drops UDP, browsers silently stay on HTTP/2 over TCP.
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./_docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates, private keys and the ACME account. MUST persist; see the
+      # warning at the top of this file. scripts/backup.sh saves it
+      # (caddy_data.tar.gz) and scripts/restore.sh puts it back, so a restore
+      # does not spend the CA's rate limit on re-issuing.
+      - caddy_data:/data:rw
+      # Caddy's autosaved running config (written on `caddy reload`).
+      - caddy_config:/config:rw
+    depends_on:
+      # Started, not healthy: Caddy should obtain its certificate as soon as
+      # possible, and while web or php are still starting it answers 502.
+      web:
+        condition: service_started
+    networks:
+      - frontend
+    restart: unless-stopped
+    # Security hardening
+    security_opt:
+      - no-new-privileges:true
+    # Caddy runs as root (uid 0) with no capabilities at all. Root because the
+    # official image's /data and /config are root-owned, and a fresh named
+    # volume inherits that owner, so a non-root user could not write its
+    # certificates without a chown step this read-only setup does not have.
+    # No capabilities because binding 80 and 443 needs none once the network
+    # namespace's unprivileged port range starts at 80 (the sysctl below; it
+    # is namespaced, so the host is unaffected). The image's file capability
+    # on the caddy binary is ignored under no-new-privileges, so it cannot add
+    # any back. Uid 0 without capabilities cannot bypass file permissions, and
+    # the only writable places are the two volumes and /tmp.
+    cap_drop:
+      - ALL
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: 80
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777,size=16M
+    deploy:
+      resources:
+        limits:
+          cpus: '${CADDY_CPU_LIMIT:-0.25}'
+          memory: ${CADDY_MEMORY_LIMIT:-128M}
+          # One Go process: its threads track the CPU count plus those blocked
+          # in system calls, a few dozen in practice.
+          pids: 128
+        reservations:
+          cpus: '0.05'
+          memory: 32M
+    healthcheck:
+      # Caddy's admin API, which listens on 127.0.0.1:2019 inside the container
+      # only. Probing the site itself would need the public name and a valid
+      # certificate, which a fresh install does not have yet.
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:2019/config/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  web:
+    # Caddy owns the host's ports 80 and 443 and reaches nginx over the
+    # frontend network, so nginx is not published at all (the base publishes
+    # it on NGINX_BIND:NGINX_PORT, port 80 by default, which would collide).
+    # nginx trusts X-Forwarded-* from NGINX_TRUSTED_PROXY_CIDR, default
+    # 172.16.0.0/12, which covers the Docker bridge Caddy connects from. On a
+    # host whose Docker hands out other ranges (192.168.x.x once the 172 pools
+    # are used up, or a custom default-address-pools), set it to the frontend
+    # network's subnet, or nginx ignores Caddy's headers: visitors then all
+    # appear as Caddy's address and Omeka builds http:// links.
+    # NGINX_HSTS_MAX_AGE stays 0: Caddy sends HSTS (CADDY_HSTS_MAX_AGE).
+    ports: !reset []
+
+  php:
+    environment:
+      # The site is HTTPS-only behind Caddy, so the session cookie is Secure
+      # unless .env says otherwise.
+      OMEKA_SESSION_COOKIE_SECURE: ${OMEKA_SESSION_COOKIE_SECURE:-true}
+
+volumes:
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local

@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 # Guard against committing the AMIRA curator MCP secrets: the Omeka service
-# key and the personal-token file (deploy/amira/README.md#curator-mcp-endpoint).
+# key and the personal-token file (deploy/amira/README.md#curator-mcp-endpoint),
+# and the file-based secrets of compose.secrets.yml (secrets/).
 # Trivy's secret scan (security.yml) knows generic credential formats; this
 # knows ours. It fails when:
 #
-#   - the real secret paths are not ignored by git;
+#   - secrets/ (compose.secrets.yml's default SECRETS_DIR) is not ignored by
+#     git and the Docker build context, or anything is tracked under it;
+#   - the real curator secret paths are not ignored by git;
 #   - anything is tracked under deploy/amira/curator-secrets/;
 #   - a template (deploy/amira/curator-*.example) holds a line that is not a
 #     comment, i.e. a value someone filled in;
@@ -23,6 +26,14 @@ fail() {
     echo "ERROR: $*" >&2
     failures=$((failures + 1))
 }
+
+# compose.secrets.yml: one file per secret in SECRETS_DIR (default ./secrets).
+for name in mysql_password omeka_secret_key typesense_api_key omeka_admin_password; do
+    git check-ignore -q --no-index "secrets/$name" || fail "secrets/$name is not ignored by git (.gitignore)"
+done
+tracked="$(git ls-files -- secrets)"
+[[ -z "$tracked" ]] || fail "files are committed under secrets/:"$'\n'"$tracked"
+grep -qxE '/?secrets/?' .dockerignore || fail "secrets/ is not excluded from the build context (.dockerignore)"
 
 secrets_dir=deploy/amira/curator-secrets
 
@@ -55,4 +66,4 @@ fi
 if (( failures > 0 )); then
     exit 1
 fi
-echo "No curator MCP secrets are committed."
+echo "No curator MCP or compose.secrets.yml secrets are committed."

@@ -3,8 +3,9 @@
 # latest upstream release, as one tracking issue that is opened, refreshed and
 # closed automatically. Run weekly by .github/workflows/untracked-pins.yml.
 #
-# Covered here (Dependabot owns image tags and action SHAs; amira-mcp has its
-# own check in check-amira-mcp-release.sh):
+# Covered here (Dependabot owns image tags and action SHAs, including those in
+# the root compose.<name>.yml overlays such as caddy in compose.tls.yml;
+# amira-mcp has its own check in check-amira-mcp-release.sh):
 #   - Omeka S core           Dockerfile ARG OMEKA_VERSION
 #   - omeka-s-cli            Dockerfile toolfetcher ARG VERSION (+ its SHA)
 #   - APCu                   Dockerfile install-php-extensions apcu-<version>

@@ -3,8 +3,9 @@
 # Upstream images are built on Ubuntu and are not rebuilt between Typesense
 # releases, so OS security fixes (openssl, apt, ...) published after a release
 # never reach them. This adds those fixes on top of the pinned release, and
-# runs the server as an unprivileged user instead of upstream's root. Binary
-# and entrypoint are unchanged.
+# runs the server as an unprivileged user instead of upstream's root. The
+# binary is unchanged; a small entrypoint wrapper (entrypoint.sh) only adds
+# TYPESENSE_API_KEY_FILE support before exec'ing it.
 #
 # Volumes created by the upstream image are root-owned; hand them over once:
 #   docker compose run --rm --no-deps --user 0 --cap-add CHOWN \
@@ -24,5 +25,11 @@ RUN apt-get update \
     && groupadd --system --gid 10002 typesense \
     && useradd --system --uid 10002 --gid typesense --home-dir /nonexistent --shell /usr/sbin/nologin typesense \
     && install -d -o typesense -g typesense -m 0750 /data
+
+# Thin wrapper that adds TYPESENSE_API_KEY_FILE (compose.secrets.yml) and then
+# execs the upstream /opt/typesense-server with the same arguments. Root-owned
+# and not writable by the server user.
+COPY --chmod=0755 entrypoint.sh /usr/local/bin/typesense-entrypoint
+ENTRYPOINT ["/usr/local/bin/typesense-entrypoint"]
 
 USER typesense

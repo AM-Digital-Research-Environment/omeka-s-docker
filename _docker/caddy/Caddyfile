@@ -1,0 +1,77 @@
+# Caddy configuration for the bundled TLS overlay (compose.tls.yml): the edge
+# of the stack, terminating HTTPS for SERVER_NAME and passing every request to
+# the in-stack nginx (web:80) over the frontend network.
+#
+# The {$NAME} placeholders are filled from the caddy service's environment
+# when Caddy reads this file; compose.tls.yml gives every one a default, so the
+# fallbacks after ":" below only matter if the file is used on its own.
+#
+# Edit, then apply with
+#   docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+# (or `docker compose restart caddy`). The certificates are kept either way.
+{
+	# Contact address for the ACME account: Let's Encrypt mails expiry
+	# warnings there if renewal keeps failing. Optional; quoted so an unset
+	# ACME_EMAIL becomes an empty argument (= no address) instead of a syntax
+	# error.
+	email "{$ACME_EMAIL}"
+
+	# Let's Encrypt production by default. For a dry run point ACME_CA at the
+	# staging directory, which has far higher rate limits but issues
+	# certificates browsers do not trust:
+	#   ACME_CA=https://acme-staging-v02.api.letsencrypt.org/directory
+	# Staging and production certificates are stored apart, so switching back
+	# simply obtains a real one.
+	acme_ca {$ACME_CA:https://acme-v02.api.letsencrypt.org/directory}
+
+	# Caddy would try to add its local CA (CADDY_TLS=internal) to the trust
+	# store of the container, which is read-only and pointless here.
+	skip_install_trust
+
+	# No `servers { trusted_proxies ... }`: Caddy is the edge, so it must not
+	# believe X-Forwarded-* from clients. With no trusted proxies (the
+	# default) it replaces any client-supplied X-Forwarded-For/-Proto/-Host
+	# with the real peer address, scheme and host before proxying, which is
+	# what the nginx behind it relies on.
+}
+
+# CADDY_TLS picks how the certificate is obtained:
+#   acme      (default) from the ACME CA above; needs a public DNS name that
+#             points at this host, with ports 80 and 443 reachable.
+#   internal  from Caddy's own local CA: for a machine without a public name
+#             (SERVER_NAME=omeka.localhost, a LAN name). Browsers warn until
+#             the root at /data/caddy/pki/authorities/local/root.crt in the
+#             caddy_data volume is trusted on the client.
+(tls-acme) {
+}
+(tls-internal) {
+	tls internal
+}
+
+# One or more names, space-separated (SERVER_NAME="example.org www.example.org"
+# gets one certificate covering both). Caddy also listens on port 80 for these
+# names, answers the ACME HTTP challenge there and redirects everything else
+# to HTTPS.
+{$SERVER_NAME} {
+	import tls-{$CADDY_TLS:acme}
+
+	# HSTS lives here, at the TLS edge, so nginx's own NGINX_HSTS_MAX_AGE stays
+	# at its default 0 in this setup. Deferred (">"), so it replaces rather
+	# than duplicates a header nginx might send anyway. Browsers ignore it on a
+	# certificate they do not trust (staging, internal), so a dry run cannot
+	# lock anyone out. No includeSubDomains or preload: this template cannot
+	# know what the operator's other subdomains serve.
+	header >Strict-Transport-Security "max-age={$CADDY_HSTS_MAX_AGE:31536000}"
+
+	# No `encode`: nginx already compresses (gzip_proxied any), and Caddy
+	# passes its compressed responses and the client's Accept-Encoding through
+	# unchanged. Compressing here too would only spend CPU twice.
+	#
+	# web is resolved through Docker's DNS on each new connection, so
+	# recreating the web container does not leave Caddy on a stale address.
+	# Caddy sets X-Forwarded-For (the client), X-Forwarded-Proto (https) and
+	# X-Forwarded-Host itself; nginx believes them because Caddy's address is
+	# inside NGINX_TRUSTED_PROXY_CIDR, so Omeka sees the real client and
+	# generates https:// URLs, and the login rate limit keys on the visitor.
+	reverse_proxy web:80
+}
