@@ -454,7 +454,7 @@ chmod -R u=rwX,go=rX "$dst"
 echo "web root: $(find "$dst" -type f | wc -l) files, $(du -sh "$dst" | cut -f1)"
 WEBROOT
 
-FROM nginx:1.30.6-alpine@sha256:901e593c95dc85f5a729f5765516321366ef4ac401821431d408897e95287d0a AS web
+FROM nginx:1.30.7-alpine@sha256:caf4e1e032a20f9c3c5e28fc7f25ffd768ad8677b4975c54193075997b3a97e3 AS web
 
 # Pick up Alpine security fixes published after the base image was built (the
 # runtime stage does the same with apt-get upgrade).
