@@ -7,6 +7,5 @@
 #
 # Syntax: <ModuleDir> <vendor/package>:<constraint>
 
-# CVE-2026-109413 (DoS via deeply nested inline YAML): Common 3.4.96 ships
-# symfony/yaml v5.4.53; fixed in 5.4.54.
-Common symfony/yaml:~5.4.54
+# (No active floors. Common 3.4.97 ships symfony/yaml v5.4.56, past the
+# CVE-2026-109413 fix in 5.4.54.)
