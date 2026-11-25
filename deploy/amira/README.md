@@ -430,9 +430,13 @@ in Omeka and the secrets directory.
 ## SPARQL endpoint
 
 DRE-LinkedData publishes the whole public graph as a gzipped N-Triples dump at
-`/linked-data/dump.nt.gz`. The optional `sparql` service loads that dump into
-[Oxigraph](https://github.com/oxigraph/oxigraph) and answers SPARQL 1.1 queries
-at:
+`/linked-data/dump.nt.gz` and, from 0.8.0, the same statements as N-Quads at
+`/linked-data/dump.nq.gz`, with each kind of record (research items,
+publications, persons, places, …) in a named graph of its own
+(`/linked-data/void#graph-research-items`, …). The optional `sparql` service
+loads the N-Quads dump when the module publishes one, the N-Triples dump
+otherwise, into [Oxigraph](https://github.com/oxigraph/oxigraph) and answers
+SPARQL 1.1 queries at:
 
 ```
 https://data.africamultiple.uni-bayreuth.de/sparql
@@ -449,6 +453,12 @@ YASGUI can use the endpoint directly. Results are sent uncompressed:
 compressing them would take the web server's small CPU share, which every page
 request depends on. Writes are refused, and `SERVICE` (federated queries) always
 fails: the service has no network (see below).
+
+The server reads its default graph as the union of every graph
+(`--union-default-graph`): a query without `GRAPH` sees all statements, as it
+did before named graphs existed, and `GRAPH <…#graph-persons> { … }` or
+`GRAPH ?g { … }` narrows it to a kind of record. Each statement sits in exactly
+one graph, so the union repeats nothing.
 
 ### Switching it on
 
@@ -471,7 +481,8 @@ answers `503`, and the rest of the site is unaffected either way.
 ### Keeping it current
 
 The endpoint follows the dump, so it is as current as the last dump. Once a minute the service reads
-`files/dre-linked-data/state.json`. When the module has published a new dump, it
+`files/dre-linked-data/state.json`. When the module has published a new dump
+(a new `nquads_sha256`, or `sha256` for a module without N-Quads), it
 loads that dump into a fresh store while the old one keeps answering, and swaps
 it in only once the load has finished, so a query never sees half a graph. At
 about 220,000 triples a load takes two seconds. Queries running at the moment

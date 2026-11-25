@@ -2,9 +2,14 @@
 # Serve the DRE-LinkedData dump as a read-only SPARQL endpoint, and reload it
 # whenever the module publishes a new one.
 #
-# The module writes files/dre-linked-data/dump.nt.gz, then state.json, each by
-# rename (DRELinkedData\Dump\DumpStore::publish). This polls state.json; when
-# its sha256 changes, the dump is copied, checked against that checksum, and
+# The module writes files/dre-linked-data/dump.nq.gz (0.8.0+) and dump.nt.gz,
+# then state.json, each by rename (DRELinkedData\Dump\DumpStore::publish). The
+# N-Quads dump holds the same statements in one named graph per kind of record;
+# it is loaded when state.json names it (nquads_sha256), the N-Triples dump
+# otherwise. The server reads its default graph as the union of all graphs
+# (--union-default-graph), so a query without GRAPH sees every statement
+# whichever file was loaded. This polls state.json; when the chosen dump's
+# checksum changes, the dump is copied, checked against that checksum, and
 # bulk-loaded into a fresh store directory named after it, while the current
 # store keeps answering. Only a complete load replaces the running server, so
 # a query never sees a partial graph; a failed or mismatched load leaves the
@@ -61,19 +66,36 @@ shutdown() {
 }
 trap shutdown TERM INT
 
-# The sha256 of the published dump, or nothing before the first one.
-published_sha() {
-    sed -n 's/^[[:space:]]*"sha256":[[:space:]]*"\([0-9a-f]\{64\}\)".*/\1/p' \
+# The checksum state.json gives under key $1 (sha256, nquads_sha256), or nothing.
+state_sha() {
+    sed -n "s/^[[:space:]]*\"$1\":[[:space:]]*\"\([0-9a-f]\{64\}\)\".*/\1/p" \
         "$dump_dir/state.json" 2>/dev/null | head -n 1 || true
 }
 
-# Build the store for dump $1 unless a completed one is already there.
+# "<sha256> <file>" of the dump to serve: the N-Quads dump when the module
+# publishes one, else the N-Triples dump; nothing before the first dump.
+published() {
+    local sha
+    sha=$(state_sha nquads_sha256)
+    if [[ -n "$sha" && -f "$dump_dir/dump.nq.gz" ]]; then
+        echo "$sha dump.nq.gz"
+        return 0
+    fi
+    sha=$(state_sha sha256)
+    if [[ -n "$sha" ]]; then
+        echo "$sha dump.nt.gz"
+    fi
+    return 0
+}
+
+# Build the store for dump file $2 (checksum $1) unless a completed one is
+# already there. Oxigraph reads the format from the name (.nq.gz, .nt.gz).
 load() {
-    local sha=$1 store="$data_dir/$1" incoming="$data_dir/incoming.nt.gz" actual
+    local sha=$1 file=$2 store="$data_dir/$1" incoming="$data_dir/incoming.${2#dump.}" actual
     [[ -f "$store.complete" ]] && return 0
 
-    rm -rf "$store" "$incoming"
-    cp "$dump_dir/dump.nt.gz" "$incoming"
+    rm -rf "$store" "$data_dir"/incoming.*
+    cp "$dump_dir/$file" "$incoming"
     actual=$(sha256sum "$incoming" | cut -d ' ' -f 1)
     if [[ "$actual" != "$sha" ]]; then
         # state.json and the dump are renamed one after the other; this is
@@ -83,7 +105,7 @@ load() {
         return 1
     fi
 
-    log "loading dump $sha"
+    log "loading $file $sha"
     # Lower priority than the serving process, so queries keep their share of
     # the container's CPU while a reload runs.
     if ! nice -n 10 oxigraph load --location "$store" --file "$incoming"; then
@@ -105,7 +127,7 @@ start_server() {
         wait "$server_pid" 2>/dev/null || true
     fi
     oxigraph serve-read-only --location "$store" --bind "127.0.0.1:$port" \
-        --timeout-s "$query_timeout" &
+        --union-default-graph --timeout-s "$query_timeout" &
     server_pid=$!
     for _ in $(seq 1 50); do
         if (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null; then
@@ -161,13 +183,14 @@ busy=0
 last_ticks=0
 while true; do
     if ((SECONDS >= next_poll)); then
-        sha=$(published_sha)
+        sha='' file=''
+        read -r sha file <<< "$(published)" || true
         if [[ -z "$sha" ]]; then
             if [[ -z "$current" && "$waiting_logged" == false ]]; then
                 log "no dump at $dump_dir yet; generate one in DRE Linked Data's configuration"
                 waiting_logged=true
             fi
-        elif [[ "$sha" != "$current" ]] && load "$sha"; then
+        elif [[ "$sha" != "$current" ]] && load "$sha" "$file"; then
             start_server "$sha"
             current=$sha
             prune "$current"

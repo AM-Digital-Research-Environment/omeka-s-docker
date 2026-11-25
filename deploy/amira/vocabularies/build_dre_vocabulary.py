@@ -23,11 +23,11 @@ from xml.sax.saxutils import escape as xml_escape, quoteattr
 ONTOLOGY = "https://data.africamultiple.uni-bayreuth.de/ontology/dre"
 NAMESPACE = ONTOLOGY + "#"
 FORMER_NAMESPACE = "http://am-digital.org/ontology/dre/"
-MODIFIED = "2026-10-15"
+MODIFIED = "2026-11-25"
 
 TITLE = "DRE — Africa Multiple Digital Research Environment vocabulary"
 DESCRIPTION = (
-    "Properties the Africa Multiple Digital Research Environment adds to "
+    "Properties and classes the Africa Multiple Digital Research Environment adds to "
     "Dublin Core, BIBO, FOAF and the other vocabularies of AMIRA, the Africa "
     "Multiple Interactive Research Atlas: identifiers and links into the "
     "University of Bayreuth's systems, provenance of machine-generated values, "
@@ -75,6 +75,20 @@ TERMS = [
      True),
 ]
 
+# (local name, label, comment, superclass IRIs). Classes are new in this
+# namespace, so they have no former IRI to be equivalent to.
+CLASSES = [
+    ("ResearchItem", "Research item",
+     "A record on AMIRA's research-item template: an object, document, "
+     "recording, image or dataset that a project of the Africa Multiple "
+     "Cluster of Excellence collected, created or curated, as distinct from "
+     "the cluster's publications and from the persons, organisations, "
+     "places, projects and concepts it describes. DRE Linked Data states it "
+     "beside schema:CreativeWork and, where the item's Type of Resource maps "
+     "to one, a DCMI Type.",
+     ["https://schema.org/CreativeWork"]),
+]
+
 PREFIXES = {
     "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
     "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
@@ -120,6 +134,16 @@ def build_turtle():
         if deprecated:
             lines.append("    owl:deprecated true ;")
         lines.append(f"    owl:equivalentProperty <{FORMER_NAMESPACE}{name}> .")
+    for name, label, comment, parents in CLASSES:
+        lines += [
+            "",
+            f"dre:{name}",
+            "    a rdfs:Class, owl:Class ;",
+            f"    rdfs:label {turtle_string(label)}@en ;",
+            f"    rdfs:comment {turtle_string(comment)}@en ;",
+        ]
+        lines += [f"    rdfs:subClassOf <{parent}> ;" for parent in parents]
+        lines.append(f"    rdfs:isDefinedBy <{ONTOLOGY}> .")
     return "\n".join(lines) + "\n"
 
 
@@ -155,6 +179,19 @@ def build_rdfxml():
             f"    <owl:equivalentProperty rdf:resource={quoteattr(FORMER_NAMESPACE + name)}/>",
             "  </rdf:Property>",
         ]
+    for name, label, comment, parents in CLASSES:
+        out += [
+            "",
+            f"  <rdfs:Class rdf:about={quoteattr(NAMESPACE + name)}>",
+            f'    <rdf:type rdf:resource="{PREFIXES["owl"]}Class"/>',
+            f"    <rdfs:label {lang}>{xml_escape(label)}</rdfs:label>",
+            f"    <rdfs:comment {lang}>{xml_escape(comment)}</rdfs:comment>",
+        ]
+        out += [f"    <rdfs:subClassOf rdf:resource={quoteattr(parent)}/>" for parent in parents]
+        out += [
+            f"    <rdfs:isDefinedBy rdf:resource={quoteattr(ONTOLOGY)}/>",
+            "  </rdfs:Class>",
+        ]
     out += ["", "</rdf:RDF>"]
     return "\n".join(out) + "\n"
 
@@ -189,6 +226,15 @@ def build_jsonld():
             term["owl:deprecated"] = True
         term["owl:equivalentProperty"] = {"@id": FORMER_NAMESPACE + name}
         graph.append(term)
+    for name, label, comment, parents in CLASSES:
+        graph.append({
+            "@id": f"dre:{name}",
+            "@type": ["rdfs:Class", "owl:Class"],
+            "rdfs:label": en(label),
+            "rdfs:comment": en(comment),
+            "rdfs:subClassOf": [{"@id": parent} for parent in parents],
+            "rdfs:isDefinedBy": {"@id": ONTOLOGY},
+        })
     return json.dumps({"@context": PREFIXES, "@graph": graph},
                       ensure_ascii=False, indent=2) + "\n"
 
@@ -233,6 +279,17 @@ def build_html():
         f'<link rel="alternate" type="{t}" href="{f}" title="{n}">' for f, t, n in formats)
     format_links = " · ".join(f'<a href="{f}" type="{t}">{n}</a>' for f, t, n in formats)
     toc = ", ".join(f'<a href="#{n}"><code>dre:{n}</code></a>' for n, *_ in TERMS)
+    class_toc = ", ".join(f'<a href="#{n}"><code>dre:{n}</code></a>' for n, *_ in CLASSES)
+    class_sections = []
+    for name, label, comment, parents in CLASSES:
+        supers = ", ".join(f'<a href="{h(p)}"><code>{h(p)}</code></a>' for p in parents)
+        class_sections.append(f"""
+<section class="term" id="{name}">
+  <h3>{h(label)} <code>dre:{name}</code></h3>
+  <p class="iri">{h(NAMESPACE + name)}</p>
+  <p>{h(comment)}</p>
+  <p>Subclass of {supers}.</p>
+</section>""")
     sections = []
     for name, label, comment, deprecated in TERMS:
         badge = '<span class="badge">deprecated</span>' if deprecated else ""
@@ -273,7 +330,11 @@ def build_html():
 which never resolved. Each term here is declared <code>owl:equivalentProperty</code> to
 its former IRI, so data loaded from earlier dumps can still be joined with current data.</p>
 
-<h2>Terms</h2>
+<h2>Classes</h2>
+<p>{class_toc}</p>
+{"".join(class_sections)}
+
+<h2>Properties</h2>
 <p>{toc}</p>
 {"".join(sections)}
 </main>

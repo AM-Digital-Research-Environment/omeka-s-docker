@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DRE vocabulary</title>
-<meta name="description" content="Properties the Africa Multiple Digital Research Environment adds to Dublin Core, BIBO, FOAF and the other vocabularies of AMIRA, the Africa Multiple Interactive Research Atlas: identifiers and links into the University of Bayreuth&#x27;s systems, provenance of machine-generated values, and the internal fields that keep AMIRA in sync with its source database.">
+<meta name="description" content="Properties and classes the Africa Multiple Digital Research Environment adds to Dublin Core, BIBO, FOAF and the other vocabularies of AMIRA, the Africa Multiple Interactive Research Atlas: identifiers and links into the University of Bayreuth&#x27;s systems, provenance of machine-generated values, and the internal fields that keep AMIRA in sync with its source database.">
 <link rel="canonical" href="https://data.africamultiple.uni-bayreuth.de/ontology/dre">
 <link rel="alternate" type="text/turtle" href="dre.ttl" title="Turtle">
 <link rel="alternate" type="application/rdf+xml" href="dre.rdf" title="RDF/XML">
@@ -42,23 +42,33 @@
 <body>
 <main>
 <h1>DRE — Africa Multiple Digital Research Environment vocabulary</h1>
-<p class="lead">Properties the Africa Multiple Digital Research Environment adds to Dublin Core, BIBO, FOAF and the other vocabularies of AMIRA, the Africa Multiple Interactive Research Atlas: identifiers and links into the University of Bayreuth&#x27;s systems, provenance of machine-generated values, and the internal fields that keep AMIRA in sync with its source database.</p>
+<p class="lead">Properties and classes the Africa Multiple Digital Research Environment adds to Dublin Core, BIBO, FOAF and the other vocabularies of AMIRA, the Africa Multiple Interactive Research Atlas: identifiers and links into the University of Bayreuth&#x27;s systems, provenance of machine-generated values, and the internal fields that keep AMIRA in sync with its source database.</p>
 <dl class="meta">
   <dt>Namespace</dt><dd><code>https://data.africamultiple.uni-bayreuth.de/ontology/dre#</code></dd>
   <dt>Prefix</dt><dd><code>dre</code></dd>
   <dt>Formats</dt><dd><a href="dre.ttl" type="text/turtle">Turtle</a> · <a href="dre.rdf" type="application/rdf+xml">RDF/XML</a> · <a href="dre.jsonld" type="application/ld+json">JSON-LD</a></dd>
   <dt>Publisher</dt><dd><a href="http://www.wikidata.org/entity/Q141717295">Africa Multiple Cluster of Excellence, University of Bayreuth</a></dd>
   <dt>Licence</dt><dd><a href="https://creativecommons.org/publicdomain/zero/1.0/">CC0 1.0</a></dd>
-  <dt>Modified</dt><dd>2026-10-15</dd>
+  <dt>Modified</dt><dd>2026-11-25</dd>
   <dt>Used in</dt><dd><a href="https://data.africamultiple.uni-bayreuth.de/linked-data/void">AMIRA's Linked Data</a></dd>
 </dl>
 
 <h2>Former namespace</h2>
-<p>Until 2026-10-15 these terms were published under <code>http://am-digital.org/ontology/dre/</code>,
+<p>Until 2026-11-25 these terms were published under <code>http://am-digital.org/ontology/dre/</code>,
 which never resolved. Each term here is declared <code>owl:equivalentProperty</code> to
 its former IRI, so data loaded from earlier dumps can still be joined with current data.</p>
 
-<h2>Terms</h2>
+<h2>Classes</h2>
+<p><a href="#ResearchItem"><code>dre:ResearchItem</code></a></p>
+
+<section class="term" id="ResearchItem">
+  <h3>Research item <code>dre:ResearchItem</code></h3>
+  <p class="iri">https://data.africamultiple.uni-bayreuth.de/ontology/dre#ResearchItem</p>
+  <p>A record on AMIRA&#x27;s research-item template: an object, document, recording, image or dataset that a project of the Africa Multiple Cluster of Excellence collected, created or curated, as distinct from the cluster&#x27;s publications and from the persons, organisations, places, projects and concepts it describes. DRE Linked Data states it beside schema:CreativeWork and, where the item&#x27;s Type of Resource maps to one, a DCMI Type.</p>
+  <p>Subclass of <a href="https://schema.org/CreativeWork"><code>https://schema.org/CreativeWork</code></a>.</p>
+</section>
+
+<h2>Properties</h2>
 <p><a href="#id"><code>dre:id</code></a>, <a href="#security"><code>dre:security</code></a>, <a href="#bitstream"><code>dre:bitstream</code></a>, <a href="#mongoId"><code>dre:mongoId</code></a>, <a href="#rdspaceHandle"><code>dre:rdspaceHandle</code></a>, <a href="#collectionUrl"><code>dre:collectionUrl</code></a>, <a href="#generatedBy"><code>dre:generatedBy</code></a>, <a href="#series"><code>dre:series</code></a>, <a href="#wisskiUrl"><code>dre:wisskiUrl</code></a></p>
 
 <section class="term" id="id">

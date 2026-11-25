@@ -11,10 +11,10 @@
   <owl:Ontology rdf:about="https://data.africamultiple.uni-bayreuth.de/ontology/dre">
     <rdfs:label xml:lang="en">DRE</rdfs:label>
     <dcterms:title xml:lang="en">DRE — Africa Multiple Digital Research Environment vocabulary</dcterms:title>
-    <rdfs:comment xml:lang="en">Properties the Africa Multiple Digital Research Environment adds to Dublin Core, BIBO, FOAF and the other vocabularies of AMIRA, the Africa Multiple Interactive Research Atlas: identifiers and links into the University of Bayreuth's systems, provenance of machine-generated values, and the internal fields that keep AMIRA in sync with its source database.</rdfs:comment>
+    <rdfs:comment xml:lang="en">Properties and classes the Africa Multiple Digital Research Environment adds to Dublin Core, BIBO, FOAF and the other vocabularies of AMIRA, the Africa Multiple Interactive Research Atlas: identifiers and links into the University of Bayreuth's systems, provenance of machine-generated values, and the internal fields that keep AMIRA in sync with its source database.</rdfs:comment>
     <dcterms:publisher rdf:resource="http://www.wikidata.org/entity/Q141717295"/>
     <dcterms:license rdf:resource="https://creativecommons.org/publicdomain/zero/1.0/"/>
-    <dcterms:modified rdf:datatype="http://www.w3.org/2001/XMLSchema#date">2026-10-15</dcterms:modified>
+    <dcterms:modified rdf:datatype="http://www.w3.org/2001/XMLSchema#date">2026-11-25</dcterms:modified>
     <vann:preferredNamespacePrefix>dre</vann:preferredNamespacePrefix>
     <vann:preferredNamespaceUri>https://data.africamultiple.uni-bayreuth.de/ontology/dre#</vann:preferredNamespaceUri>
     <owl:priorVersion rdf:resource="http://am-digital.org/ontology/dre/"/>
@@ -84,5 +84,13 @@
     <owl:deprecated rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">true</owl:deprecated>
     <owl:equivalentProperty rdf:resource="http://am-digital.org/ontology/dre/wisskiUrl"/>
   </rdf:Property>
+
+  <rdfs:Class rdf:about="https://data.africamultiple.uni-bayreuth.de/ontology/dre#ResearchItem">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Research item</rdfs:label>
+    <rdfs:comment xml:lang="en">A record on AMIRA's research-item template: an object, document, recording, image or dataset that a project of the Africa Multiple Cluster of Excellence collected, created or curated, as distinct from the cluster's publications and from the persons, organisations, places, projects and concepts it describes. DRE Linked Data states it beside schema:CreativeWork and, where the item's Type of Resource maps to one, a DCMI Type.</rdfs:comment>
+    <rdfs:subClassOf rdf:resource="https://schema.org/CreativeWork"/>
+    <rdfs:isDefinedBy rdf:resource="https://data.africamultiple.uni-bayreuth.de/ontology/dre"/>
+  </rdfs:Class>
 
 </rdf:RDF>
