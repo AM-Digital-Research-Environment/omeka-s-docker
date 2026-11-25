@@ -10,10 +10,10 @@
     a owl:Ontology ;
     rdfs:label "DRE"@en ;
     dcterms:title "DRE — Africa Multiple Digital Research Environment vocabulary"@en ;
-    rdfs:comment "Properties the Africa Multiple Digital Research Environment adds to Dublin Core, BIBO, FOAF and the other vocabularies of AMIRA, the Africa Multiple Interactive Research Atlas: identifiers and links into the University of Bayreuth's systems, provenance of machine-generated values, and the internal fields that keep AMIRA in sync with its source database."@en ;
+    rdfs:comment "Properties and classes the Africa Multiple Digital Research Environment adds to Dublin Core, BIBO, FOAF and the other vocabularies of AMIRA, the Africa Multiple Interactive Research Atlas: identifiers and links into the University of Bayreuth's systems, provenance of machine-generated values, and the internal fields that keep AMIRA in sync with its source database."@en ;
     dcterms:publisher <http://www.wikidata.org/entity/Q141717295> ;
     dcterms:license <https://creativecommons.org/publicdomain/zero/1.0/> ;
-    dcterms:modified "2026-10-15"^^xsd:date ;
+    dcterms:modified "2026-11-25"^^xsd:date ;
     vann:preferredNamespacePrefix "dre" ;
     vann:preferredNamespaceUri "https://data.africamultiple.uni-bayreuth.de/ontology/dre#" ;
     owl:priorVersion <http://am-digital.org/ontology/dre/> ;
@@ -82,3 +82,10 @@ dre:wisskiUrl
     rdfs:isDefinedBy <https://data.africamultiple.uni-bayreuth.de/ontology/dre> ;
     owl:deprecated true ;
     owl:equivalentProperty <http://am-digital.org/ontology/dre/wisskiUrl> .
+
+dre:ResearchItem
+    a rdfs:Class, owl:Class ;
+    rdfs:label "Research item"@en ;
+    rdfs:comment "A record on AMIRA's research-item template: an object, document, recording, image or dataset that a project of the Africa Multiple Cluster of Excellence collected, created or curated, as distinct from the cluster's publications and from the persons, organisations, places, projects and concepts it describes. DRE Linked Data states it beside schema:CreativeWork and, where the item's Type of Resource maps to one, a DCMI Type."@en ;
+    rdfs:subClassOf <https://schema.org/CreativeWork> ;
+    rdfs:isDefinedBy <https://data.africamultiple.uni-bayreuth.de/ontology/dre> .

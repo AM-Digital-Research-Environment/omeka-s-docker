@@ -21,7 +21,7 @@
         "@language": "en"
       },
       "rdfs:comment": {
-        "@value": "Properties the Africa Multiple Digital Research Environment adds to Dublin Core, BIBO, FOAF and the other vocabularies of AMIRA, the Africa Multiple Interactive Research Atlas: identifiers and links into the University of Bayreuth's systems, provenance of machine-generated values, and the internal fields that keep AMIRA in sync with its source database.",
+        "@value": "Properties and classes the Africa Multiple Digital Research Environment adds to Dublin Core, BIBO, FOAF and the other vocabularies of AMIRA, the Africa Multiple Interactive Research Atlas: identifiers and links into the University of Bayreuth's systems, provenance of machine-generated values, and the internal fields that keep AMIRA in sync with its source database.",
         "@language": "en"
       },
       "dcterms:publisher": {
@@ -31,7 +31,7 @@
         "@id": "https://creativecommons.org/publicdomain/zero/1.0/"
       },
       "dcterms:modified": {
-        "@value": "2026-10-15",
+        "@value": "2026-11-25",
         "@type": "xsd:date"
       },
       "vann:preferredNamespacePrefix": "dre",
@@ -204,6 +204,29 @@
       "owl:deprecated": true,
       "owl:equivalentProperty": {
         "@id": "http://am-digital.org/ontology/dre/wisskiUrl"
+      }
+    },
+    {
+      "@id": "dre:ResearchItem",
+      "@type": [
+        "rdfs:Class",
+        "owl:Class"
+      ],
+      "rdfs:label": {
+        "@value": "Research item",
+        "@language": "en"
+      },
+      "rdfs:comment": {
+        "@value": "A record on AMIRA's research-item template: an object, document, recording, image or dataset that a project of the Africa Multiple Cluster of Excellence collected, created or curated, as distinct from the cluster's publications and from the persons, organisations, places, projects and concepts it describes. DRE Linked Data states it beside schema:CreativeWork and, where the item's Type of Resource maps to one, a DCMI Type.",
+        "@language": "en"
+      },
+      "rdfs:subClassOf": [
+        {
+          "@id": "https://schema.org/CreativeWork"
+        }
+      ],
+      "rdfs:isDefinedBy": {
+        "@id": "https://data.africamultiple.uni-bayreuth.de/ontology/dre"
       }
     }
   ]
