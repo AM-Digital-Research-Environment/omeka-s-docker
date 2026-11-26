@@ -74,7 +74,8 @@ tracks them in `binlog.index`; `PURGE BINARY LOGS` is the tool for that case.
 ## Running unprivileged
 
 The `db` service runs as the image's `mysql` user (uid/gid 999 in the pinned
-`mysql:9.7.4` image) from its first process, with no capabilities and a
+`mysql:9.7.4` image, built through `_docker/mysql/Dockerfile`) from its first
+process, with no capabilities and a
 read-only root filesystem. The MySQL entrypoint skips its `chown` step when it
 does not start as root, and a fresh named volume is seeded from the image's
 `/var/lib/mysql`, which is already owned by 999 — so a new install initialises

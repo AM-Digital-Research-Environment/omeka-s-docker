@@ -104,10 +104,40 @@ updates:
     cooldown:
       default-days: 7
 
+  # The MySQL image (upstream release minus gosu and MySQL Shell), built from
+  # its own Dockerfile.
+  - package-ecosystem: "docker"
+    directory: "/_docker/mysql"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "docker"
+    labels:
+      - "dependencies"
+      - "docker"
+    open-pull-requests-limit: 5
+    assignees:
+      - "fmadore"
+    # Let a release age a week before proposing it, so a compromised or
+    # yanked publish is usually caught first. Security updates ignore this.
+    cooldown:
+      default-days: 7
+    # MySQL ships two concurrent lines: 9.x LTS (the `lts` tag) and the
+    # calendar-versioned Innovation line (26.x = `innovation` = `latest`).
+    # Dependabot only sees that 26 > 9, so a major bump jumps release tracks
+    # rather than moving the version forward. This deployment follows LTS, so
+    # block majors — 9.7.x patches and 9.x minors still flow, and adopting a
+    # future LTS stays a deliberate change.
+    ignore:
+      - dependency-name: "mysql"
+        update-types:
+          - "version-update:semver-major"
+
   # Monitor the image tags pinned in the Compose files of the repository root:
-  # mysql in docker-compose.yml and caddy in compose.tls.yml. (typesense is
-  # built from _docker/typesense, tracked above; nginx is built from the
-  # Dockerfile's web target, so the first ecosystem owns it.)
+  # caddy in compose.tls.yml. (mysql and typesense are built from _docker/,
+  # tracked above; nginx is built from the Dockerfile's web target, so the
+  # first ecosystem owns it.)
   # The overlays are scanned too: Dependabot picks Compose files by the
   # unanchored pattern /(docker-)?compose(-[\w]+)?(?>\.[\w-]+)?\.ya?ml/i
   # (dependabot-core, docker/lib/dependabot/docker_compose/file_fetcher.rb),
@@ -130,19 +160,9 @@ updates:
     # yanked publish is usually caught first. Security updates ignore this.
     cooldown:
       default-days: 7
-    # MySQL ships two concurrent lines: 9.x LTS (the `lts` tag) and the
-    # calendar-versioned Innovation line (26.x = `innovation` = `latest`).
-    # Dependabot only sees that 26 > 9, so a major bump jumps release tracks
-    # rather than moving the version forward. This deployment follows LTS, so
-    # block majors — 9.7.x patches and 9.x minors still flow, and adopting a
-    # future LTS stays a deliberate change.
-    #
     # Caddy: 2.x minors and patches flow; a Caddy 3 would change the Caddyfile
     # and defaults compose.tls.yml relies on, so moving to it stays deliberate.
     ignore:
-      - dependency-name: "mysql"
-        update-types:
-          - "version-update:semver-major"
       - dependency-name: "caddy"
         update-types:
           - "version-update:semver-major"

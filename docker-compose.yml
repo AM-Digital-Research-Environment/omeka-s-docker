@@ -260,7 +260,11 @@ services:
         max-file: "3"
 
   db:
-    image: mysql:9.7.4@sha256:1f2ca53a9e94ff9f1f313099fa7dc7fb2f72e180ca5b2ef83574031e451bbbf1
+    # The pinned upstream MySQL release minus gosu and MySQL Shell, which this
+    # service never runs. The release and its digest live in
+    # _docker/mysql/Dockerfile.
+    build:
+      context: _docker/mysql
     # MySQL tuning parameters — see docs/DB_TUNING.md for explanations
     # --skip-log-bin: a single server with no replica, backed up with
     # mysqldump, has no use for binary logs, which otherwise pile up on the
