@@ -16,7 +16,7 @@ RUN apk add --no-cache curl \
 # `COPY --from=` or `RUN --mount=from=` is invisible to it, so those pins would
 # silently never be offered an update. Referencing the stage name below keeps
 # one `FROM` line per tool as the single place a bump has to land.
-FROM ghcr.io/mlocati/php-extension-installer:2.13.2@sha256:4fd45396c16685266d32bf147a24ecd5e81029d3820295895bf4a90131190ac9 AS php-extension-installer
+FROM ghcr.io/mlocati/php-extension-installer:2.13.4@sha256:584fcc217b94a10187367552f6571cd8680ee4bf22bd752f1087a7d55e35e7de AS php-extension-installer
 FROM composer/composer:2.11.1-bin@sha256:56a1b0a72bacd78079e3fa49a49e7bf58326365753415c99385ea2b08bded0a5 AS composer-bin
 
 FROM php:8.5.12-fpm-trixie@sha256:baf3ea13a8207fa18e1011bad1016e8b5e59fc974c6966d0efa6f36a16f875f0 AS runtime
